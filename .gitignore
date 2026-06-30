@@ -1,0 +1,41 @@
+# HSPICE simulation output
+*.tr0
+*.tr1
+*.tr2
+*.sw0
+*.st0
+*.mt0
+*.mt1
+*.mt2
+*.lis
+*.log
+*.out
+*.ic0
+
+# Waveform formats (FSDB, PSF)
+*.fsdb
+*.psf
+*.pdb
+
+# Raw data / measurement exports
+*.csv
+*.dat
+*.txt
+
+# Temporary / intermediate files
+*.tmp
+*.bak
+*.old
+*~
+
+# OpenCode agent state
+.omo/
+
+# Codegraph index
+.codegraph/
+
+# Node / tooling (if any)
+node_modules/
+.venv/
+__pycache__/
+*.pyc
