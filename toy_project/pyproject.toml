@@ -1,0 +1,14 @@
+[project]
+name = "sram_pvta_toy"
+version = "0.1.0"
+description = "Toy project: PVTA contour estimation via GP surrogate + differentiable physics layer"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "matplotlib>=3.7",
+    "torch>=2.1",
+    "gpytorch>=1.11",
+    "pandas>=2.0",
+    "seaborn>=0.13",
+]
