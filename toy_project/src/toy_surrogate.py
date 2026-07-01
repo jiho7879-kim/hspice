@@ -173,7 +173,7 @@ class Surrogate:
             gp = self.sigma_gp
             ls_vop = gp.covar_module.kernels[0].base_kernel.lengthscale.detach().cpu().numpy().flatten()
             ls_cnpu = gp.covar_module.kernels[1].base_kernel.lengthscale.detach().cpu().numpy().flatten()
-            return np.concatenate([ls_vop, ls_cnpu])  # [Vop_lengthscale, cn_lengthscale, pu_lengthscale]
+            return np.concatenate([ls_vop, ls_cnpu])
 
 
 # ---------------------------------------------------------------------------
