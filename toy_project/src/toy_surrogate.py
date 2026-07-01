@@ -31,7 +31,7 @@ from src.utils import load_intermediate, stratified_train_test_split
 # ---------------------------------------------------------------------------
 
 class ExactGPModel(gpytorch.models.ExactGP):
-    """Single-output exact GP with Matern 5/2 + ARD kernel."""
+    """Single-output exact GP with Matern 5/2 + ARD kernel (standard, all dims)."""
 
     def __init__(self, train_x: torch.Tensor, train_y: torch.Tensor) -> None:
         from gpytorch.likelihoods import GaussianLikelihood
@@ -50,13 +50,39 @@ class ExactGPModel(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
+class AdditiveGPModel(gpytorch.models.ExactGP):
+    """Additive GP: k_Vop(Vop) + k_cnpu(cn, pu). Separates Vop trend from corner effects."""
+
+    def __init__(self, train_x: torch.Tensor, train_y: torch.Tensor) -> None:
+        from gpytorch.likelihoods import GaussianLikelihood
+        from gpytorch.means import ConstantMean
+        from gpytorch.kernels import ScaleKernel, MaternKernel
+
+        likelihood = GaussianLikelihood()
+        super().__init__(train_x, train_y, likelihood)
+        self.mean_module = ConstantMean()
+        self.covar_module = (
+            ScaleKernel(MaternKernel(nu=2.5, active_dims=[2])) +
+            ScaleKernel(MaternKernel(nu=2.5, ard_num_dims=2, active_dims=[0, 1]))
+        )
+
+    def forward(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
+
 class Surrogate:
-    """Dual-output GP surrogate: mu and sigma modeled independently."""
+    """Dual-output GP surrogate: mu and sigma modeled independently.
+
+    mu:    ExactGPModel (full 3D Matern 5/2 + ARD)
+    sigma: AdditiveGPModel (k_Vop(Vop) + k_cnpu(cn, pu))
+    """
 
     def __init__(self, device: str = "cpu") -> None:
         self.device = device
         self.mu_gp: ExactGPModel | None = None
-        self.sigma_gp: ExactGPModel | None = None
+        self.sigma_gp: AdditiveGPModel | None = None
         self._x_train: np.ndarray | None = None
 
     def _to_tensor(self, arr: np.ndarray) -> torch.Tensor:
@@ -78,7 +104,7 @@ class Surrogate:
         yt_sigma = self._to_tensor(y_train[:, 1])
 
         self.mu_gp = ExactGPModel(xt, yt_mu).to(self.device)
-        self.sigma_gp = ExactGPModel(xt, yt_sigma).to(self.device)
+        self.sigma_gp = AdditiveGPModel(xt, yt_sigma).to(self.device)
 
         for name, gp in [("mu", self.mu_gp), ("sigma", self.sigma_gp)]:
             gp.train()
@@ -102,9 +128,15 @@ class Surrogate:
             gp.likelihood.eval()
             if verbose:
                 elapsed = time.time() - start
-                lengthscales = gp.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
+                if name == "sigma" and isinstance(gp, AdditiveGPModel):
+                    ls_vop = gp.covar_module.kernels[0].base_kernel.lengthscale.detach()
+                    ls_cnpu = gp.covar_module.kernels[1].base_kernel.lengthscale.detach()
+                    ls_str = f"Vop={ls_vop.item():.3f}, cn={ls_cnpu[0,0].item():.3f}, pu={ls_cnpu[0,1].item():.3f}"
+                else:
+                    ls = gp.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
+                    ls_str = str(ls.round(3))
                 print(f"  [{name}] done ({elapsed:.1f}s) "
-                      f"lengthscales={lengthscales.round(3)}")
+                      f"lengthscales={ls_str}")
 
     def predict(self, X_test: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Predict mu and sigma with uncertainty.
@@ -127,10 +159,21 @@ class Surrogate:
 
         return mu_mean, mu_std, sigma_mean, sigma_std
 
-    def get_lengthscales(self) -> np.ndarray:
-        """Return ARD lengthscales for each input dimension."""
-        assert self.mu_gp is not None
-        return self.mu_gp.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
+    def get_lengthscales(self, model: str = "mu") -> np.ndarray:
+        """Return ARD lengthscales.
+
+        For ExactGPModel: shape (3,) = [cn, pu, Vop].
+        For AdditiveGPModel: shape (3,) = [Vop, cn, pu] (reordered for display).
+        """
+        if model == "mu":
+            assert self.mu_gp is not None
+            return self.mu_gp.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
+        else:
+            assert self.sigma_gp is not None
+            gp = self.sigma_gp
+            ls_vop = gp.covar_module.kernels[0].base_kernel.lengthscale.detach().cpu().numpy().flatten()
+            ls_cnpu = gp.covar_module.kernels[1].base_kernel.lengthscale.detach().cpu().numpy().flatten()
+            return np.concatenate([ls_vop, ls_cnpu])  # [Vop_lengthscale, cn_lengthscale, pu_lengthscale]
 
 
 # ---------------------------------------------------------------------------
@@ -188,7 +231,8 @@ def run_ablation(
         surr.fit(X_tr, y_tr, verbose=False)
         mu_mean, mu_std, sigma_mean, sigma_std = surr.predict(X_te)
         metrics = evaluate(X_te, y_te, mu_mean, sigma_mean)
-        metrics["lengthscales"] = surr.get_lengthscales()
+        metrics["lengthscales_mu"] = surr.get_lengthscales("mu").tolist()
+        metrics["lengthscales_sigma"] = surr.get_lengthscales("sigma").tolist()
         results[n] = metrics
 
     return results
@@ -223,11 +267,13 @@ def main() -> None:
     # Evaluate
     print("\n--- Test set evaluation ---")
     mu_mean, mu_std, sigma_mean, sigma_std = surr.predict(X_te)
-    metrics = evaluate(X_te, y_te, mu_mean, mu_std, sigma_mean)
+    metrics = evaluate(X_te, y_te, mu_mean, sigma_mean)
 
-    lengthscales = surr.get_lengthscales()
-    print(f"\nARD lengthscales: {lengthscales.round(3)}")
-    print(f"  (common_N, PU, Vop) -- smaller = more important feature")
+    mu_ls = surr.get_lengthscales("mu")
+    sigma_ls = surr.get_lengthscales("sigma")
+    print(f"\nARD lengthscales (smaller = more important):")
+    print(f"  mu GP:    [cn={mu_ls[0]:.3f}, pu={mu_ls[1]:.3f}, Vop={mu_ls[2]:.3f}]")
+    print(f"  sigma GP: [Vop={sigma_ls[0]:.3f}, cn={sigma_ls[1]:.3f}, pu={sigma_ls[2]:.3f}]  (additive kernel)")
 
     # Save results
     import json
