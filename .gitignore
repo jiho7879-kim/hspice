@@ -1,3 +1,6 @@
+# Python venv
+python/.venv/
+
 # HSPICE simulation output
 *.tr0
 *.tr1

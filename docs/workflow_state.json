@@ -1,0 +1,59 @@
+{
+  "_format_version": "1.0",
+  "project": "HSPICE SRAM Vmin Estimation",
+  "phase": "Stage 3a",
+  "phase_label": "Stage 3a: Validate assist at correct target Vmin",
+  "phase_history": [
+    {
+      "phase": "Stage 1",
+      "status": "completed",
+      "summary": "3D baseline GP — mu RMSE 0.00206, contour GO"
+    },
+    {
+      "phase": "Stage 2",
+      "status": "completed",
+      "summary": "4D + WLUD ratio — mu RMSE 0.00237, monotonicity 100%"
+    },
+    {
+      "phase": "Stage 3 init",
+      "status": "completed",
+      "summary": "PhysicsConstrainedSurrogate 4D — mu RMSE 0.039, Vmin RMSE 0.156V NO-GO"
+    },
+    {
+      "phase": "Stage 3a",
+      "status": "in_progress",
+      "summary": "Target Vmin=0.55V too low. Need correct target."
+    }
+  ],
+  "bg_queue": [
+    "bg_c838db51"
+  ],
+  "bg_queue_history": [
+    {
+      "task_id": "bg_c838db51",
+      "action": "add",
+      "timestamp": "2026-07-02T06:04:08.661015+00:00"
+    }
+  ],
+  "documentation": {
+    "trial_log_updated": null,
+    "phase_summary_updated": null,
+    "decisions_logged": [
+      "docs/decisions/toy_validation_results.md",
+      "docs/decisions/session_20260702_summary.md",
+      "docs/decisions/physics_ablation.md"
+    ]
+  },
+  "open_questions": [
+    "What target Vmin makes sense for WLUD∈[0.90, 1.0]? (Vmin range ~0.57-0.77V)",
+    "Does plain Surrogate give good WLUD prediction at correct target Vmin?",
+    "Should we fix PhysicsConstrainedSurrogate or accept plain Surrogate for Stage 3?"
+  ],
+  "session_start_checklist": {
+    "read_harness": false,
+    "read_workflow_state": false,
+    "read_agents_md": false,
+    "read_decisions": false,
+    "check_bg_queue": false
+  }
+}

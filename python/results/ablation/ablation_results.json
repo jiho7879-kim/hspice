@@ -1,0 +1,142 @@
+{
+  "baseline": {
+    "config": "baseline",
+    "label": "Baseline GP",
+    "train_time_s": 0.9,
+    "mu_rmse": 0.003767,
+    "mu_r2": 0.9973,
+    "sigma_rmse": 0.000541,
+    "sigma_r2": 0.6301,
+    "vmin_rmse_mV": 6.517,
+    "vmin_max_err_mV": 23.479,
+    "vmin_bias_mV": 1.128,
+    "hausdorff_mV": 1.789,
+    "area_overlap": 0.0,
+    "dVmin_dcn": -0.00593,
+    "dVmin_dpu": 0.0087,
+    "grad_cosine_sim": 0.9999,
+    "grad_mag_ratio": 1.0206,
+    "lengthscales_mu": [
+      15.658777236938477,
+      15.625890731811523,
+      0.6479297876358032
+    ],
+    "lengthscales_sigma": [
+      4.641114711761475,
+      12.835805892944336,
+      12.463737487792969
+    ]
+  },
+  "mono": {
+    "config": "mono",
+    "label": "+L_mono",
+    "train_time_s": 0.0,
+    "mu_rmse": 0.003782,
+    "mu_r2": 0.9973,
+    "sigma_rmse": 0.000542,
+    "sigma_r2": 0.6292,
+    "vmin_rmse_mV": 6.456,
+    "vmin_max_err_mV": 23.537,
+    "vmin_bias_mV": 0.89,
+    "hausdorff_mV": 2.149,
+    "area_overlap": 0.0,
+    "dVmin_dcn": -0.00579,
+    "dVmin_dpu": 0.00869,
+    "grad_cosine_sim": 1.0,
+    "grad_mag_ratio": 1.0122,
+    "lengthscales_mu": [
+      15.713163375854492,
+      15.66182804107666,
+      0.636634111404419
+    ],
+    "lengthscales_sigma": [
+      4.521289825439453,
+      12.902714729309082,
+      12.647064208984375
+    ]
+  },
+  "boundary": {
+    "config": "boundary",
+    "label": "+L_boundary",
+    "train_time_s": 0.0,
+    "mu_rmse": 0.003431,
+    "mu_r2": 0.9978,
+    "sigma_rmse": 0.000538,
+    "sigma_r2": 0.634,
+    "vmin_rmse_mV": 5.163,
+    "vmin_max_err_mV": 20.77,
+    "vmin_bias_mV": 0.416,
+    "hausdorff_mV": 1.34,
+    "area_overlap": 0.0,
+    "dVmin_dcn": -0.00597,
+    "dVmin_dpu": 0.00811,
+    "grad_cosine_sim": 0.9989,
+    "grad_mag_ratio": 0.9763,
+    "lengthscales_mu": [
+      15.820286750793457,
+      15.435890197753906,
+      0.65889972448349
+    ],
+    "lengthscales_sigma": [
+      4.512974262237549,
+      13.214574813842773,
+      12.252239227294922
+    ]
+  },
+  "mono_boundary": {
+    "config": "mono_boundary",
+    "label": "+Mono+Boundary",
+    "train_time_s": 0.0,
+    "mu_rmse": 0.003418,
+    "mu_r2": 0.9978,
+    "sigma_rmse": 0.00054,
+    "sigma_r2": 0.6313,
+    "vmin_rmse_mV": 5.098,
+    "vmin_max_err_mV": 23.946,
+    "vmin_bias_mV": 0.888,
+    "hausdorff_mV": 1.183,
+    "area_overlap": 1.0,
+    "dVmin_dcn": -0.00582,
+    "dVmin_dpu": 0.0085,
+    "grad_cosine_sim": 0.9999,
+    "grad_mag_ratio": 0.9985,
+    "lengthscales_mu": [
+      15.697203636169434,
+      15.68899154663086,
+      0.6496992707252502
+    ],
+    "lengthscales_sigma": [
+      4.604836940765381,
+      13.201720237731934,
+      12.411385536193848
+    ]
+  },
+  "all": {
+    "config": "all",
+    "label": "+Mono+Boundary+Pelgrom",
+    "train_time_s": 0.0,
+    "mu_rmse": 0.003438,
+    "mu_r2": 0.9978,
+    "sigma_rmse": 0.000536,
+    "sigma_r2": 0.6365,
+    "vmin_rmse_mV": 4.906,
+    "vmin_max_err_mV": 21.143,
+    "vmin_bias_mV": 1.279,
+    "hausdorff_mV": 1.3,
+    "area_overlap": 1.0,
+    "dVmin_dcn": -0.00574,
+    "dVmin_dpu": 0.00807,
+    "grad_cosine_sim": 0.9995,
+    "grad_mag_ratio": 0.9598,
+    "lengthscales_mu": [
+      15.693949699401855,
+      15.54764461517334,
+      0.6543927788734436
+    ],
+    "lengthscales_sigma": [
+      4.578149795532227,
+      12.903164863586426,
+      12.714486122131348
+    ]
+  }
+}
