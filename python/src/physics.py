@@ -36,6 +36,7 @@ import gpytorch
 from src.utils import (
     VOPS, VOP_COL, WLUD_COL, WLUD_FACTORS, N_WLUD,
     COMMON_N_MIN, COMMON_N_MAX, PU_MIN, PU_MAX,
+    StandardScaler,
 )
 from src.models import ExactGPModel, AdditiveGPModel
 
@@ -173,6 +174,12 @@ class PhysicsConstrainedSurrogate:
         self.sigma_gp: AdditiveGPModel | None = None
         self._x_train: np.ndarray | None = None
         self._probe_points: np.ndarray | None = None
+        # Input standardization — same policy as surrogate.Surrogate.
+        # Raw inputs mix scales (cn/pu ~ +-60 mV vs WLUD range 0.1), which
+        # GPyTorch's default lengthscale init (~0.69) cannot bridge within
+        # a normal iteration budget; unscaled training silently degrades
+        # (mu RMSE 10x+ in 4D, root cause of the 2026-07-02 Stage 3 NO-GO).
+        self._x_scaler = StandardScaler()
 
     def _to_tensor(self, arr: np.ndarray) -> torch.Tensor:
         return torch.from_numpy(arr.astype(np.float32)).to(self.device)
@@ -229,7 +236,7 @@ class PhysicsConstrainedSurrogate:
         else:
             X_aug, y_aug = X_train, y_train
 
-        # Pre-generate probe points for L_mono
+        # Pre-generate probe points for L_mono (raw units; scaled below)
         if use_mono:
             self._probe_points = generate_probe_points(n_per_dim=n_probe, n_extra=n_extra)
             n_pp = len(self._probe_points)
@@ -237,10 +244,18 @@ class PhysicsConstrainedSurrogate:
                 print(f"  [mono] {n_pp} probe points "
                       f"({n_probe}^3 x {n_probe} Vop{' x WLUD' if n_extra >= 1 else ''})")
 
-        # Convert to tensors
-        xt_aug = self._to_tensor(X_aug)
+        # Standardize inputs (fit on the augmented training set), then tensorize.
+        # Probe points and predict() inputs go through the same scaler.
+        X_aug_scaled = self._x_scaler.fit_transform(X_aug)
+        xt_aug = self._to_tensor(X_aug_scaled)
         yt_aug_mu = self._to_tensor(y_aug[:, 0])
         yt_aug_sigma = self._to_tensor(y_aug[:, 1])
+
+        # L_pelgrom target is a data-fixed function of the RAW Vop column;
+        # precompute once (it does not depend on model parameters).
+        pelgrom_target_t = self._to_tensor(
+            SIGMA0 + SIGMA_VOP_SLOPE * (0.9 - X_aug[:, VOP_COL])
+        )
 
         # Train mu GP
         if verbose:
@@ -255,6 +270,7 @@ class PhysicsConstrainedSurrogate:
             lambda_mono=lambda_mono,
             lambda_pelgrom=0.0,
             ckpt_tag=ckpt_tag,
+            pelgrom_target=None,
         )
 
         # Train sigma GP
@@ -270,17 +286,24 @@ class PhysicsConstrainedSurrogate:
             lambda_mono=0.0,
             lambda_pelgrom=lambda_pelgrom,
             ckpt_tag=ckpt_tag,
+            pelgrom_target=pelgrom_target_t,
         )
 
     # -------------------------------------------------------------------
     # Checkpoint save/load
     # -------------------------------------------------------------------
 
+    # Checkpoint format version.  v2: inputs standardized via StandardScaler
+    # (2026-07-06).  v1 checkpoints (plain "gp_{tag}.pth") were trained on
+    # raw inputs and are incompatible — loading them would silently produce
+    # garbage predictions, so the filename is versioned instead.
+    _CKPT_VERSION = "v2"
+
     def _ckpt_path(self, tag: str) -> Path | None:
         if self.checkpoint_dir is None:
             return None
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        return self.checkpoint_dir / f"gp_{tag}.pth"
+        return self.checkpoint_dir / f"gp_{tag}_{self._CKPT_VERSION}.pth"
 
     def _save_checkpoint(self, gp: ExactGPModel | AdditiveGPModel, tag: str) -> None:
         ckpt = self._ckpt_path(tag)
@@ -314,6 +337,7 @@ class PhysicsConstrainedSurrogate:
         lambda_mono: float,
         lambda_pelgrom: float,
         ckpt_tag: str = "",
+        pelgrom_target: torch.Tensor | None = None,
     ) -> None:
         """Train a single GP with optional physics penalty terms."""
         # Try loading checkpoint
@@ -330,15 +354,19 @@ class PhysicsConstrainedSurrogate:
         optimizer = torch.optim.Adam(gp.parameters(), lr=lr)
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(gp.likelihood, gp)
 
-        # Pre-tensorize probe points
+        # Pre-tensorize probe points (transformed with the fitted scaler so
+        # they live in the same standardized space as the training inputs)
         if apply_mono and self._probe_points is not None:
-            probe_t = self._to_tensor(self._probe_points)
+            probe_t = self._to_tensor(self._x_scaler.transform(self._probe_points))
         else:
             probe_t = None
 
-        # Constraint scheduling
+        # Constraint scheduling (both posterior-based penalties cost one
+        # extra Cholesky per evaluation, so they share warmup/interval)
         mono_warmup = 30
         mono_interval = 3
+        pelgrom_warmup = 30
+        pelgrom_interval = 3
 
         data_losses, mono_losses, pelgrom_losses = [], [], []
 
@@ -356,8 +384,9 @@ class PhysicsConstrainedSurrogate:
                 mono_penalty = self._compute_mono_penalty(gp, probe_t)
                 if torch.isnan(mono_penalty):
                     mono_penalty = torch.tensor(0.0, device=self.device)
-            if apply_pelgrom and name == "sigma":
-                pelgrom_penalty = self._compute_pelgrom_penalty(gp, xt)
+            if (apply_pelgrom and name == "sigma" and pelgrom_target is not None
+                    and i >= pelgrom_warmup and i % pelgrom_interval == 0):
+                pelgrom_penalty = self._compute_pelgrom_penalty(gp, xt, pelgrom_target)
                 if torch.isnan(pelgrom_penalty):
                     pelgrom_penalty = torch.tensor(0.0, device=self.device)
 
@@ -426,15 +455,27 @@ class PhysicsConstrainedSurrogate:
     def _compute_pelgrom_penalty(
         self, gp: AdditiveGPModel,
         xt: torch.Tensor,
+        pelgrom_target: torch.Tensor,
     ) -> torch.Tensor:
-        """Compute L_pelgrom = mean((sigma - pelgrom_target)^2)."""
-        with torch.no_grad():
-            output = gp(xt)
-            sigma_pred = output.mean
-            pelgrom_target = (
-                SIGMA0 + SIGMA_VOP_SLOPE * (0.9 - xt[:, VOP_COL])
-            )
-            penalty = (sigma_pred - pelgrom_target).pow(2).mean()
+        """Compute L_pelgrom = mean((sigma_posterior - pelgrom_target)^2).
+
+        POSTERIOR mean at the (standardized) training inputs, computed in
+        eval mode with gradient flow — the historical implementation used
+        `torch.no_grad()` on the train-mode prior, which contributes zero
+        gradient (a silent no-op).  `pelgrom_target` must be precomputed
+        from the RAW (unstandardized) Vop column.
+        """
+        was_training = gp.training
+        gp.eval()
+        gp.prediction_strategy = None
+
+        output = gp(xt)
+        penalty = (output.mean - pelgrom_target).pow(2).mean()
+
+        if was_training:
+            gp.train()
+            gp.likelihood.train()
+
         return penalty
 
     # -------------------------------------------------------------------
@@ -450,8 +491,9 @@ class PhysicsConstrainedSurrogate:
         Batched to avoid OOM from large joint covariance matrices.
         """
         assert self.mu_gp is not None and self.sigma_gp is not None
+        X_scaled = self._x_scaler.transform(X_test)
 
-        n = len(X_test)
+        n = len(X_scaled)
         mu_mean = np.empty(n, dtype=np.float64)
         mu_std = np.empty(n, dtype=np.float64)
         sigma_mean = np.empty(n, dtype=np.float64)
@@ -459,7 +501,7 @@ class PhysicsConstrainedSurrogate:
 
         for start in range(0, n, batch_size):
             end = min(start + batch_size, n)
-            xt_batch = self._to_tensor(X_test[start:end])
+            xt_batch = self._to_tensor(X_scaled[start:end])
 
             with torch.no_grad():
                 mu_pred = self.mu_gp(xt_batch)

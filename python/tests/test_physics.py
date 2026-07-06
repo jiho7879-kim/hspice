@@ -185,7 +185,12 @@ def test_mono_penalty_computation() -> None:
 
 
 def test_pelgrom_penalty_computation() -> None:
-    """_compute_pelgrom_penalty returns a non-negative scalar."""
+    """_compute_pelgrom_penalty returns a non-negative scalar WITH gradient.
+
+    The target is precomputed from raw Vop (data-fixed); the penalty is the
+    posterior-mean mismatch and must carry gradient back to kernel params
+    (the pre-2026-07-06 implementation was a silent no_grad no-op).
+    """
     rng = np.random.default_rng(42)
     n = 30
     xt = torch.from_numpy(rng.uniform(-1, 1, size=(n, 3)).astype(np.float32))
@@ -193,14 +198,24 @@ def test_pelgrom_penalty_computation() -> None:
 
     from src.models import AdditiveGPModel
     gp = AdditiveGPModel(xt, yt)
+    gp.train()
+    gp.likelihood.train()
 
     surr = PhysicsConstrainedSurrogate(device="cpu")
-    penalty = surr._compute_pelgrom_penalty(gp, xt)
+    vop_raw = rng.uniform(0.4, 0.9, size=n)
+    target = torch.from_numpy(
+        (0.015 + 0.004 * (0.9 - vop_raw)).astype(np.float32)
+    )
+    penalty = surr._compute_pelgrom_penalty(gp, xt, target)
     assert isinstance(penalty, torch.Tensor)
     assert penalty.numel() == 1
     assert penalty.item() >= 0
     assert torch.isfinite(penalty)
-    print(f"  [OK] _compute_pelgrom_penalty: {penalty.item():.6f}")
+    assert penalty.requires_grad, "L_pelgrom must carry gradient (was a no-op)"
+    penalty.backward()
+    grads = [p.grad for p in gp.parameters() if p.grad is not None]
+    assert any(g.abs().sum() > 0 for g in grads), "no gradient reached GP params"
+    print(f"  [OK] _compute_pelgrom_penalty: {penalty.item():.6f} (grad OK)")
 
 
 def test_get_lengthscales() -> None:

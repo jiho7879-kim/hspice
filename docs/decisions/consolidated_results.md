@@ -3,6 +3,13 @@
 **Date**: 2026-07-02
 **Scope**: Three-stage validation of plain GP Surrogate on analytic SRAM SNM model
 
+> **⚠️ CORRECTION 2026-07-06** — Stage 3의 "Vmin RMSE 0.16-0.26V"와 "feasibility
+> agreement 74-90%"는 지표 정의 아티팩트였음 (설계범위 불일치 + 포화 floor 산입 +
+> 무어시스트 셀 오차 산입). 수정된 지표로는 **inverse 정확도 2.6-4.9mV, 일치율
+> 99.2-99.9% → Stage 3 GO**. "Target 0.70V 권장"도 무효 — 모든 target 동등.
+> 상세: `session_20260706_root_cause_fixes.md` §4. 이 문서의 Stage 3 섹션은
+> 역사 기록으로만 유지.
+
 ---
 
 ## Stage 1: 3D GP Surrogate (cn, pu, Vop) → (mu, sigma)

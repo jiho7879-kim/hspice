@@ -171,9 +171,10 @@ Step 1: Zscore 계산
   Z_Vtrip(Vop) = μ_Vtrip(Vop) / σ_Vtrip(Vop)
 
 Step 2: Target Zscore from Poisson yield
-  Nbits = Mb × 10^6 × 6         ← 6T SRAM bit 수
+  Nbits = Mb × 10^6             ← bit(=cell) 수. 6T의 "6"은 cell당 transistor 수이므로
+                                   여기 곱하면 안 됨 (failure 단위는 cell)
   P_fail_per_bit = 1 − Y_target^(1/Nbits)
-  Z_target = −Φ⁻¹(P_fail_per_bit)  ← norm.ppf
+  Z_target = −Φ⁻¹(P_fail_per_bit)  ← norm.isf (64Mb @ 99.9% → Z ≈ 6.65)
 
 Step 3: Vmin interpolation
   Vmin = Vop_low + (Z_target − Z_low) × (Vop_high − Vop_low) / (Z_high − Z_low)

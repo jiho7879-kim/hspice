@@ -4,6 +4,12 @@
 > **생성일**: 2026-07-01  
 > **관련**: toy_project/ → physics_ablation/ 전환
 
+> **⚠️ CORRECTION 2026-07-06** — 본 문서의 수치는 입력 스케일링이 누락된 GP +
+> no-op L_pelgrom으로 얻은 것이다. 수정된 코드의 재실행 결과(baseline 1.26mV,
+> +boundary 0.92mV, all 0.90mV)와 결론 정정("스케일링이 1차 요인, corner anchor는
+> 잔여 -27%", "ℓ_pu/ℓ_cn≈1.0은 unscaled 아티팩트")은
+> `session_20260706_root_cause_fixes.md` §5-6 참조. 이하 수치는 역사 기록.
+
 ---
 
 ## 1. 핵심 논의 (3 Topics)

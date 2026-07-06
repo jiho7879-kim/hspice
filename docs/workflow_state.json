@@ -2,53 +2,71 @@
   "_format_version": "1.0",
   "project": "HSPICE SRAM Vmin Estimation",
   "phase": "Stage 3a",
-  "phase_label": "Stage 3a: Validate assist at correct target Vmin",
+  "phase_label": "Stage 3a: RESOLVED - inverse assist GO after root-cause fixes",
   "phase_history": [
     {
       "phase": "Stage 1",
       "status": "completed",
-      "summary": "3D baseline GP — mu RMSE 0.00206, contour GO"
+      "summary": "3D baseline GP - mu RMSE 0.00206, contour GO"
     },
     {
       "phase": "Stage 2",
       "status": "completed",
-      "summary": "4D + WLUD ratio — mu RMSE 0.00237, monotonicity 100%"
+      "summary": "4D + WLUD ratio - mu RMSE 0.00237, monotonicity 100%"
     },
     {
       "phase": "Stage 3 init",
       "status": "completed",
-      "summary": "PhysicsConstrainedSurrogate 4D — mu RMSE 0.039, Vmin RMSE 0.156V NO-GO"
+      "summary": "PhysicsConstrainedSurrogate 4D - mu RMSE 0.039, Vmin RMSE 0.156V NO-GO (later shown to be bugs, see 2026-07-06)"
     },
     {
       "phase": "Stage 3a",
-      "status": "in_progress",
-      "summary": "Target Vmin=0.55V too low. Need correct target."
+      "status": "completed",
+      "summary": "2026-07-06: NO-GO root causes fixed. (1) physics.py missing input StandardScaler -> 4D mu RMSE 0.049->0.0023; (2) L_pelgrom was a no_grad no-op, fixed; (3) three metric artifacts in validate_assist_sweep (design-range mismatch, censored floor, no-assist cells) -> true inverse accuracy 2.6-4.9 mV, feasibility agreement 99.2-99.9%. Stage 3 GO. Ablation re-run: baseline 1.26mV, +boundary 0.92mV (-27%), all 0.90mV. See docs/decisions/session_20260706_root_cause_fixes.md"
     }
   ],
-  "bg_queue": [
-    "bg_c838db51"
-  ],
+  "ngspice_track": {
+    "status": "paused_by_user_2026-07-06",
+    "note": "Verified findings (SNM extraction bug, broken model card, repaired card 14nm_HP_sram.pm, no-OSDI build) recorded at top of docs/decisions/ngspice_integration.md. Resume checklist there."
+  },
+  "bg_queue": [],
   "bg_queue_history": [
     {
       "task_id": "bg_c838db51",
       "action": "add",
       "timestamp": "2026-07-02T06:04:08.661015+00:00"
+    },
+    {
+      "task_id": "bg_c838db51",
+      "action": "resolved_stale",
+      "timestamp": "2026-07-06T00:00:00+00:00",
+      "note": "superseded by 2026-07-06 root-cause session"
     }
   ],
   "documentation": {
-    "trial_log_updated": null,
-    "phase_summary_updated": null,
+    "trial_log_updated": "docs/decisions/session_20260706_root_cause_fixes.md#8",
+    "phase_summary_updated": "docs/decisions/session_20260706_root_cause_fixes.md",
     "decisions_logged": [
       "docs/decisions/toy_validation_results.md",
       "docs/decisions/session_20260702_summary.md",
-      "docs/decisions/physics_ablation.md"
+      "docs/decisions/physics_ablation.md",
+      "docs/decisions/ngspice_integration.md",
+      "docs/decisions/session_20260706_root_cause_fixes.md"
     ]
   },
   "open_questions": [
-    "What target Vmin makes sense for WLUD∈[0.90, 1.0]? (Vmin range ~0.57-0.77V)",
-    "Does plain Surrogate give good WLUD prediction at correct target Vmin?",
-    "Should we fix PhysicsConstrainedSurrogate or accept plain Surrogate for Stage 3?"
+    "HSPICE farm data generation timing (deck_generation_plan.md) - carry the censored/assist-active metric definitions into the parser",
+    "L_mono value on real (possibly non-monotonic) HSPICE data - re-evaluate; on analytic toy it only adds training noise",
+    "Switch Z_FIXED 6.0 -> derive_z_target() (6.64) when absolute Vmin matters (fixed +shift, shapes unchanged)"
   ],
+  "stage3_final": {
+    "date": "2026-07-06",
+    "script": "python/scripts/demo_assist.py",
+    "output": "python/results/stage3_assist/",
+    "target_vmin_V": 0.60,
+    "verdict": "GO (3/3 PASS)",
+    "physics_vs_plain": "Vmin RMSE assist-active 2.55 vs 3.14 mV (-19%), p95 3.87 vs 6.15 mV (-37%), feas agreement 100.0 vs 99.9%"
+  },
   "session_start_checklist": {
     "read_harness": false,
     "read_workflow_state": false,

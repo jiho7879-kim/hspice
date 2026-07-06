@@ -45,12 +45,34 @@ MB = 64  # memory block size in Mb
 Y_TARGET = 0.999  # per-block yield target
 Z_TARGET = 3.0  # simplified single-bit sigma target (adjustable)
 
-# Actually compute from yield model:
-# Per-bit yield = Y_target^(1/(MB * 1e6)) ~ exp(-(Z^2/2))  ->  Z = sqrt(-2 * ln(1 - (1-Y_target)/(MB*1e6)))
-# But for toy project we use a conservative fixed Z_target.
-# The physics layer will use this as the Z-score threshold for Vmin interpolation.
-# After Phase 3 validation the exact Z_target can be tuned.
-Z_FIXED = 6.0  # conservative Z_target for 64Mb @ 99.9%
+
+def derive_z_target(mb: float = MB, y_target: float = Y_TARGET,
+                    bits_per_mb: float = 1e6) -> float:
+    """Exact Z_target from the Poisson/binomial yield model.
+
+    P_fail_per_bit = 1 - y_target^(1/Nbits),  Nbits = mb * bits_per_mb
+    Z_target = Phi^-1(1 - P_fail_per_bit) = norm.isf(P_fail_per_bit)
+
+    For 64 Mb @ 99.9%:  P_bit ~ 1.56e-11  ->  Z ~ 6.65.
+    Note: Nbits is the CELL (bit) count — do not multiply by 6 for the
+    six transistors of a 6T cell; the failure unit is the cell.
+    """
+    from scipy.stats import norm
+    nbits = mb * bits_per_mb
+    p_fail_bit = 1.0 - y_target ** (1.0 / nbits)
+    return float(norm.isf(p_fail_bit))
+
+
+# Fixed Z-score threshold used by the physics layer for Vmin interpolation.
+#
+# NOTE: 6.0 is a SIMPLIFIED toy value, kept fixed so results stay comparable
+# across sessions.  The exact value for 64Mb @ 99.9% is derive_z_target()
+# ~ 6.65, i.e. Z_FIXED = 6.0 is slightly OPTIMISTIC (lower Vmin), not
+# "conservative" as earlier comments claimed (higher Z = stricter = higher
+# Vmin).  Switch to derive_z_target() when absolute Vmin accuracy matters
+# (HSPICE deployment / paper numbers); expect a fixed +shift in all Vmin
+# values, no change to contour SHAPES or GP quality metrics.
+Z_FIXED = 6.0
 
 # PVTA parameter bounds
 COMMON_N_MIN, COMMON_N_MAX = -60.0, 60.0  # mV

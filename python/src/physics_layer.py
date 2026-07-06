@@ -45,25 +45,36 @@ def compute_vmin_from_z(
     zscore: np.ndarray,
     z_target: float = Z_FIXED,
     vops: np.ndarray = VOPS,
-) -> np.ndarray:
+    return_censored: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Compute Vmin by linear interpolation of Zscore = Z_target.
 
     Args:
         zscore: (N, 6) array of Zscore at each Vop level
         z_target: Target Z-score for Vmin definition
         vops: Vop levels corresponding to columns of zscore
+        return_censored: If True, also return a boolean mask marking rows
+            whose true Vmin lies BELOW the lowest sampled Vop (left-censored).
+            For those rows the returned value is the heuristic floor
+            ``vops[0] - 0.05`` — a placeholder, not a measurement.  Continuous
+            error metrics (RMSE etc.) must exclude censored rows; treating the
+            floor as a real Vmin was the source of the inflated Stage 3
+            "Vmin RMSE 0.16-0.26 V" artifact (2026-07-02).
 
     Returns:
-        vmin: (N,) array of interpolated Vmin values.
-              Returns NaN if Z_target is outside the range.
+        vmin: (N,) interpolated Vmin values (NaN when z never reaches
+              z_target = fail point even at max Vop).
+        censored: (N,) bool, only when return_censored=True.
     """
     n = zscore.shape[0]
     vmin = np.full(n, np.nan, dtype=np.float64)
+    censored = np.zeros(n, dtype=bool)
 
     for i in range(n):
         z = zscore[i]
         if z[0] > z_target:
             vmin[i] = vops[0] - 0.05  # heuristic below min Vop
+            censored[i] = True
             continue
         if z[-1] < z_target:
             vmin[i] = np.nan  # fail point
@@ -75,6 +86,8 @@ def compute_vmin_from_z(
                 vmin[i] = vops[j] + t * (vops[j + 1] - vops[j])
                 break
 
+    if return_censored:
+        return vmin, censored
     return vmin
 
 
