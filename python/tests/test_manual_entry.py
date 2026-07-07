@@ -106,11 +106,11 @@ def test_shipped_templates_parse() -> None:
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         write_entry_templates(tmp)
-        ds = parse_manual_csv(tmp / "manual_entry_simple.csv")
+        ds = parse_manual_csv(tmp / "manual_entry_standard.csv")
         dl = parse_manual_csv(tmp / "manual_entry_lobe.csv")
     assert ds["schema"] == "simple" and ds["X"].shape[0] == 2
     assert dl["schema"] == "lobe" and dl["rho_LR"] is not None
-    print("  [OK] shipped templates parse (simple + lobe)")
+    print("  [OK] shipped templates parse (standard + lobe)")
 
 
 if __name__ == "__main__":

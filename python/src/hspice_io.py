@@ -731,19 +731,34 @@ def parse_csv_to_dataset(
 # ============================================================================
 
 _ALIASES = {
+    # --- conditions (X) ---
     "cn": ("common_n_shift", "common_n", "cn", "common n shift"),
     "pu": ("pu_shift", "pu", "pu shift"),
     "vop": ("vop", "vdd"),
     "vwl": ("vwl", "wl_voltage", "wordline", "wl voltage"),
-    "mu": ("mu_snmr", "mu", "mean", "median"),
+    "temp": ("temp", "temperature", "temp_c"),
+    "sig_g": ("sigg_mult", "sig_g", "sigmag", "vtsg", "sigg", "global_sigma"),
+    "sig_l": ("sigl_mult", "sig_l", "sigmal", "vtsl", "sigl", "local_sigma"),
+    "mob": ("mob_mult", "mob", "mobility", "mom", "mom_mult"),
+    # --- SNMR results (y) ---
+    "mu": ("mu_snmr", "mu", "mean", "median", "avg"),
     "sigma": ("sigma_snmr", "sigma", "std", "stdev"),
+    # --- SNMR lobe-resolved (optional, worst corners only) ---
     "mu_l": ("mu_l", "mu_snmr_l", "mul", "mu_left"),
     "sigma_l": ("sigma_l", "sigma_snmr_l", "sigl", "sigma_left"),
     "mu_r": ("mu_r", "mu_snmr_r", "mur", "mu_right"),
     "sigma_r": ("sigma_r", "sigma_snmr_r", "sigr", "sigma_right"),
     "rho": ("rho_lr", "rho", "corr", "correlation"),
+    # --- Vtrip / write-margin results (optional) ---
+    "vtrip_mu": ("vtrip_min_mu", "vtrip_mu", "vtripmin_mu", "wrm_mu", "bwrm_mu"),
+    "vtrip_sigma": ("vtrip_min_sigma", "vtrip_sigma", "wrm_sigma", "bwrm_sigma"),
+    # --- MC count (noise) ---
     "n_mc": ("n_mc", "nmc", "mc_runs", "n"),
 }
+
+# Extra conditions carried through for the future 8-D model (not yet in the
+# core GP input; kept in the returned dict for record-keeping / Phase 4).
+_EXTRA_CONDITION_KEYS = ("temp", "sig_g", "sig_l", "mob")
 
 
 def _map_columns(df) -> dict[str, str]:
@@ -822,6 +837,14 @@ def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
         y_noise = np.column_stack([np.maximum(sem_mu, 1e-9),
                                    np.maximum(sem_sigma, 1e-9)])
 
+    # extra conditions carried through (Phase-4 dims; not in core GP X yet)
+    extras = {k: col(k) for k in _EXTRA_CONDITION_KEYS if k in cm}
+
+    # optional Vtrip / write-margin results
+    y_vtrip = None
+    if "vtrip_mu" in cm and "vtrip_sigma" in cm:
+        y_vtrip = np.column_stack([col("vtrip_mu"), col("vtrip_sigma")])
+
     if np.isnan(X).any():
         raise ValueError("NaN in X columns")
     n_bad = int(np.isnan(y).any(axis=1).sum())
@@ -829,37 +852,76 @@ def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
         print(f"  [WARN] {n_bad} rows with NaN in y — check those conditions")
 
     print(f"  manual CSV [{schema}] -> X {X.shape}, y {y.shape}"
-          f"{', y_noise ' + str(y_noise.shape) if y_noise is not None else ''}")
+          f"{', y_noise ' + str(y_noise.shape) if y_noise is not None else ''}"
+          f"{', +' + ','.join(extras) if extras else ''}"
+          f"{', y_vtrip ' + str(y_vtrip.shape) if y_vtrip is not None else ''}")
     if has_lobe:
         print(f"    rho_LR range [{rho_out.min():+.2f}, {rho_out.max():+.2f}]  "
               f"(A1: negative rho => larger min-stats bias corrected)")
-    return {"X": X, "y": y, "y_noise": y_noise, "rho_LR": rho_out, "schema": schema}
+    return {"X": X, "y": y, "y_noise": y_noise, "rho_LR": rho_out,
+            "schema": schema, "extras": extras, "y_vtrip": y_vtrip}
+
+
+# The one standard transcription form. Fill one row per (condition x Vop).
+# Only sweep-varying columns need real values; blank optional columns take
+# the nominal shown in the comment. Record RAW statistics only — z-score,
+# Vmin, and censoring are computed downstream, so a change in those
+# definitions never requires re-transcribing.
+_STANDARD_HEADER_COMMENT = (
+    "# SRAM Vmin training data — standard hand-entry form.\n"
+    "# One row per (condition x Vop). '#' lines are ignored.\n"
+    "#\n"
+    "# CONDITIONS (from the deck; record what you actually swept):\n"
+    "#   common_N_shift  mV   NMOS (PG=PD) Vth shift          [required]\n"
+    "#   PU_shift        mV   PMOS Vth shift                  [required]\n"
+    "#   Vop             V    supply voltage                  [required]\n"
+    "#   Vwl             V    wordline (assist); blank => = Vop (no assist)\n"
+    "#   temp            C    temperature;        blank => 125\n"
+    "#   sigG_mult       -    global-sigma mult (VTSG); blank => 1\n"
+    "#   sigL_mult       -    local-sigma  mult (VTSL); blank => 1\n"
+    "#   mob_mult        -    mobility     mult (MOM);  blank => 1\n"
+    "# RESULTS (raw MC statistics; NOT z-score or Vmin):\n"
+    "#   mu_SNMR         V    SNMR mean (MC avg)              [required]\n"
+    "#   sigma_SNMR      V    SNMR std  (MC std)              [required]\n"
+    "#   n_mc            -    MC sample count (enables noise-aware GP)\n"
+    "#   vtrip_min_mu    V    mean of per-sample min(L,R) write margin  [optional]\n"
+    "#   vtrip_min_sigma V    its std                                   [optional]\n"
+    "#\n"
+)
+
+_STANDARD_COLS = (
+    "common_N_shift,PU_shift,Vop,Vwl,temp,sigG_mult,sigL_mult,mob_mult,"
+    "mu_SNMR,sigma_SNMR,n_mc,vtrip_min_mu,vtrip_min_sigma"
+)
 
 
 def write_entry_templates(out_dir: str | Path) -> None:
-    """Write two hand-entry CSV templates (simple + lobe) with examples."""
+    """Write the standard hand-entry template (+ a lobe-schema variant).
+
+    `manual_entry_standard.csv` is the one form to fill: conditions from the
+    deck + raw MC results. `manual_entry_lobe.csv` is the optional per-lobe
+    variant for worst-case corners only (removes the min-of-lobes A1 bias at
+    2.5x transcription cost).
+    """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    simple = (
-        "# SRAM Vmin hand-entry template (SIMPLE schema)\n"
-        "# One row per (common_N, PU, Vop) condition. Units: mV, mV, V, V, V.\n"
-        "# n_mc optional (enables noise-aware GP). Lines starting with # ignored.\n"
-        "common_N_shift,PU_shift,Vop,mu_SNMR,sigma_SNMR,n_mc\n"
-        "-60,60,0.6,0.0721,0.0203,2000\n"
-        "0,0,0.6,0.1183,0.0198,2000\n"
+    standard = (
+        _STANDARD_HEADER_COMMENT
+        + _STANDARD_COLS + "\n"
+        + "-60,60,0.6,,,,,,0.0721,0.0203,5000,,\n"          # FSG corner, nominal PVTA
+        + "0,0,0.6,0.54,125,1,1,1,0.1183,0.0198,5000,0.281,0.018\n"  # TT + assist + Vtrip
     )
     lobe = (
-        "# SRAM Vmin hand-entry template (LOBE schema, removes A1 optimism)\n"
-        "# Per-lobe stats + correlation. 2.5x transcription cost vs simple;\n"
-        "# recommended only for worst-case corners to measure the A1 bias.\n"
+        "# LOBE variant — worst-case corners only (removes A1 min-of-lobes bias).\n"
+        "# 2.5x transcription cost; use for a handful of corners, standard form elsewhere.\n"
         "common_N_shift,PU_shift,Vop,mu_L,sigma_L,mu_R,sigma_R,rho_LR,n_mc\n"
-        "-60,60,0.6,0.0731,0.0205,0.0725,0.0201,-0.35,2000\n"
-        "0,0,0.6,0.1190,0.0199,0.1188,0.0197,0.20,2000\n"
+        "-60,60,0.6,0.0731,0.0205,0.0725,0.0201,-0.35,5000\n"
+        "60,-60,0.6,0.0902,0.0210,0.0898,0.0208,-0.30,5000\n"
     )
-    (out_dir / "manual_entry_simple.csv").write_text(simple, encoding="utf-8")
+    (out_dir / "manual_entry_standard.csv").write_text(standard, encoding="utf-8")
     (out_dir / "manual_entry_lobe.csv").write_text(lobe, encoding="utf-8")
-    print(f"  templates -> {out_dir / 'manual_entry_simple.csv'}")
+    print(f"  templates -> {out_dir / 'manual_entry_standard.csv'}")
     print(f"             {out_dir / 'manual_entry_lobe.csv'}")
 
 
