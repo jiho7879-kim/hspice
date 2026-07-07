@@ -1,8 +1,22 @@
 {
   "_format_version": "1.0",
   "project": "HSPICE SRAM Vmin Estimation",
-  "phase": "Stage 3a",
-  "phase_label": "Stage 3a: RESOLVED - inverse assist GO after root-cause fixes",
+  "phase": "Phase 2 planning",
+  "phase_label": "Phase 2: HSPICE real-data validation - master plan at docs/plans/phase2_to_paper_plan.md (2026-07-07)",
+  "active_plan": "docs/plans/phase2_to_paper_plan.md",
+  "done_2026-07-07_impl": [
+    "DONE lobe-resolved Z_eff: utils.bvn_cdf/z_eff_from_lobes/effective_mu_sigma + test_zeff.py (8 tests, A1 bias +0.697 sigma regression-pinned)",
+    "DONE noise-aware GP: models likelihood arg + surrogate.fit(y_noise=) + FixedNoiseGaussianLikelihood + test_noise_aware.py (RMSE 0.0059->0.0020 on corrupted); fixed latent Surrogate.load weights_only bug",
+    "DONE parser QC: hspice_io.bootstrap_sem/condition_qc/lobe_mc_summary/write_qc_report + data.save_with_noise/load_with_noise + test_parser_qc.py",
+    "all 6 test suites pass by exit code"
+  ],
+  "next_actions": [
+    "scripts/budget_pareto.py: N x strategy x 10 seeds sweep (plan sec 4.2)",
+    "scripts/demo_gradient_inversion.py: multi-parameter scenario + censored barrier (plan sec 4.1, review B2/C8)",
+    "ASAP7 public-PDK parallel track: port deck template (review A4 - insurance + reproducibility)",
+    "papers/paper_en.md v0.4: replace stale ablation numbers (plan sec 6.8)",
+    "HSPICE Step A validation deck incl. per-lobe measures + rho_LR (plan sec 3.2)"
+  ],
   "phase_history": [
     {
       "phase": "Stage 1",
@@ -51,7 +65,9 @@
       "docs/decisions/session_20260702_summary.md",
       "docs/decisions/physics_ablation.md",
       "docs/decisions/ngspice_integration.md",
-      "docs/decisions/session_20260706_root_cause_fixes.md"
+      "docs/decisions/session_20260706_root_cause_fixes.md",
+      "docs/plans/phase2_to_paper_plan.md",
+      "docs/decisions/adversarial_review_20260707.md"
     ]
   },
   "open_questions": [
