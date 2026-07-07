@@ -39,8 +39,18 @@ WLUD_LO = 0.90
 TARGET_VMINS = [0.55, 0.60, 0.65, 0.70]
 N_ITER = 50
 
-# Dense WLUD grid for ground truth Vmin computation (wider than training range)
-DENSE_WLUD = np.linspace(0.50, 1.0, 20, dtype=np.float64)
+# Dense WLUD grid for ground truth Vmin computation.
+#
+# DESIGN-RANGE truth (primary): same actionable range the GP searches
+# ([WLUD_LO, 1.0]).  The 2026-07-02 run compared GP feasibility (search
+# range [0.90, 1.0]) against truth over [0.50, 1.0], so every point that
+# needed >10% underdrive was counted as a GP miss — an unfair metric
+# (74-90% "agreement" artifact).  Feasibility must be defined over the
+# same actionable WLUD range on both sides.
+DENSE_WLUD = np.linspace(WLUD_LO, 1.0, 20, dtype=np.float64)
+# Full-range diagnostic: strongest physically-considered assist (WLUD=0.50)
+# used only to report how many points would need out-of-design-range assist.
+WLUD_FULL_MIN = 0.50
 
 rng = np.random.default_rng(42)
 
@@ -107,6 +117,8 @@ pua = np.linspace(PU_MIN, PU_MAX, N_GRID)
 CN, PU = np.meshgrid(cna, pua, indexing="xy")
 
 true_vmin_3d = np.full((N_GRID, N_GRID, len(DENSE_WLUD)), np.nan, dtype=np.float64)
+true_cens_3d = np.zeros((N_GRID, N_GRID, len(DENSE_WLUD)), dtype=bool)
+vmin_full_assist = np.full((N_GRID, N_GRID), np.nan, dtype=np.float64)
 for i in range(N_GRID):
     for j in range(N_GRID):
         cn = float(CN[i, j])
@@ -117,9 +129,19 @@ for i in range(N_GRID):
                 / analytic_snmr(cn, pu, v, vwl_v=v * wlud)[1]
                 for v in VOPS
             ])
-            v = float(compute_vmin_from_z(z_vals.reshape(1, -1))[0])
-            true_vmin_3d[i, j, k] = v
-print(f"  Ground truth grid: {true_vmin_3d.shape}")
+            v, cens = compute_vmin_from_z(z_vals.reshape(1, -1), return_censored=True)
+            true_vmin_3d[i, j, k] = float(v[0])
+            true_cens_3d[i, j, k] = bool(cens[0])
+        # Full-range diagnostic: Vmin at the strongest out-of-range assist
+        z_full = np.array([
+            analytic_snmr(cn, pu, v, vwl_v=v * WLUD_FULL_MIN)[0]
+            / analytic_snmr(cn, pu, v, vwl_v=v * WLUD_FULL_MIN)[1]
+            for v in VOPS
+        ])
+        vmin_full_assist[i, j] = float(compute_vmin_from_z(z_full.reshape(1, -1))[0])
+print(f"  Ground truth grid: {true_vmin_3d.shape} "
+      f"(design-range WLUD [{DENSE_WLUD[0]:.2f}, {DENSE_WLUD[-1]:.2f}]; "
+      f"{int(true_cens_3d.sum())} censored cells)")
 
 # ===================================================================
 # 4. Validation at each target Vmin
@@ -194,23 +216,35 @@ for tgt in TARGET_VMINS:
     feasible_mask = gp_feasible & true_feasible
     n_feasible_both = int(feasible_mask.sum())
 
+    # Out-of-design-range diagnostic: needs assist stronger than WLUD_LO
+    # (feasible at WLUD_FULL_MIN but not within [WLUD_LO, 1.0])
+    oor_mask = (~true_feasible) & ~np.isnan(vmin_full_assist) & (vmin_full_assist <= tgt)
+    n_out_of_range = int(oor_mask.sum())
+
     if n_feasible_both > 0:
         # WLUD error
         wlud_error = wlud_required[feasible_mask] - true_wlud_required[feasible_mask]
         wlud_rmse = float(np.sqrt(np.mean(wlud_error ** 2)))
         wlud_mae = float(np.mean(np.abs(wlud_error)))
 
-        # Vmin achieved at GP-predicted WLUD (interpolated from true model)
+        # Vmin achieved at GP-predicted WLUD (interpolated from true model).
+        # Censoring: if either interpolation endpoint sits at the heuristic
+        # floor (true Vmin < min Vop), the achieved value is not a real
+        # number — the target is met with margin beyond the measurable
+        # range.  Those points are counted separately, NOT in the RMSE.
         vmin_at_gp_wlud = np.full((N_GRID, N_GRID), np.nan, dtype=np.float64)
+        achieved_censored = np.zeros((N_GRID, N_GRID), dtype=bool)
         for idx in zip(*np.where(feasible_mask)):
             i, j = idx
             wlud_gp = float(wlud_required[i, j])
 
             if wlud_gp <= DENSE_WLUD[0]:
                 vmin_at_gp_wlud[i, j] = true_vmin_3d[i, j, 0]
+                achieved_censored[i, j] = true_cens_3d[i, j, 0]
                 continue
             if wlud_gp >= DENSE_WLUD[-1]:
                 vmin_at_gp_wlud[i, j] = true_vmin_3d[i, j, -1]
+                achieved_censored[i, j] = true_cens_3d[i, j, -1]
                 continue
 
             hi = int(np.searchsorted(DENSE_WLUD, wlud_gp))
@@ -221,10 +255,22 @@ for tgt in TARGET_VMINS:
             if np.isnan(v_lo) or np.isnan(v_hi):
                 continue
             vmin_at_gp_wlud[i, j] = v_lo + t_frac * (v_hi - v_lo)
+            achieved_censored[i, j] = bool(true_cens_3d[i, j, lo] or true_cens_3d[i, j, hi])
 
-        valid_vmin = ~np.isnan(vmin_at_gp_wlud[feasible_mask])
-        if valid_vmin.sum() > 0:
-            vmin_error = vmin_at_gp_wlud[feasible_mask][valid_vmin] - tgt
+        # Assist-active subset: cells where the GP actually dialed in an
+        # interior WLUD.  Cells returned as wlud_required == 1.0 mean "no
+        # assist needed" — their natural Vmin sits below the target by
+        # margin, which is a SUCCESS, not an estimation error; including
+        # them turned natural margin into fake RMSE.
+        assist_active = feasible_mask & (wlud_required < 1.0 - 1e-9)
+        n_no_assist = int((feasible_mask & ~assist_active).sum())
+
+        # Interpolable subset: achieved Vmin is a real (non-censored) number
+        interp_mask = assist_active & ~achieved_censored & ~np.isnan(vmin_at_gp_wlud)
+        n_censored = int((assist_active & achieved_censored).sum())
+
+        if interp_mask.sum() > 0:
+            vmin_error = vmin_at_gp_wlud[interp_mask] - tgt
             vmin_rmse = float(np.sqrt(np.mean(vmin_error ** 2)))
             vmin_mae = float(np.mean(np.abs(vmin_error)))
             abs_err = np.abs(vmin_error)
@@ -233,18 +279,34 @@ for tgt in TARGET_VMINS:
             p95 = float(np.percentile(abs_err, 95))
         else:
             vmin_rmse = vmin_mae = p5 = p50 = p95 = np.nan
+
+        # Legacy metric (censored + no-assist points included) — kept to
+        # quantify the size of the artifact vs the 2026-07-02 report.
+        legacy_valid = feasible_mask & ~np.isnan(vmin_at_gp_wlud)
+        if legacy_valid.sum() > 0:
+            legacy_err = vmin_at_gp_wlud[legacy_valid] - tgt
+            vmin_rmse_legacy = float(np.sqrt(np.mean(legacy_err ** 2)))
+        else:
+            vmin_rmse_legacy = np.nan
     else:
         wlud_rmse = wlud_mae = np.nan
         vmin_rmse = vmin_mae = p5 = p50 = p95 = np.nan
+        vmin_rmse_legacy = np.nan
+        n_censored = 0
+        n_no_assist = 0
 
     all_results[tgt] = {
         "n_feasible_gp": n_feasible_gp,
         "n_feasible_true": n_feasible_true,
         "n_feasible_both": n_feasible_both,
+        "n_out_of_range": n_out_of_range,
+        "n_censored": n_censored,
+        "n_no_assist": n_no_assist,
         "feas_agreement_pct": feas_agreement_pct,
         "wlud_rmse": wlud_rmse,
         "wlud_mae": wlud_mae,
         "vmin_rmse": vmin_rmse,
+        "vmin_rmse_legacy": vmin_rmse_legacy,
         "vmin_mae": vmin_mae,
         "p5": p5,
         "p50": p50,
@@ -252,13 +314,16 @@ for tgt in TARGET_VMINS:
     }
 
     # Print per-target summary
-    print(f"    Feasible (GP):          {n_feasible_gp:>4d} / {n_total}")
-    print(f"    Feasible (true):        {n_feasible_true:>4d} / {n_total}")
-    print(f"    Feasibility agreement:  {feas_agreement_pct:>6.2f}%")
+    print(f"    Feasible (GP, design range):    {n_feasible_gp:>4d} / {n_total}")
+    print(f"    Feasible (true, design range):  {n_feasible_true:>4d} / {n_total}")
+    print(f"    Needs out-of-range assist:      {n_out_of_range:>4d}  (WLUD < {WLUD_LO})")
+    print(f"    Feasibility agreement:          {feas_agreement_pct:>6.2f}%")
+    print(f"    No assist needed (natural met): {n_no_assist:>4d}  (WLUD_req = 1.0)")
+    print(f"    Target met w/ margin (censored): {n_censored:>4d}  (achieved < {VOPS[0]:.2f} V)")
     print(f"    WLUD RMSE:              {wlud_rmse:.6f}" if not np.isnan(wlud_rmse) else "    WLUD RMSE:              N/A")
     print(f"    WLUD MAE:               {wlud_mae:.6f}" if not np.isnan(wlud_mae) else "    WLUD MAE:               N/A")
-    print(f"    Vmin error RMSE:        {vmin_rmse:.6f} V" if not np.isnan(vmin_rmse) else "    Vmin error RMSE:        N/A")
-    print(f"    Vmin error MAE:         {vmin_mae:.6f} V" if not np.isnan(vmin_mae) else "    Vmin error MAE:         N/A")
+    print(f"    Vmin RMSE (interpolable): {vmin_rmse:.6f} V" if not np.isnan(vmin_rmse) else "    Vmin RMSE (interpolable): N/A")
+    print(f"    Vmin RMSE (legacy, w/ censored): {vmin_rmse_legacy:.6f} V" if not np.isnan(vmin_rmse_legacy) else "    Vmin RMSE (legacy):     N/A")
     if not np.isnan(p5):
         print(f"    |Vmin err| percentiles: p5={p5:.6f}  p50={p50:.6f}  p95={p95:.6f} V")
 
@@ -270,9 +335,9 @@ print("COMPARISON TABLE: Validation Sweep at Multiple Vmin Targets")
 print("=" * 72)
 
 # Column widths
-col_w = [8, 8, 10, 8, 10, 10, 12, 10, 8, 8, 8]
-headers = ["Target", "Feas_GP", "Feas_True", "Agree%", "WLUD_RMSE",
-           "WLUD_MAE", "Vmin_RMSE", "Vmin_MAE", "|err|p5", "|err|p50", "|err|p95"]
+col_w = [8, 8, 10, 6, 8, 6, 6, 10, 12, 12, 8, 8]
+headers = ["Target", "Feas_GP", "Feas_True", "OoR", "Agree%", "NoAst", "Cens",
+           "WLUD_RMSE", "VminRMSE_int", "VminRMSE_leg", "|err|p50", "|err|p95"]
 hdr_line = "  ".join(f"{h:>{w}}" for h, w in zip(headers, col_w))
 sep_line = "  ".join("-" * w for w in col_w)
 print(hdr_line)
@@ -290,16 +355,22 @@ for tgt in TARGET_VMINS:
         f"{tgt:>{col_w[0]}.2f}",
         f"{r['n_feasible_gp']:>{col_w[1]}d}",
         f"{r['n_feasible_true']:>{col_w[2]}d}",
-        f"{r['feas_agreement_pct']:>{col_w[3] - 1}.1f}%",
-        _fmt(r['wlud_rmse'], col_w[4], 4),
-        _fmt(r['wlud_mae'], col_w[5], 4),
-        _fmt(r['vmin_rmse'], col_w[6], 6),
-        _fmt(r['vmin_mae'], col_w[7], 6),
-        _fmt(r['p5'], col_w[8], 6),
-        _fmt(r['p50'], col_w[9], 6),
-        _fmt(r['p95'], col_w[10], 6),
+        f"{r['n_out_of_range']:>{col_w[3]}d}",
+        f"{r['feas_agreement_pct']:>{col_w[4] - 1}.1f}%",
+        f"{r['n_no_assist']:>{col_w[5]}d}",
+        f"{r['n_censored']:>{col_w[6]}d}",
+        _fmt(r['wlud_rmse'], col_w[7], 4),
+        _fmt(r['vmin_rmse'], col_w[8], 6),
+        _fmt(r['vmin_rmse_legacy'], col_w[9], 6),
+        _fmt(r['p50'], col_w[10], 6),
+        _fmt(r['p95'], col_w[11], 6),
     ]
     print("  ".join(vals))
+print("\n  VminRMSE_int = assist-active, non-censored points only (the real inverse accuracy)")
+print("  VminRMSE_leg = legacy definition incl. no-assist + censored points (artifact)")
+print("  OoR   = true-feasible only with WLUD < WLUD_LO (out of design range)")
+print("  NoAst = no assist needed (natural Vmin already <= target; success, not error)")
+print("  Cens  = target met with margin (achieved Vmin below min sampled Vop)")
 
 print()
 
