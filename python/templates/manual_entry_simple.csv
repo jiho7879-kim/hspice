@@ -1,0 +1,6 @@
+# SRAM Vmin hand-entry template (SIMPLE schema)
+# One row per (common_N, PU, Vop) condition. Units: mV, mV, V, V, V.
+# n_mc optional (enables noise-aware GP). Lines starting with # ignored.
+common_N_shift,PU_shift,Vop,mu_SNMR,sigma_SNMR,n_mc
+-60,60,0.6,0.0721,0.0203,2000
+0,0,0.6,0.1183,0.0198,2000

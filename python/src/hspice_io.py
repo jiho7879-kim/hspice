@@ -714,6 +714,156 @@ def parse_csv_to_dataset(
 
 
 # ============================================================================
+# Hand-entry ingestion
+#
+# When the simulator results are transcribed by hand (no auto file export),
+# the transcription burden dominates.  These helpers accept a structured
+# CSV/sheet the user fills condition-by-condition and turn it into the
+# training tensors + noise + QC in one call.  Two schemas:
+#
+#   simple : cn, pu, Vop [, Vwl] , mu_SNMR, sigma_SNMR [, n_mc]
+#   lobe   : cn, pu, Vop [, Vwl] , mu_L, sigma_L, mu_R, sigma_R, rho_LR [, n_mc]
+#
+# The lobe schema removes the min-of-lobes optimism (adversarial review A1)
+# at 2.5x the transcription cost.  Recommended split: transcribe the whole
+# sweep in the simple schema, and a handful of worst-case corners in the
+# lobe schema, to measure the A1 bias without paying it everywhere.
+# ============================================================================
+
+_ALIASES = {
+    "cn": ("common_n_shift", "common_n", "cn", "common n shift"),
+    "pu": ("pu_shift", "pu", "pu shift"),
+    "vop": ("vop", "vdd"),
+    "vwl": ("vwl", "wl_voltage", "wordline", "wl voltage"),
+    "mu": ("mu_snmr", "mu", "mean", "median"),
+    "sigma": ("sigma_snmr", "sigma", "std", "stdev"),
+    "mu_l": ("mu_l", "mu_snmr_l", "mul", "mu_left"),
+    "sigma_l": ("sigma_l", "sigma_snmr_l", "sigl", "sigma_left"),
+    "mu_r": ("mu_r", "mu_snmr_r", "mur", "mu_right"),
+    "sigma_r": ("sigma_r", "sigma_snmr_r", "sigr", "sigma_right"),
+    "rho": ("rho_lr", "rho", "corr", "correlation"),
+    "n_mc": ("n_mc", "nmc", "mc_runs", "n"),
+}
+
+
+def _map_columns(df) -> dict[str, str]:
+    col_map: dict[str, str] = {}
+    for col in df.columns:
+        cl = str(col).strip().lower().split("(")[0].strip()
+        for key, names in _ALIASES.items():
+            if cl in names:
+                col_map[key] = col
+                break
+    return col_map
+
+
+def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
+    """Parse a hand-entered CSV into training arrays + noise + lobe stats.
+
+    Auto-detects the simple vs lobe schema.  Vwl (absolute) is converted to
+    the WLUD ratio (Vwl/Vop).  When n_mc is present, per-point standard
+    errors are derived (sem_mu = sigma/sqrt(N), sem_sigma = sigma/sqrt(2N))
+    for the noise-aware GP.
+
+    Returns a dict with:
+        X        : (N, d)  [cn, pu, Vop, WLUD?]
+        y        : (N, 2)  [mu, sigma]  (effective, if lobe schema)
+        y_noise  : (N, 2) or None
+        rho_LR   : (N,) or None   (lobe schema only; QC/diagnostics)
+        schema   : "simple" | "lobe"
+    """
+    import pandas as pd
+
+    df = pd.read_csv(csv_path, comment="#")
+    df = df.dropna(how="all")
+    cm = _map_columns(df)
+
+    base = ["cn", "pu", "vop"]
+    missing_base = [b for b in base if b not in cm]
+    if missing_base:
+        raise ValueError(f"missing base columns {missing_base}; found {list(df.columns)}")
+
+    lobe_keys = ["mu_l", "sigma_l", "mu_r", "sigma_r", "rho"]
+    has_lobe = all(k in cm for k in lobe_keys)
+    has_simple = ("mu" in cm and "sigma" in cm)
+    if not (has_lobe or has_simple):
+        raise ValueError(
+            "need either simple (mu_SNMR, sigma_SNMR) or lobe "
+            "(mu_L, sigma_L, mu_R, sigma_R, rho_LR) columns; "
+            f"found {list(df.columns)}"
+        )
+
+    def col(key: str) -> np.ndarray:
+        return df[cm[key]].to_numpy(dtype=np.float64)
+
+    # X (+ optional WLUD from absolute Vwl)
+    x_list = [col("cn"), col("pu"), col("vop")]
+    if "vwl" in cm:
+        x_list.append(col("vwl") / col("vop"))
+    X = np.column_stack(x_list)
+
+    rho_out = None
+    if has_lobe:
+        mu, sigma = effective_mu_sigma(
+            col("mu_l"), col("sigma_l"), col("mu_r"), col("sigma_r"), col("rho"),
+        )
+        rho_out = col("rho")
+        schema = "lobe"
+    else:
+        mu, sigma = col("mu"), col("sigma")
+        schema = "simple"
+    y = np.column_stack([mu, sigma])
+
+    y_noise = None
+    if "n_mc" in cm:
+        n_mc = np.clip(col("n_mc"), 2, None)
+        sem_mu = sigma / np.sqrt(n_mc)
+        sem_sigma = sigma / np.sqrt(2.0 * n_mc)
+        y_noise = np.column_stack([np.maximum(sem_mu, 1e-9),
+                                   np.maximum(sem_sigma, 1e-9)])
+
+    if np.isnan(X).any():
+        raise ValueError("NaN in X columns")
+    n_bad = int(np.isnan(y).any(axis=1).sum())
+    if n_bad:
+        print(f"  [WARN] {n_bad} rows with NaN in y — check those conditions")
+
+    print(f"  manual CSV [{schema}] -> X {X.shape}, y {y.shape}"
+          f"{', y_noise ' + str(y_noise.shape) if y_noise is not None else ''}")
+    if has_lobe:
+        print(f"    rho_LR range [{rho_out.min():+.2f}, {rho_out.max():+.2f}]  "
+              f"(A1: negative rho => larger min-stats bias corrected)")
+    return {"X": X, "y": y, "y_noise": y_noise, "rho_LR": rho_out, "schema": schema}
+
+
+def write_entry_templates(out_dir: str | Path) -> None:
+    """Write two hand-entry CSV templates (simple + lobe) with examples."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    simple = (
+        "# SRAM Vmin hand-entry template (SIMPLE schema)\n"
+        "# One row per (common_N, PU, Vop) condition. Units: mV, mV, V, V, V.\n"
+        "# n_mc optional (enables noise-aware GP). Lines starting with # ignored.\n"
+        "common_N_shift,PU_shift,Vop,mu_SNMR,sigma_SNMR,n_mc\n"
+        "-60,60,0.6,0.0721,0.0203,2000\n"
+        "0,0,0.6,0.1183,0.0198,2000\n"
+    )
+    lobe = (
+        "# SRAM Vmin hand-entry template (LOBE schema, removes A1 optimism)\n"
+        "# Per-lobe stats + correlation. 2.5x transcription cost vs simple;\n"
+        "# recommended only for worst-case corners to measure the A1 bias.\n"
+        "common_N_shift,PU_shift,Vop,mu_L,sigma_L,mu_R,sigma_R,rho_LR,n_mc\n"
+        "-60,60,0.6,0.0731,0.0205,0.0725,0.0201,-0.35,2000\n"
+        "0,0,0.6,0.1190,0.0199,0.1188,0.0197,0.20,2000\n"
+    )
+    (out_dir / "manual_entry_simple.csv").write_text(simple, encoding="utf-8")
+    (out_dir / "manual_entry_lobe.csv").write_text(lobe, encoding="utf-8")
+    print(f"  templates -> {out_dir / 'manual_entry_simple.csv'}")
+    print(f"             {out_dir / 'manual_entry_lobe.csv'}")
+
+
+# ============================================================================
 # CLI
 # ============================================================================
 

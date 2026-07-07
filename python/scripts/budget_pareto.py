@@ -34,6 +34,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np
+import torch
+import gpytorch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -133,9 +135,24 @@ def _stack_vop(cn: np.ndarray, pu: np.ndarray) -> np.ndarray:
     return X
 
 
+def _predict_mean(surr, X: np.ndarray, batch: int = 2048) -> tuple[np.ndarray, np.ndarray]:
+    """GP posterior MEANS only (mu, sigma).  Vmin needs no variance, so we
+    skip it (skip_posterior_variances) and batch the test set to bound the
+    test-test kernel memory -- a full predict() with variance over a large
+    contour grid both wastes compute and can OOM."""
+    Xs = surr._x_scaler.transform(X).astype(np.float32)
+    mus, sgs = [], []
+    with torch.no_grad(), gpytorch.settings.skip_posterior_variances(True):
+        for i in range(0, len(Xs), batch):
+            xt = torch.from_numpy(Xs[i:i + batch])
+            mus.append(surr.mu_gp(xt).mean.cpu().numpy())
+            sgs.append(surr.sigma_gp(xt).mean.cpu().numpy())
+    return np.concatenate(mus), np.concatenate(sgs)
+
+
 def _vmin_at(surr, cn: np.ndarray, pu: np.ndarray):
     """Surrogate Vmin at (cn, pu) points, censored-aware."""
-    mu, _, sg, _ = surr.predict(_stack_vop(cn, pu))
+    mu, sg = _predict_mean(surr, _stack_vop(cn, pu))
     z = (mu / (sg + 1e-12)).reshape(len(cn), len(VOPS))
     return compute_vmin_from_z(z, z_target=Z_FIXED, return_censored=True)
 
@@ -169,7 +186,7 @@ def run_cell(
     Xho = _stack_vop(ho_cn, ho_pu)
     yho_mu = np.array([analytic_snmr(float(c), float(p), float(v))[0]
                        for c, p in zip(ho_cn, ho_pu) for v in VOPS])
-    mu_p, _, _, _ = surr.predict(Xho)
+    mu_p, _ = _predict_mean(surr, Xho)
     mu_rmse = float(np.sqrt(np.mean((mu_p - yho_mu) ** 2)))
 
     # Vmin RMSE (censored-aware): exclude points left-censored in either

@@ -72,6 +72,26 @@ Phase 5  논문 작성/투고                        ← Phase 2+3 결과로 초
 
 ## 3. Phase 2 — HSPICE 실데이터 검증 (Stage 4/5 of execution_guide)
 
+### 3.0 데이터 획득 제약 (user 확인 2026-07-07) — 계획 근본 가정 수정
+
+원 계획서 §14.4는 "farm이 결과를 자동 파일로 내보낸다"를 전제했으나, 실제는:
+- **시뮬 자체는 빠름, 조건 1000+ 가능** → budget 규모는 제약 아님 (원 계획 유지).
+- **병목 = 결과 수동 전사**: 시뮬 결과가 자동 파일로 안 나와 노트/시트에 손으로
+  옮겨 적어야 함. 즉 **전사량(조건당 기입할 숫자 개수)이 실질 비용**.
+
+**함의 (우선순위 재조정):**
+1. budget efficiency(적은 N)는 *생존 필수*가 아니라 **논문 figure**로 유지 (§4.2).
+2. 진짜 레버 = **전사 최소화 + 자동 변환**. → `parse_manual_csv()` +
+   hand-entry 템플릿(`templates/manual_entry_{simple,lobe}.csv`) 구현 완료:
+   사용자가 조건당 한 줄 기입 → 1커맨드로 X/y/y_noise/QC 생성.
+3. **A1(lobe-resolved) vs 전사비용 절충**: simple 스키마는 조건당 (mu,sigma) 2개,
+   lobe 스키마는 (mu_L,σ_L,mu_R,σ_R,ρ) 5개 = **전사 2.5배**. 권고:
+   **전체 sweep은 simple로, worst-case corner 소수(4~8점)만 lobe로** 전사 →
+   A1 편향을 *측정*하되 전 조건에 지불하지 않음. ρ_LR이 corner에서 유의미하게
+   음수면(편향 큼) lobe 전사 범위를 확대, 아니면 simple 유지.
+4. n_mc를 한 칸 더 적으면 noise-aware GP의 SEM이 자동 유도됨 (§3.5) — 전사 1칸
+   대비 효용 큼. 조건마다 MC 수가 같으면 상수 1개만.
+
 ### 3.1 Entry 조건 및 사전 결정사항
 
 - [ ] 사내 PDK 접근 + farm 계정 확인, 데이터 반출 규정 확인 (§7.7 익명화 전략과 연동)

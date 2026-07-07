@@ -1,0 +1,6 @@
+# SRAM Vmin hand-entry template (LOBE schema, removes A1 optimism)
+# Per-lobe stats + correlation. 2.5x transcription cost vs simple;
+# recommended only for worst-case corners to measure the A1 bias.
+common_N_shift,PU_shift,Vop,mu_L,sigma_L,mu_R,sigma_R,rho_LR,n_mc
+-60,60,0.6,0.0731,0.0205,0.0725,0.0201,-0.35,2000
+0,0,0.6,0.1190,0.0199,0.1188,0.0197,0.20,2000
