@@ -402,6 +402,86 @@ def merge_deck_dir(
     return df
 
 
+def build_dataset_csv(
+    sim_dir: str | Path,
+    out_csv: str | Path | None = None,
+    deck_pattern: str = "*.in",
+    snmr_pattern: str = "{stem}.mt0",
+    snmr_measure: str | None = None,
+    vtrip: bool = False,
+    vtrip_a0_pattern: str = "{stem}*a0*.mt0",
+    vtrip_a1_pattern: str = "{stem}*a1*.mt0",
+    vtrip_left_col: str = "bwrm_1",
+    vtrip_right_col: str = "bwrm_2",
+    snm_floor: float = 0.0,
+):
+    """Build ONE training CSV from a sim directory of decks + .mt0 results.
+
+    Run this in the sim environment (where python + the raw files live).
+    For each deck (`deck_pattern`):
+      - conditions from parse_in_deck (VTMSKEW/VTSG/VTSL/MOM, VOP, temp)
+      - SNMR (mu/sigma/n) from the matching `snmr_pattern` .mt0 (mc_stats)
+      - optional Vtrip write margin from a0/a1 files (vtrip_min_stats),
+        left col in a0, right col in a1 -> min per MC sample -> mu/sigma/median
+    -> one row per deck.  RAW statistics only; z-score/Vmin are computed
+    later at train time.  The CSV columns match hspice_io.parse_manual_csv,
+    so the same file is both the auto output and the hand-transcription form.
+
+    Patterns use `{stem}` = deck filename without extension.
+    """
+    import pandas as pd
+
+    sim_dir = Path(sim_dir)
+    decks = sorted(sim_dir.glob(deck_pattern))
+    if not decks:
+        raise FileNotFoundError(f"no {deck_pattern} in {sim_dir}")
+
+    rows, n_snmr, n_vtrip = [], 0, 0
+    for deck in decks:
+        stem = deck.stem
+        row = parse_in_deck(deck)
+
+        # --- SNMR ---
+        snmr_hits = sorted(sim_dir.glob(snmr_pattern.format(stem=stem)))
+        # never mistake a vtrip a0/a1 file for the SNMR file
+        snmr_hits = [f for f in snmr_hits
+                     if "a0" not in f.stem[len(stem):] and "a1" not in f.stem[len(stem):]]
+        if snmr_hits:
+            s = mc_stats(snmr_hits[0], measure=snmr_measure, snm_floor=snm_floor)
+            row["mu_SNMR"] = s["mu"]
+            row["sigma_SNMR"] = s["sigma"]
+            row["n_mc"] = s["n"]
+            n_snmr += 1
+        else:
+            print(f"  [WARN] {deck.name}: no SNMR file for pattern "
+                  f"{snmr_pattern.format(stem=stem)}")
+
+        # --- Vtrip (optional) ---
+        if vtrip:
+            a0 = sorted(sim_dir.glob(vtrip_a0_pattern.format(stem=stem)))
+            a1 = sorted(sim_dir.glob(vtrip_a1_pattern.format(stem=stem)))
+            if a0 and a1:
+                v = vtrip_min_stats(a0[0], a1[0],
+                                    measure_left=vtrip_left_col,
+                                    measure_right=vtrip_right_col)
+                row["vtrip_min_mu"] = v["mu"]
+                row["vtrip_min_sigma"] = v["sigma"]
+                row["vtrip_min_median"] = v["median"]
+                n_vtrip += 1
+            else:
+                print(f"  [WARN] {deck.name}: missing Vtrip a0/a1")
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    print(f"  built {len(decks)} rows  (SNMR {n_snmr}"
+          f"{', Vtrip ' + str(n_vtrip) if vtrip else ''})  -> {df.shape[1]} cols")
+    if out_csv:
+        df.to_csv(out_csv, index=False)
+        print(f"  -> {out_csv}")
+    return df
+
+
 # ---------------------------------------------------------------------------
 # CLI — validate on a real file
 # ---------------------------------------------------------------------------
@@ -440,6 +520,17 @@ def _main() -> None:
     p5.add_argument("--pattern", default="*.in")
     p5.add_argument("-o", "--out", default="merged_conditions.csv")
 
+    p6 = sub.add_parser("build", help="decks + .mt0 results -> one training CSV")
+    p6.add_argument("sim_dir")
+    p6.add_argument("-o", "--out", default="dataset.csv")
+    p6.add_argument("--vtrip", action="store_true", help="include Vtrip a0/a1")
+    p6.add_argument("--snmr-pattern", default="{stem}.mt0")
+    p6.add_argument("--snmr-measure", default=None)
+    p6.add_argument("--vtrip-a0", default="{stem}*a0*.mt0")
+    p6.add_argument("--vtrip-a1", default="{stem}*a1*.mt0")
+    p6.add_argument("--vtrip-left-col", default="bwrm_1")
+    p6.add_argument("--vtrip-right-col", default="bwrm_2")
+
     args = ap.parse_args()
 
     if args.cmd == "snmr":
@@ -470,6 +561,13 @@ def _main() -> None:
         merge_deck_dir(args.in_dir, result_dir=args.result_dir,
                        result_ext=args.result_ext, pattern=args.pattern,
                        out_csv=args.out)
+    elif args.cmd == "build":
+        build_dataset_csv(
+            args.sim_dir, out_csv=args.out, vtrip=args.vtrip,
+            snmr_pattern=args.snmr_pattern, snmr_measure=args.snmr_measure,
+            vtrip_a0_pattern=args.vtrip_a0, vtrip_a1_pattern=args.vtrip_a1,
+            vtrip_left_col=args.vtrip_left_col,
+            vtrip_right_col=args.vtrip_right_col)
 
 
 if __name__ == "__main__":

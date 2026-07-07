@@ -17,7 +17,7 @@ import numpy as np
 
 from src.primesim_io import (
     parse_mt0_wrapped, mc_stats, vtrip_min_stats,
-    parse_in_deck, parse_result_md, merge_deck_dir,
+    parse_in_deck, parse_result_md, merge_deck_dir, build_dataset_csv,
 )
 
 
@@ -307,6 +307,53 @@ def test_merge_missing_result() -> None:
     print("  [OK] merge with no result file leaves result columns blank")
 
 
+def test_build_dataset_csv() -> None:
+    """End-to-end: decks + SNMR + Vtrip a0/a1 .mt0 -> one training CSV."""
+    rng = np.random.default_rng(11)
+    n_mc = 800
+    cols = ["index", "snm", "temper"]
+    vcols = ["index", "bwrm_1", "bwrm_2", "temper"]
+    idx = np.arange(1, n_mc + 1)
+
+    def write_mt0(path, colnames, data):
+        _write_wrapped_mt0(path, colnames, data, per_line=5)
+
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        for cid, (pu, pg) in enumerate([(0, 0), (30, -40)], start=1):
+            stem = f"cond_{cid:03d}"
+            (tmp / f"{stem}.in").write_text(_deck(pu=pu, pg=pg), encoding="utf-8")
+            # SNMR file: {stem}.mt0
+            snm = rng.normal(0.11 + 0.0002 * pg, 0.02, n_mc)
+            write_mt0(tmp / f"{stem}.mt0", cols,
+                      np.column_stack([idx, snm, np.full(n_mc, 25.0)]))
+            # Vtrip a0 (bwrm_1 wanted) / a1 (bwrm_2 wanted; a1.bwrm_1 = Vop pinned)
+            l = rng.normal(0.30, 0.03, n_mc)
+            r = rng.normal(0.31, 0.03, n_mc)
+            write_mt0(tmp / f"{stem}.a0.mt0", vcols,
+                      np.column_stack([idx, l, rng.normal(0.5, 0.05, n_mc), np.full(n_mc, 25.0)]))
+            write_mt0(tmp / f"{stem}.a1.mt0", vcols,
+                      np.column_stack([idx, np.full(n_mc, 0.75), r, np.full(n_mc, 25.0)]))
+
+        df = build_dataset_csv(tmp, out_csv=tmp / "dataset.csv", vtrip=True)
+
+        assert len(df) == 2
+        assert {"common_N_shift", "PU_shift", "VOP", "mu_SNMR", "sigma_SNMR",
+                "n_mc", "vtrip_min_mu", "vtrip_min_sigma"}.issubset(df.columns)
+        assert (df["n_mc"] == n_mc).all()
+        r2 = df[df["deck"] == "cond_002"].iloc[0]
+        assert abs(r2["common_N_shift"] - (-40)) < 1e-9      # from deck
+        assert r2["vtrip_min_mu"] < 0.31                     # min(L,R) < both means
+
+        # the auto CSV feeds straight into the training loader (same format)
+        from src.hspice_io import parse_manual_csv
+        d = parse_manual_csv(tmp / "dataset.csv")
+        assert d["X"].shape[0] == 2 and d["y"].shape == (2, 2)
+        assert d["y_noise"] is not None            # n_mc -> SEM
+        assert d["y_vtrip"] is not None            # vtrip columns carried through
+    print("  [OK] build_dataset_csv -> parse_manual_csv round-trip (X,y,noise,vtrip)")
+
+
 if __name__ == "__main__":
     print("=== test_primesim_io ===")
     test_wrap_reshape_roundtrip()
@@ -320,4 +367,5 @@ if __name__ == "__main__":
     test_deck_instance_mismatch_flag()
     test_merge_deck_dir()
     test_merge_missing_result()
+    test_build_dataset_csv()
     print("\n=== ALL PRIMESIM-IO TESTS PASSED ===")
