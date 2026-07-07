@@ -482,7 +482,7 @@ Phase 4(8D)는 TCAD면 본문, DAC면 future work로 강등 가능한 모듈형 
 | 6 | Write margin 미편입 시 inverse assist가 반쪽 최적화로 공격받음 (리뷰 A2) | — | Step F' 파일럿 조기 편입 (§5.4). 지연 시 fallback = "read-limited" 명시 스코핑 + 주장 강도 하향 |
 | 7 | 데이터 반출 승인 지연/거부 | 승인 > 3주 | 정규화 축 선반영 (§6.7) + **ASAP7 공개 PDK 병렬 트랙** (아래 #9) |
 | 8 | Tail 가정 공격 | — | §4.5 선제 방어 + **lobe-resolved Z_eff (§3.2.1)가 1차 방어선** — min-통계 편향(+0.7~1.9σ)을 정량 교정했음을 명시 |
-| 9 | 사내 PDK 단일 의존 = 논문 좌초 리스크 + 재현성 공격 (리뷰 A4) | 승인 프로세스 정체 | **ASAP7 (공개 FinFET, HSPICE 호환) Stage 4 축소 재현** (50 cond × 6 Vop, MC 2K, ~3-4일) 을 Phase 2 병렬 트랙으로. 사내 데이터 확보 시 보조 검증으로 강등, 실패 시 주 실험으로 승격 |
+| 9 | 사내 PDK 단일 의존 = 논문 좌초 리스크 + 재현성 공격 (리뷰 A4) | 승인 프로세스 정체 | **ASAP7 트랙은 DEFERRED** (user 결정 2026-07-07). 재현성은 analytic 공개로 방어. **조건부 트리거**: 사내 반출 거부/3주+ 정체 시 ASAP7을 주 실험으로 승격 (deck 이식 3-4일). 잔여 리스크: 로컬 실리콘-급 검증 경로 0 (ngspice OSDI 미지원) |
 
 ---
 
@@ -543,7 +543,10 @@ W11+            제출. 8D full은 리뷰 기간 중 병행 → major revision �
 
 ### 9.3 다음 착수 (남은 병렬 작업)
 
-6. **ASAP7 병렬 트랙 착수** — deck 템플릿 이식 (리뷰 A4; 사내 farm과 독립)
-7. **paper_en.md v0.4** — stale 수치 교체 (§6.8)
+6. ✅ **paper_en.md v0.4** — stale 수치 전면 교체 완료 (ablation 재실행 수치,
+   lobe-resolved Z_eff, noise-aware GP, gradient inversion, 지표 정의 체계,
+   Z_target 6.64 유도). v0.3의 physics-constraint 수치 전면 폐기.
+7. ~~ASAP7 병렬 트랙~~ — **DEFERRED** (user 결정, 리스크표 #9 참조). 조건부
+   트리거 시에만 착수.
 8. (farm 접근 가능해지는 즉시) **Step A validation deck 실행** (로브별 측정 포함)
 ```
