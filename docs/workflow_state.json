@@ -19,6 +19,17 @@
     "papers/paper_en.md v0.4: replace stale ablation numbers (plan sec 6.8)",
     "HSPICE Step A validation deck incl. per-lobe measures + rho_LR (plan sec 3.2)"
   ],
+  "running_background_jobs": [
+    {
+      "job": "python scripts/budget_pareto.py --full --seeds 10",
+      "started": "2026-07-08T08:42:12 (local, KST)",
+      "status": "RUNNING as of 2026-07-08T08:48 - not a zombie, verified via CPU time",
+      "progress_at_check": "30/300 cells done (random strategy, physics=off, N<=200)",
+      "eta": "~2.5-3h more (N=400/800 cells cost much more per-cell than N<=200; still need sobol_uniform, stratified_sobol, and all physics=on cells)",
+      "on_completion": "verify results/budget_pareto/pareto_results.json has config.n_seeds==10 and len(records)==300 and a non-empty 'significance' list, then fill docs/decisions/budget_pareto_review.md sec 3-4 and commit both",
+      "note": "this process was started in a PRIOR session and is not tracked by the current session's background-task notifier -- check manually via `Get-CimInstance Win32_Process -Filter \"Name='python.exe'\"` filtering CommandLine for budget_pareto, or just re-check the json's record count"
+    }
+  ],
   "phase_history": [
     {
       "phase": "Stage 1",
