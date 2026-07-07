@@ -1,0 +1,99 @@
+{
+  "records": [
+    {
+      "mu_rmse": 0.0017620461764233603,
+      "vmin_rmse_mV": 4.618948376115429,
+      "hausdorff_mV": 1.109842971266406,
+      "n_holdout_scored": 145,
+      "strategy": "random",
+      "n_cond": 50,
+      "physics": false,
+      "seed": 0
+    },
+    {
+      "mu_rmse": 0.0020718208136301795,
+      "vmin_rmse_mV": 4.639775355904621,
+      "hausdorff_mV": 1.3489645670591486,
+      "n_holdout_scored": 145,
+      "strategy": "random",
+      "n_cond": 50,
+      "physics": false,
+      "seed": 1
+    },
+    {
+      "mu_rmse": 0.0014599850885337082,
+      "vmin_rmse_mV": 4.1454746626461985,
+      "hausdorff_mV": 1.3255673307431337,
+      "n_holdout_scored": 145,
+      "strategy": "random",
+      "n_cond": 100,
+      "physics": false,
+      "seed": 0
+    },
+    {
+      "mu_rmse": 0.0016662283567687331,
+      "vmin_rmse_mV": 3.080793771417813,
+      "hausdorff_mV": 1.1855454933721532,
+      "n_holdout_scored": 146,
+      "strategy": "random",
+      "n_cond": 100,
+      "physics": false,
+      "seed": 1
+    },
+    {
+      "mu_rmse": 0.0015384725572458583,
+      "vmin_rmse_mV": 5.238352595274221,
+      "hausdorff_mV": 1.0531019474239052,
+      "n_holdout_scored": 145,
+      "strategy": "stratified_sobol",
+      "n_cond": 50,
+      "physics": false,
+      "seed": 0
+    },
+    {
+      "mu_rmse": 0.0015328833748166023,
+      "vmin_rmse_mV": 6.193334947642987,
+      "hausdorff_mV": 2.1325017641529485,
+      "n_holdout_scored": 144,
+      "strategy": "stratified_sobol",
+      "n_cond": 50,
+      "physics": false,
+      "seed": 1
+    },
+    {
+      "mu_rmse": 0.0011864149910089977,
+      "vmin_rmse_mV": 3.87836774423642,
+      "hausdorff_mV": 0.7881224343866514,
+      "n_holdout_scored": 144,
+      "strategy": "stratified_sobol",
+      "n_cond": 100,
+      "physics": false,
+      "seed": 0
+    },
+    {
+      "mu_rmse": 0.0010223605290258424,
+      "vmin_rmse_mV": 4.504833116396275,
+      "hausdorff_mV": 1.2124422699192507,
+      "n_holdout_scored": 146,
+      "strategy": "stratified_sobol",
+      "n_cond": 100,
+      "physics": false,
+      "seed": 1
+    }
+  ],
+  "config": {
+    "n_list": [
+      50,
+      100
+    ],
+    "strategies": [
+      "random",
+      "stratified_sobol"
+    ],
+    "physics": [
+      false
+    ],
+    "n_seeds": 2,
+    "n_iter": 80
+  }
+}

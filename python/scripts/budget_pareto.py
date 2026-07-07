@@ -55,7 +55,7 @@ OUT_DIR = Path(__file__).resolve().parent.parent / "results" / "budget_pareto"
 MU_NOISE_STD = 0.002
 SIGMA_NOISE_STD = 0.0005
 CONTOUR_LEVEL = 0.6
-N_TRUE_GRID = 80          # dense grid for the true/pred contour
+N_TRUE_GRID = 60          # dense grid for the true/pred contour (Hausdorff)
 N_HOLDOUT_COND = 300      # random hold-out conditions for Vmin RMSE
 
 STRATEGIES = ("random", "sobol_uniform", "stratified_sobol")
@@ -220,13 +220,15 @@ def main() -> None:
     ap.add_argument("--smoke", action="store_true", help="fast sanity run")
     ap.add_argument("--full", action="store_true", help="paper-quality run")
     ap.add_argument("--n_iter", type=int, default=80)
+    ap.add_argument("--seeds", type=int, default=6,
+                    help="seed count for --full (error bars; 6 default, 10 for final figure)")
     args = ap.parse_args()
 
     if args.full:
         n_list = [50, 100, 200, 400, 800]
         strategies = list(STRATEGIES)
         physics_opts = [False, True]
-        seeds = list(range(10))
+        seeds = list(range(args.seeds))
     else:  # smoke
         n_list = [50, 100]
         strategies = ["random", "stratified_sobol"]
@@ -264,7 +266,8 @@ def main() -> None:
                 vv = np.array([c["vmin_rmse_mV"] for c in cell])
                 print(f"  [{'phys' if phys else 'plain'}] {strat:16s} N={n_cond:4d}  "
                       f"Haus={np.nanmean(hv):5.2f}+/-{np.nanstd(hv):4.2f}mV  "
-                      f"VminRMSE={np.nanmean(vv):5.2f}+/-{np.nanstd(vv):4.2f}mV")
+                      f"VminRMSE={np.nanmean(vv):5.2f}+/-{np.nanstd(vv):4.2f}mV  "
+                      f"[{len(records)} cells, {time.time()-t0:.0f}s]", flush=True)
 
     elapsed = time.time() - t0
     print(f"\nDone in {elapsed:.1f}s ({len(records)} cells)")
