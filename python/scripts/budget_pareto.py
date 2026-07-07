@@ -56,9 +56,21 @@ MU_NOISE_STD = 0.002
 SIGMA_NOISE_STD = 0.0005
 CONTOUR_LEVEL = 0.6
 N_TRUE_GRID = 60          # dense grid for the true/pred contour (Hausdorff)
-N_HOLDOUT_COND = 300      # random hold-out conditions for Vmin RMSE
+N_HOLDOUT_COND = 300      # uniform-random hold-out conditions for Vmin RMSE
 
 STRATEGIES = ("random", "sobol_uniform", "stratified_sobol")
+
+# Corner-neighborhood hold-out (review follow-up): the uniform hold-out
+# rewards whichever strategy's train distribution matches it (uniform),
+# which can hide stratified_sobol's actual advantage near the corners it
+# targets. This second hold-out samples ONLY near the 4 global corners so
+# corner accuracy is visible on its own, not averaged into the domain mean.
+CORNERS_MV = {
+    "FSG": (COMMON_N_MIN, PU_MAX), "SFG": (COMMON_N_MAX, PU_MIN),
+    "FFG": (COMMON_N_MIN, PU_MIN), "SSG": (COMMON_N_MAX, PU_MAX),
+}
+CORNER_RADIUS_MV = 15.0
+N_PER_CORNER = 20
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +133,24 @@ def true_vmin_grid(n_grid: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return CN, PU, vmin.reshape(n_grid, n_grid)
 
 
+def build_corner_holdout(seed: int = 998) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Hold-out points sampled ONLY within CORNER_RADIUS_MV of each global
+    corner, clipped to the domain. Same (vmin, censored) contract as
+    true_vmin_points, so it plugs into the same scoring path."""
+    rng = np.random.default_rng(seed)
+    cn_list, pu_list = [], []
+    for cn0, pu0 in CORNERS_MV.values():
+        d = rng.uniform(-CORNER_RADIUS_MV, CORNER_RADIUS_MV, (N_PER_CORNER, 2))
+        cn = np.clip(cn0 + d[:, 0], COMMON_N_MIN, COMMON_N_MAX)
+        pu = np.clip(pu0 + d[:, 1], PU_MIN, PU_MAX)
+        cn_list.append(cn)
+        pu_list.append(pu)
+    cn = np.concatenate(cn_list)
+    pu = np.concatenate(pu_list)
+    vmin, cens = true_vmin_points(cn, pu)
+    return cn, pu, vmin, cens
+
+
 # ---------------------------------------------------------------------------
 # One (N, strategy, physics, seed) cell
 # ---------------------------------------------------------------------------
@@ -163,11 +193,20 @@ def gp_vmin_grid(surr, CN: np.ndarray, PU: np.ndarray) -> np.ndarray:
     return vmin.reshape(CN.shape)
 
 
+def _censored_aware_rmse_mV(vmin_p, cens_p, vmin_true, cens_true) -> tuple[float, int]:
+    good = (~cens_true) & (~cens_p) & ~np.isnan(vmin_p) & ~np.isnan(vmin_true)
+    if good.sum() == 0:
+        return float("nan"), 0
+    rmse = float(np.sqrt(np.mean((vmin_p[good] - vmin_true[good]) ** 2))) * 1000
+    return rmse, int(good.sum())
+
+
 def run_cell(
     strategy: str, n_cond: int, use_physics: bool, seed: int,
-    holdout, true_grid, n_iter: int,
+    holdout, corner_holdout, true_grid, n_iter: int,
 ) -> dict:
     ho_cn, ho_pu, ho_vmin, ho_cens = holdout
+    c_cn, c_pu, c_vmin, c_cens = corner_holdout
     CN_t, PU_t, vmin_t = true_grid
     true_cn, true_pu = extract_contour(vmin_t, CN_t, PU_t, CONTOUR_LEVEL)
 
@@ -189,14 +228,17 @@ def run_cell(
     mu_p, _ = _predict_mean(surr, Xho)
     mu_rmse = float(np.sqrt(np.mean((mu_p - yho_mu) ** 2)))
 
-    # Vmin RMSE (censored-aware): exclude points left-censored in either
-    # the truth or the prediction (the 0.35V floor is not a measurement)
+    # Vmin RMSE (censored-aware) on the UNIFORM hold-out (domain-average
+    # accuracy -- rewards whichever strategy's train distribution matches
+    # this hold-out's, see module docstring)
     vmin_p, cens_p = _vmin_at(surr, ho_cn, ho_pu)
-    good = (~ho_cens) & (~cens_p) & ~np.isnan(vmin_p) & ~np.isnan(ho_vmin)
-    if good.sum() > 0:
-        vmin_rmse = float(np.sqrt(np.mean((vmin_p[good] - ho_vmin[good]) ** 2))) * 1000
-    else:
-        vmin_rmse = float("nan")
+    vmin_rmse, n_scored = _censored_aware_rmse_mV(vmin_p, cens_p, ho_vmin, ho_cens)
+
+    # Vmin RMSE on the CORNER-ONLY hold-out (isolates accuracy exactly where
+    # stratified_sobol over-samples; averaged away in the uniform metric)
+    vmin_pc, cens_pc = _vmin_at(surr, c_cn, c_pu)
+    corner_vmin_rmse, n_corner_scored = _censored_aware_rmse_mV(
+        vmin_pc, cens_pc, c_vmin, c_cens)
 
     # Contour Hausdorff
     vmin_grid_p = gp_vmin_grid(surr, CN_t, PU_t)
@@ -206,8 +248,10 @@ def run_cell(
     return {
         "mu_rmse": mu_rmse,
         "vmin_rmse_mV": vmin_rmse,
+        "corner_vmin_rmse_mV": corner_vmin_rmse,
         "hausdorff_mV": float(haus),
-        "n_holdout_scored": int(good.sum()),
+        "n_holdout_scored": n_scored,
+        "n_corner_scored": n_corner_scored,
     }
 
 
@@ -240,15 +284,19 @@ def main() -> None:
           f"physics={physics_opts} seeds={len(seeds)}  "
           f"({len(n_list)*len(strategies)*len(physics_opts)*len(seeds)} cells)")
 
-    # Fixed hold-out + true contour grid (shared across all cells)
+    # Fixed hold-outs + true contour grid (shared across all cells)
     rng = np.random.default_rng(999)
     ho_cn = rng.uniform(COMMON_N_MIN, COMMON_N_MAX, N_HOLDOUT_COND)
     ho_pu = rng.uniform(PU_MIN, PU_MAX, N_HOLDOUT_COND)
     ho_vmin, ho_cens = true_vmin_points(ho_cn, ho_pu)
     holdout = (ho_cn, ho_pu, ho_vmin, ho_cens)
+    corner_holdout = build_corner_holdout()
     true_grid = true_vmin_grid(N_TRUE_GRID)
-    print(f"  hold-out: {N_HOLDOUT_COND} cond ({int(ho_cens.sum())} censored), "
-          f"true contour pts: {len(extract_contour(true_grid[2], true_grid[0], true_grid[1], CONTOUR_LEVEL)[0])}")
+    print(f"  uniform hold-out: {N_HOLDOUT_COND} cond ({int(ho_cens.sum())} censored)")
+    print(f"  corner hold-out:  {len(corner_holdout[0])} cond "
+          f"({N_PER_CORNER}/corner x {len(CORNERS_MV)}, radius={CORNER_RADIUS_MV}mV, "
+          f"{int(corner_holdout[3].sum())} censored)")
+    print(f"  true contour pts: {len(extract_contour(true_grid[2], true_grid[0], true_grid[1], CONTOUR_LEVEL)[0])}")
 
     records = []
     t0 = time.time()
@@ -256,7 +304,8 @@ def main() -> None:
         for strat in strategies:
             for n_cond in n_list:
                 for seed in seeds:
-                    r = run_cell(strat, n_cond, phys, seed, holdout, true_grid, args.n_iter)
+                    r = run_cell(strat, n_cond, phys, seed, holdout,
+                                corner_holdout, true_grid, args.n_iter)
                     r.update(strategy=strat, n_cond=n_cond, physics=phys, seed=seed)
                     records.append(r)
                 # aggregate print
@@ -264,23 +313,80 @@ def main() -> None:
                         if x["strategy"] == strat and x["n_cond"] == n_cond and x["physics"] == phys]
                 hv = np.array([c["hausdorff_mV"] for c in cell])
                 vv = np.array([c["vmin_rmse_mV"] for c in cell])
+                cv = np.array([c["corner_vmin_rmse_mV"] for c in cell])
                 print(f"  [{'phys' if phys else 'plain'}] {strat:16s} N={n_cond:4d}  "
                       f"Haus={np.nanmean(hv):5.2f}+/-{np.nanstd(hv):4.2f}mV  "
                       f"VminRMSE={np.nanmean(vv):5.2f}+/-{np.nanstd(vv):4.2f}mV  "
+                      f"CornerRMSE={np.nanmean(cv):5.2f}+/-{np.nanstd(cv):4.2f}mV  "
                       f"[{len(records)} cells, {time.time()-t0:.0f}s]", flush=True)
 
     elapsed = time.time() - t0
     print(f"\nDone in {elapsed:.1f}s ({len(records)} cells)")
+
+    sig_tests = _paired_significance(records, n_list, strategies)
 
     # Save raw records
     with open(OUT_DIR / "pareto_results.json", "w") as f:
         json.dump({"records": records,
                    "config": {"n_list": n_list, "strategies": strategies,
                               "physics": physics_opts, "n_seeds": len(seeds),
-                              "n_iter": args.n_iter}}, f, indent=2)
+                              "n_iter": args.n_iter,
+                              "corner_radius_mV": CORNER_RADIUS_MV,
+                              "n_per_corner": N_PER_CORNER},
+                   "significance": sig_tests}, f, indent=2)
     print(f"  -> {OUT_DIR / 'pareto_results.json'}")
 
     _plot(records, n_list, strategies, physics_opts)
+
+
+def _paired_significance(records, n_list, strategies) -> list[dict]:
+    """Wilcoxon signed-rank test: physics ON vs OFF, paired by seed, for
+    each (strategy, N) cell AND pooled across all cells (does physics win
+    on net, not just in isolated cells that may be noise). Non-parametric
+    because n_seeds is small (5-10) -- no normality assumption on the
+    per-seed Vmin-RMSE differences.
+    """
+    from scipy.stats import wilcoxon
+
+    def vec(strat, n, phys, metric):
+        rows = sorted((r for r in records if r["strategy"] == strat
+                       and r["n_cond"] == n and r["physics"] == phys),
+                      key=lambda r: r["seed"])
+        return np.array([r[metric] for r in rows]), [r["seed"] for r in rows]
+
+    results = []
+    pooled_diff = []
+    print("\n--- Paired significance: physics ON vs OFF (Wilcoxon signed-rank) ---")
+    for strat in strategies:
+        for n in n_list:
+            off, seeds_off = vec(strat, n, False, "vmin_rmse_mV")
+            on, seeds_on = vec(strat, n, True, "vmin_rmse_mV")
+            if seeds_off != seeds_on or len(off) < 4:
+                continue  # need matched seeds and enough pairs for Wilcoxon
+            valid = ~(np.isnan(off) | np.isnan(on))
+            diff = on[valid] - off[valid]   # negative = physics better
+            pooled_diff.extend(diff.tolist())
+            if len(diff) < 4 or np.allclose(diff, 0):
+                continue
+            stat, p = wilcoxon(diff)
+            entry = {"strategy": strat, "n_cond": n, "n_pairs": int(len(diff)),
+                     "mean_diff_mV": float(diff.mean()), "wilcoxon_p": float(p)}
+            results.append(entry)
+            sig = "*" if p < 0.05 else " "
+            print(f"  {strat:16s} N={n:4d}  physics-plain diff={diff.mean():+6.2f}mV  "
+                  f"p={p:.3f} {sig}")
+
+    if pooled_diff:
+        pooled = np.array(pooled_diff)
+        stat, p = wilcoxon(pooled)
+        print(f"  {'POOLED (all cells)':16s}       "
+              f"diff={pooled.mean():+6.2f}mV  p={p:.4f}  "
+              f"n={len(pooled)}  {'*significant*' if p < 0.05 else '(not significant)'}")
+        results.append({"strategy": "POOLED", "n_cond": None,
+                        "n_pairs": int(len(pooled)),
+                        "mean_diff_mV": float(pooled.mean()), "wilcoxon_p": float(p)})
+    print("  (negative diff = physics-constrained better; * = p<0.05)")
+    return results
 
 
 def _plot(records, n_list, strategies, physics_opts) -> None:
@@ -294,12 +400,13 @@ def _plot(records, n_list, strategies, physics_opts) -> None:
             s.append(np.nanstd(vals))
         return np.array(m), np.array(s)
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(19, 5))
     colors = {"random": "#e74c3c", "sobol_uniform": "#3498db",
               "stratified_sobol": "#2ecc71"}
     for ax, metric, title in [
         (axes[0], "hausdorff_mV", "Contour Hausdorff (mV)"),
-        (axes[1], "vmin_rmse_mV", "Vmin RMSE, censored-aware (mV)"),
+        (axes[1], "vmin_rmse_mV", "Vmin RMSE, uniform hold-out (mV)"),
+        (axes[2], "corner_vmin_rmse_mV", "Vmin RMSE, CORNER hold-out (mV)"),
     ]:
         for strat in strategies:
             for phys in physics_opts:
@@ -315,7 +422,8 @@ def _plot(records, n_list, strategies, physics_opts) -> None:
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
     axes[0].set_title("Budget vs contour accuracy")
-    axes[1].set_title("Budget vs Vmin accuracy")
+    axes[1].set_title("Budget vs Vmin accuracy (domain avg)")
+    axes[2].set_title("Budget vs Vmin accuracy (corners only)")
     fig.tight_layout()
     fig.savefig(OUT_DIR / "budget_pareto.png", dpi=150, bbox_inches="tight")
     print(f"  -> {OUT_DIR / 'budget_pareto.png'}")
