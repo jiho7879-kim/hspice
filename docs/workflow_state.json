@@ -10,9 +10,11 @@
     "DONE parser QC: hspice_io.bootstrap_sem/condition_qc/lobe_mc_summary/write_qc_report + data.save_with_noise/load_with_noise + test_parser_qc.py",
     "all 6 test suites pass by exit code"
   ],
+  "done_2026-07-07_impl2": [
+    "DONE scripts/budget_pareto.py (plan 4.2): N x strategy x physics x seeds sweep, censored-aware Vmin RMSE + contour Hausdorff, seed error bars, --smoke/--full. Smoke verified.",
+    "DONE scripts/demo_gradient_inversion.py (plan 4.1): x=(cn,pu,WLUD) autograd inversion through GP posterior + physics layer, sigmoid box reparam, feasibility barriers (C8). GO: 8/8 min-assist manifold convergence, Vmin max err 2.41mV, gradient-vs-bisection WLUD 0.0000."
+  ],
   "next_actions": [
-    "scripts/budget_pareto.py: N x strategy x 10 seeds sweep (plan sec 4.2)",
-    "scripts/demo_gradient_inversion.py: multi-parameter scenario + censored barrier (plan sec 4.1, review B2/C8)",
     "ASAP7 public-PDK parallel track: port deck template (review A4 - insurance + reproducibility)",
     "papers/paper_en.md v0.4: replace stale ablation numbers (plan sec 6.8)",
     "HSPICE Step A validation deck incl. per-lobe measures + rho_LR (plan sec 3.2)"

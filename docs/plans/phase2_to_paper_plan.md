@@ -528,11 +528,21 @@ W11+            제출. 8D full은 리뷰 기간 중 병행 → major revision �
    `data.py`: `save_with_noise()`/`load_with_noise()` (n_mc/sem/censored/extras,
    하위호환). `tests/test_parser_qc.py` 5개 (실 .mt0은 Step A에서 연결).
 
-### 9.2 다음 착수 (남은 병렬 작업)
+### 9.2 완료 (2026-07-07 구현 세션, 이어서)
 
-4. **budget Pareto 스크립트** — `scripts/budget_pareto.py` (§4.2, 10 seeds×전략, 밤샘 CPU)
-5. **gradient inversion 데모** — `scripts/demo_gradient_inversion.py` (§4.1,
-   다변수 시나리오 + censored barrier)
+4. ✅ **budget Pareto 스크립트** — `scripts/budget_pareto.py` (§4.2). N×전략×
+   physics×seeds 스윕, 고정 hold-out, censored-aware Vmin RMSE + contour
+   Hausdorff, seed 오차막대. `--smoke`/`--full`. 스모크 검증 완료
+   (N↑ → Vmin RMSE 감소 확인). 풀런 결과 `results/budget_pareto/`.
+5. ✅ **gradient inversion 데모** — `scripts/demo_gradient_inversion.py` (§4.1).
+   x=(cn,pu,WLUD) 3자유변수 동시 역추정, sigmoid 박스 재param, feasibility
+   barrier 2종(floor/fail, 리뷰 C8). 결과: 8/8 시작점 min-assist 다양체
+   수렴, **Vmin 정확도 max 2.41mV, gradient vs bisection WLUD 일치 0.0000**
+   → GO. figure `results/gradient_inversion/inversion_trajectories.png`.
+   다변수라 grid O(K³) 대비 gradient가 유리함을 시연 (리뷰 B2 반영).
+
+### 9.3 다음 착수 (남은 병렬 작업)
+
 6. **ASAP7 병렬 트랙 착수** — deck 템플릿 이식 (리뷰 A4; 사내 farm과 독립)
 7. **paper_en.md v0.4** — stale 수치 교체 (§6.8)
 8. (farm 접근 가능해지는 즉시) **Step A validation deck 실행** (로브별 측정 포함)
