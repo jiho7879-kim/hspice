@@ -24,6 +24,7 @@ from src.utils import (
     WLUD_COL, WLUD_FACTORS, N_WLUD,
     TEMP_C, TEMP_C_COLD,
     sample_common_n_pu,
+    z_eff_from_lobes, effective_mu_sigma,
 )
 from src.data import build_dataset, save_intermediate
 
@@ -335,6 +336,212 @@ def histogram_qc(snmr_values: np.ndarray, label: str = "") -> dict:
     return result
 
 
+# ============================================================================
+# MC statistics: bootstrap SEM, lobe-resolved stats, per-condition QC
+# ============================================================================
+
+def bootstrap_sem(
+    samples: np.ndarray,
+    stat: str = "mean",
+    n_boot: int = 500,
+    seed: int = 0,
+) -> float:
+    """Bootstrap standard error of a statistic ('mean' or 'std').
+
+    Preferred over the Gaussian closed forms (sigma/sqrt(N) for the mean,
+    sigma/sqrt(2N) for the std) because the std SEM in particular is
+    kurtosis-sensitive and MC SNM distributions are not exactly Gaussian
+    (adversarial review C3).
+    """
+    x = np.asarray(samples, dtype=np.float64)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n < 2:
+        return float("nan")
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n, size=(n_boot, n))
+    resampled = x[idx]
+    if stat == "mean":
+        vals = resampled.mean(axis=1)
+    elif stat == "std":
+        vals = resampled.std(axis=1, ddof=1)
+    else:
+        raise ValueError(f"unknown stat: {stat}")
+    return float(np.std(vals, ddof=1))
+
+
+def condition_qc(samples: np.ndarray, snm_floor: float = 0.0) -> dict:
+    """Per-condition MC QC on a single SNM sample vector.
+
+    Returns mu, sigma (ddof=1), bootstrap SEMs, normality (Anderson-Darling
+    statistic + 5% critical value), skewness, excess kurtosis, and the
+    fraction of samples at/below the fail floor (which flags left-tail
+    fail-mixing that may warrant treating this Vop as censored).
+    """
+    from scipy.stats import anderson, skew, kurtosis
+
+    x = np.asarray(samples, dtype=np.float64)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n < 3:
+        return {
+            "mu": float("nan"), "sigma": float("nan"), "n": n,
+            "sem_mu": float("nan"), "sem_sigma": float("nan"),
+            "ad_stat": float("nan"), "ad_crit5": float("nan"),
+            "normal_ok": False, "skew": float("nan"), "kurtosis": float("nan"),
+            "frac_below_floor": float("nan"),
+        }
+
+    import warnings
+
+    mu = float(np.mean(x))
+    sigma = float(np.std(x, ddof=1))
+    try:
+        # Keep the table-based critical_values form (no `method` kwarg).
+        # SciPy >=1.17 warns that a future default will return a p-value
+        # instead; we pin the current behavior and silence that warning
+        # until we migrate the QC report to p-values.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            ad = anderson(x, dist="norm")
+        ad_stat = float(ad.statistic)
+        # critical value at 5% significance (index 2 in scipy's list)
+        ad_crit5 = float(ad.critical_values[2])
+        normal_ok = ad_stat < ad_crit5
+    except Exception:
+        ad_stat = ad_crit5 = float("nan")
+        normal_ok = False
+
+    return {
+        "mu": mu,
+        "sigma": sigma,
+        "n": n,
+        "sem_mu": bootstrap_sem(x, "mean"),
+        "sem_sigma": bootstrap_sem(x, "std"),
+        "ad_stat": ad_stat,
+        "ad_crit5": ad_crit5,
+        "normal_ok": bool(normal_ok),
+        "skew": float(skew(x)),
+        "kurtosis": float(kurtosis(x)),  # excess (0 = Gaussian)
+        "frac_below_floor": float(np.mean(x <= snm_floor)),
+    }
+
+
+def lobe_mc_summary(
+    snm_l: np.ndarray,
+    snm_r: np.ndarray,
+    snm_floor: float = 0.0,
+) -> dict:
+    """Lobe-resolved MC statistics for one condition (adversarial review A1).
+
+    Returns per-lobe (mu, sigma), their correlation rho_LR, the effective
+    (mu, sigma) whose ratio equals the union-based Z_eff, and the SEMs of
+    the effective mu/sigma (bootstrap over paired resamples so rho is
+    preserved).  Use effective (mu, sigma) as the GP target instead of the
+    optimistically-biased min-statistics.
+    """
+    L = np.asarray(snm_l, dtype=np.float64)
+    R = np.asarray(snm_r, dtype=np.float64)
+    mask = ~(np.isnan(L) | np.isnan(R))
+    L, R = L[mask], R[mask]
+    n = len(L)
+    if n < 3:
+        raise ValueError("need >= 3 paired samples for lobe summary")
+
+    mu_l, sg_l = float(np.mean(L)), float(np.std(L, ddof=1))
+    mu_r, sg_r = float(np.mean(R)), float(np.std(R, ddof=1))
+    rho = float(np.corrcoef(L, R)[0, 1]) if (sg_l > 0 and sg_r > 0) else 0.0
+    rho = float(np.clip(rho, -0.999, 0.999))
+
+    mu_eff, sg_eff = effective_mu_sigma(mu_l, sg_l, mu_r, sg_r, rho, snm_floor)
+    z_eff = float(z_eff_from_lobes(mu_l, sg_l, mu_r, sg_r, rho, snm_floor))
+
+    # Paired bootstrap for SEM of the effective statistics (keeps rho)
+    rng = np.random.default_rng(0)
+    n_boot = 400
+    idx = rng.integers(0, n, size=(n_boot, n))
+    Lb, Rb = L[idx], R[idx]
+    mul_b = Lb.mean(1); sgl_b = Lb.std(1, ddof=1)
+    mur_b = Rb.mean(1); sgr_b = Rb.std(1, ddof=1)
+    rho_b = np.array([
+        np.clip(np.corrcoef(Lb[i], Rb[i])[0, 1], -0.999, 0.999)
+        if (sgl_b[i] > 0 and sgr_b[i] > 0) else 0.0
+        for i in range(n_boot)
+    ])
+    mu_eff_b, sg_eff_b = effective_mu_sigma(mul_b, sgl_b, mur_b, sgr_b, rho_b, snm_floor)
+
+    return {
+        "mu_L": mu_l, "sigma_L": sg_l,
+        "mu_R": mu_r, "sigma_R": sg_r,
+        "rho_LR": rho,
+        "mu_eff": float(mu_eff), "sigma_eff": float(sg_eff),
+        "z_eff": z_eff,
+        "sem_mu_eff": float(np.std(mu_eff_b, ddof=1)),
+        "sem_sigma_eff": float(np.std(sg_eff_b, ddof=1)),
+        "n": n,
+    }
+
+
+def write_qc_report(
+    qc_rows: list[dict],
+    out_path: str | Path,
+    title: str = "HSPICE MC QC report",
+) -> None:
+    """Write a markdown QC report from a list of per-condition QC dicts.
+
+    Each row dict should carry identifying fields (e.g. job_id, cn, pu, Vop)
+    plus the keys produced by condition_qc().  A summary table flags any
+    non-normal, high-skew, or fail-mixed conditions.
+    """
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    n = len(qc_rows)
+    n_nonnormal = sum(1 for r in qc_rows if not r.get("normal_ok", True))
+    n_failmix = sum(1 for r in qc_rows if r.get("frac_below_floor", 0.0) > 0.001)
+    n_highskew = sum(1 for r in qc_rows if abs(r.get("skew", 0.0)) > 1.0)
+
+    lines = [
+        f"# {title}",
+        "",
+        f"- conditions: **{n}**",
+        f"- non-normal (AD stat >= 5% crit): **{n_nonnormal}** "
+        f"({100 * n_nonnormal / max(n, 1):.1f}%)",
+        f"- fail-mixed (frac SNM<=floor > 0.1%): **{n_failmix}** "
+        "(candidate for Vop censoring)",
+        f"- high-skew (|skew| > 1): **{n_highskew}**",
+        "",
+        "| job | cn | pu | Vop | n | mu | sigma | sem_mu | sem_sig | "
+        "AD/crit | skew | kurt | fail% | flags |",
+        "|----:|---:|---:|----:|--:|----:|------:|-------:|--------:|"
+        "--------:|-----:|-----:|------:|-------|",
+    ]
+    for r in qc_rows:
+        flags = []
+        if not r.get("normal_ok", True):
+            flags.append("nonnormal")
+        if r.get("frac_below_floor", 0.0) > 0.001:
+            flags.append("failmix")
+        if abs(r.get("skew", 0.0)) > 1.0:
+            flags.append("skew")
+        ad = r.get("ad_stat", float("nan"))
+        crit = r.get("ad_crit5", float("nan"))
+        lines.append(
+            f"| {r.get('job_id', '')} | {r.get('cn', ''):.0f} | "
+            f"{r.get('pu', ''):.0f} | {r.get('vop', float('nan')):.2f} | "
+            f"{r.get('n', 0)} | {r.get('mu', float('nan')):.4f} | "
+            f"{r.get('sigma', float('nan')):.5f} | "
+            f"{r.get('sem_mu', float('nan')):.5f} | "
+            f"{r.get('sem_sigma', float('nan')):.5f} | "
+            f"{ad:.2f}/{crit:.2f} | {r.get('skew', float('nan')):.2f} | "
+            f"{r.get('kurtosis', float('nan')):.2f} | "
+            f"{100 * r.get('frac_below_floor', 0.0):.2f} | "
+            f"{','.join(flags) if flags else 'ok'} |"
+        )
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"  QC report -> {out_path}")
+
+
 def process_all(
     raw_dir: str | Path,
     out_file: str | Path,
@@ -504,6 +711,218 @@ def parse_csv_to_dataset(
     print(f"    sigma range [{y[:, 1].min():.5f}, {y[:, 1].max():.5f}] V")
 
     return X_raw, y
+
+
+# ============================================================================
+# Hand-entry ingestion
+#
+# When the simulator results are transcribed by hand (no auto file export),
+# the transcription burden dominates.  These helpers accept a structured
+# CSV/sheet the user fills condition-by-condition and turn it into the
+# training tensors + noise + QC in one call.  Two schemas:
+#
+#   simple : cn, pu, Vop [, Vwl] , mu_SNMR, sigma_SNMR [, n_mc]
+#   lobe   : cn, pu, Vop [, Vwl] , mu_L, sigma_L, mu_R, sigma_R, rho_LR [, n_mc]
+#
+# The lobe schema removes the min-of-lobes optimism (adversarial review A1)
+# at 2.5x the transcription cost.  Recommended split: transcribe the whole
+# sweep in the simple schema, and a handful of worst-case corners in the
+# lobe schema, to measure the A1 bias without paying it everywhere.
+# ============================================================================
+
+_ALIASES = {
+    # --- conditions (X) ---
+    "cn": ("common_n_shift", "common_n", "cn", "common n shift"),
+    "pu": ("pu_shift", "pu", "pu shift"),
+    "vop": ("vop", "vdd"),
+    "vwl": ("vwl", "wl_voltage", "wordline", "wl voltage"),
+    "temp": ("temp", "temperature", "temp_c"),
+    "sig_g": ("sigg_mult", "sig_g", "sigmag", "vtsg", "sigg", "global_sigma"),
+    "sig_l": ("sigl_mult", "sig_l", "sigmal", "vtsl", "sigl", "local_sigma"),
+    "mob": ("mob_mult", "mob", "mobility", "mom", "mom_mult"),
+    # --- SNMR results (y) ---
+    "mu": ("mu_snmr", "mu", "mean", "median", "avg"),
+    "sigma": ("sigma_snmr", "sigma", "std", "stdev"),
+    # --- SNMR lobe-resolved (optional, worst corners only) ---
+    "mu_l": ("mu_l", "mu_snmr_l", "mul", "mu_left"),
+    "sigma_l": ("sigma_l", "sigma_snmr_l", "sigl", "sigma_left"),
+    "mu_r": ("mu_r", "mu_snmr_r", "mur", "mu_right"),
+    "sigma_r": ("sigma_r", "sigma_snmr_r", "sigr", "sigma_right"),
+    "rho": ("rho_lr", "rho", "corr", "correlation"),
+    # --- Vtrip / write-margin results (optional) ---
+    "vtrip_mu": ("vtrip_min_mu", "vtrip_mu", "vtripmin_mu", "wrm_mu", "bwrm_mu"),
+    "vtrip_sigma": ("vtrip_min_sigma", "vtrip_sigma", "wrm_sigma", "bwrm_sigma"),
+    # --- MC count (noise) ---
+    "n_mc": ("n_mc", "nmc", "mc_runs", "n"),
+}
+
+# Extra conditions carried through for the future 8-D model (not yet in the
+# core GP input; kept in the returned dict for record-keeping / Phase 4).
+_EXTRA_CONDITION_KEYS = ("temp", "sig_g", "sig_l", "mob")
+
+
+def _map_columns(df) -> dict[str, str]:
+    col_map: dict[str, str] = {}
+    for col in df.columns:
+        cl = str(col).strip().lower().split("(")[0].strip()
+        for key, names in _ALIASES.items():
+            if cl in names:
+                col_map[key] = col
+                break
+    return col_map
+
+
+def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
+    """Parse a hand-entered CSV into training arrays + noise + lobe stats.
+
+    Auto-detects the simple vs lobe schema.  Vwl (absolute) is converted to
+    the WLUD ratio (Vwl/Vop).  When n_mc is present, per-point standard
+    errors are derived (sem_mu = sigma/sqrt(N), sem_sigma = sigma/sqrt(2N))
+    for the noise-aware GP.
+
+    Returns a dict with:
+        X        : (N, d)  [cn, pu, Vop, WLUD?]
+        y        : (N, 2)  [mu, sigma]  (effective, if lobe schema)
+        y_noise  : (N, 2) or None
+        rho_LR   : (N,) or None   (lobe schema only; QC/diagnostics)
+        schema   : "simple" | "lobe"
+    """
+    import pandas as pd
+
+    df = pd.read_csv(csv_path, comment="#")
+    df = df.dropna(how="all")
+    cm = _map_columns(df)
+
+    base = ["cn", "pu", "vop"]
+    missing_base = [b for b in base if b not in cm]
+    if missing_base:
+        raise ValueError(f"missing base columns {missing_base}; found {list(df.columns)}")
+
+    lobe_keys = ["mu_l", "sigma_l", "mu_r", "sigma_r", "rho"]
+    has_lobe = all(k in cm for k in lobe_keys)
+    has_simple = ("mu" in cm and "sigma" in cm)
+    if not (has_lobe or has_simple):
+        raise ValueError(
+            "need either simple (mu_SNMR, sigma_SNMR) or lobe "
+            "(mu_L, sigma_L, mu_R, sigma_R, rho_LR) columns; "
+            f"found {list(df.columns)}"
+        )
+
+    def col(key: str) -> np.ndarray:
+        return df[cm[key]].to_numpy(dtype=np.float64)
+
+    # X (+ optional WLUD from absolute Vwl)
+    x_list = [col("cn"), col("pu"), col("vop")]
+    if "vwl" in cm:
+        x_list.append(col("vwl") / col("vop"))
+    X = np.column_stack(x_list)
+
+    rho_out = None
+    if has_lobe:
+        mu, sigma = effective_mu_sigma(
+            col("mu_l"), col("sigma_l"), col("mu_r"), col("sigma_r"), col("rho"),
+        )
+        rho_out = col("rho")
+        schema = "lobe"
+    else:
+        mu, sigma = col("mu"), col("sigma")
+        schema = "simple"
+    y = np.column_stack([mu, sigma])
+
+    y_noise = None
+    if "n_mc" in cm:
+        n_mc = np.clip(col("n_mc"), 2, None)
+        sem_mu = sigma / np.sqrt(n_mc)
+        sem_sigma = sigma / np.sqrt(2.0 * n_mc)
+        y_noise = np.column_stack([np.maximum(sem_mu, 1e-9),
+                                   np.maximum(sem_sigma, 1e-9)])
+
+    # extra conditions carried through (Phase-4 dims; not in core GP X yet)
+    extras = {k: col(k) for k in _EXTRA_CONDITION_KEYS if k in cm}
+
+    # optional Vtrip / write-margin results
+    y_vtrip = None
+    if "vtrip_mu" in cm and "vtrip_sigma" in cm:
+        y_vtrip = np.column_stack([col("vtrip_mu"), col("vtrip_sigma")])
+
+    if np.isnan(X).any():
+        raise ValueError("NaN in X columns")
+    n_bad = int(np.isnan(y).any(axis=1).sum())
+    if n_bad:
+        print(f"  [WARN] {n_bad} rows with NaN in y — check those conditions")
+
+    print(f"  manual CSV [{schema}] -> X {X.shape}, y {y.shape}"
+          f"{', y_noise ' + str(y_noise.shape) if y_noise is not None else ''}"
+          f"{', +' + ','.join(extras) if extras else ''}"
+          f"{', y_vtrip ' + str(y_vtrip.shape) if y_vtrip is not None else ''}")
+    if has_lobe:
+        print(f"    rho_LR range [{rho_out.min():+.2f}, {rho_out.max():+.2f}]  "
+              f"(A1: negative rho => larger min-stats bias corrected)")
+    return {"X": X, "y": y, "y_noise": y_noise, "rho_LR": rho_out,
+            "schema": schema, "extras": extras, "y_vtrip": y_vtrip}
+
+
+# The one standard transcription form. Fill one row per (condition x Vop).
+# Only sweep-varying columns need real values; blank optional columns take
+# the nominal shown in the comment. Record RAW statistics only — z-score,
+# Vmin, and censoring are computed downstream, so a change in those
+# definitions never requires re-transcribing.
+_STANDARD_HEADER_COMMENT = (
+    "# SRAM Vmin training data — standard hand-entry form.\n"
+    "# One row per (condition x Vop). '#' lines are ignored.\n"
+    "#\n"
+    "# CONDITIONS (from the deck; record what you actually swept):\n"
+    "#   common_N_shift  mV   NMOS (PG=PD) Vth shift          [required]\n"
+    "#   PU_shift        mV   PMOS Vth shift                  [required]\n"
+    "#   Vop             V    supply voltage                  [required]\n"
+    "#   Vwl             V    wordline (assist); blank => = Vop (no assist)\n"
+    "#   temp            C    temperature;        blank => 125\n"
+    "#   sigG_mult       -    global-sigma mult (VTSG); blank => 1\n"
+    "#   sigL_mult       -    local-sigma  mult (VTSL); blank => 1\n"
+    "#   mob_mult        -    mobility     mult (MOM);  blank => 1\n"
+    "# RESULTS (raw MC statistics; NOT z-score or Vmin):\n"
+    "#   mu_SNMR         V    SNMR mean (MC avg)              [required]\n"
+    "#   sigma_SNMR      V    SNMR std  (MC std)              [required]\n"
+    "#   n_mc            -    MC sample count (enables noise-aware GP)\n"
+    "#   vtrip_min_mu    V    mean of per-sample min(L,R) write margin  [optional]\n"
+    "#   vtrip_min_sigma V    its std                                   [optional]\n"
+    "#\n"
+)
+
+_STANDARD_COLS = (
+    "common_N_shift,PU_shift,Vop,Vwl,temp,sigG_mult,sigL_mult,mob_mult,"
+    "mu_SNMR,sigma_SNMR,n_mc,vtrip_min_mu,vtrip_min_sigma"
+)
+
+
+def write_entry_templates(out_dir: str | Path) -> None:
+    """Write the standard hand-entry template (+ a lobe-schema variant).
+
+    `manual_entry_standard.csv` is the one form to fill: conditions from the
+    deck + raw MC results. `manual_entry_lobe.csv` is the optional per-lobe
+    variant for worst-case corners only (removes the min-of-lobes A1 bias at
+    2.5x transcription cost).
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    standard = (
+        _STANDARD_HEADER_COMMENT
+        + _STANDARD_COLS + "\n"
+        + "-60,60,0.6,,,,,,0.0721,0.0203,5000,,\n"          # FSG corner, nominal PVTA
+        + "0,0,0.6,0.54,125,1,1,1,0.1183,0.0198,5000,0.281,0.018\n"  # TT + assist + Vtrip
+    )
+    lobe = (
+        "# LOBE variant — worst-case corners only (removes A1 min-of-lobes bias).\n"
+        "# 2.5x transcription cost; use for a handful of corners, standard form elsewhere.\n"
+        "common_N_shift,PU_shift,Vop,mu_L,sigma_L,mu_R,sigma_R,rho_LR,n_mc\n"
+        "-60,60,0.6,0.0731,0.0205,0.0725,0.0201,-0.35,5000\n"
+        "60,-60,0.6,0.0902,0.0210,0.0898,0.0208,-0.30,5000\n"
+    )
+    (out_dir / "manual_entry_standard.csv").write_text(standard, encoding="utf-8")
+    (out_dir / "manual_entry_lobe.csv").write_text(lobe, encoding="utf-8")
+    print(f"  templates -> {out_dir / 'manual_entry_standard.csv'}")
+    print(f"             {out_dir / 'manual_entry_lobe.csv'}")
 
 
 # ============================================================================

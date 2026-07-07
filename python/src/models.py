@@ -21,14 +21,21 @@ from src.utils import VOP_COL, VWL_COL
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
-    """Single-output exact GP with Matern 5/2 + ARD kernel (all dims, auto-adapts)."""
+    """Single-output exact GP with Matern 5/2 + ARD kernel (all dims, auto-adapts).
 
-    def __init__(self, train_x: torch.Tensor, train_y: torch.Tensor) -> None:
+    `likelihood=None` (default) constructs a homoscedastic GaussianLikelihood.
+    Pass a FixedNoiseGaussianLikelihood for noise-aware training with known
+    per-point observation noise (e.g. MC standard errors).
+    """
+
+    def __init__(self, train_x: torch.Tensor, train_y: torch.Tensor,
+                 likelihood: "gpytorch.likelihoods.Likelihood | None" = None) -> None:
         from gpytorch.likelihoods import GaussianLikelihood
         from gpytorch.means import ConstantMean
         from gpytorch.kernels import ScaleKernel, MaternKernel
 
-        likelihood = GaussianLikelihood()
+        if likelihood is None:
+            likelihood = GaussianLikelihood()
         super().__init__(train_x, train_y, likelihood)
         self.mean_module = ConstantMean()
         n_dims = train_x.shape[-1]
@@ -48,12 +55,14 @@ class AdditiveGPModel(gpytorch.models.ExactGP):
          Operating-group dims: indices [VOP_COL .. n_dims-1] past core device dims.
     """
 
-    def __init__(self, train_x: torch.Tensor, train_y: torch.Tensor) -> None:
+    def __init__(self, train_x: torch.Tensor, train_y: torch.Tensor,
+                 likelihood: "gpytorch.likelihoods.Likelihood | None" = None) -> None:
         from gpytorch.likelihoods import GaussianLikelihood
         from gpytorch.means import ConstantMean
         from gpytorch.kernels import ScaleKernel, MaternKernel
 
-        likelihood = GaussianLikelihood()
+        if likelihood is None:
+            likelihood = GaussianLikelihood()
         super().__init__(train_x, train_y, likelihood)
         self.mean_module = ConstantMean()
         n_dims = train_x.shape[-1]

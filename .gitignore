@@ -24,6 +24,8 @@ python/.venv/
 *.csv
 *.dat
 *.txt
+# ...but keep hand-entry CSV templates (they are code, not data)
+!python/templates/manual_entry_*.csv
 
 # Temporary / intermediate files
 *.tmp

@@ -74,6 +74,137 @@ def derive_z_target(mb: float = MB, y_target: float = Y_TARGET,
 # values, no change to contour SHAPES or GP quality metrics.
 Z_FIXED = 6.0
 
+
+# ---------------------------------------------------------------------------
+# Lobe-resolved effective z-score (adversarial review 2026-07-07, finding A1)
+#
+# Read SNM is the MIN of the two butterfly lobes.  Applying a Gaussian
+# z-score to the min's (mu, sigma) underestimates the fail tail by
+# +0.7 sigma (independent lobes) to +1.9 sigma (anticorrelated lobes) at
+# Z ~ 6, i.e. ~70-190 mV of optimistic Vmin bias.  The correct treatment
+# works from per-lobe statistics:
+#
+#     p_fail = P(L < t) + P(R < t) - P(L < t, R < t)
+#     Z_eff  = Phi^-1(1 - p_fail)
+#
+# which is closed-form (bivariate normal CDF via Owen's T), vectorized,
+# and smooth in all inputs (differentiable for the physics layer).
+# ---------------------------------------------------------------------------
+
+def bvn_cdf(h: np.ndarray, k: np.ndarray, rho: np.ndarray) -> np.ndarray:
+    """Standard bivariate normal CDF  P(X <= h, Y <= k), corr(X, Y) = rho.
+
+    Vectorized over (h, k, rho) via Owen's T function (Owen 1956):
+
+        Phi2(h, k, rho) = 0.5*(Phi(h) + Phi(k)) - T(h, a_h) - T(k, a_k) - c
+        a_h = (k - rho*h) / (h * sqrt(1 - rho^2)),  a_k symmetric
+        c   = 0.5 if h*k < 0 (or h*k == 0 and h + k < 0), else 0
+
+    Exact up to floating point; the subtractive cancellation only becomes
+    relatively large when the result is negligibly small (rho -> 0 deep in
+    the joint tail), where it does not matter for the union probability.
+    Results are clipped to the Frechet bounds for safety.
+    """
+    from scipy.stats import norm
+    from scipy.special import owens_t
+
+    h = np.asarray(h, dtype=np.float64)
+    k = np.asarray(k, dtype=np.float64)
+    rho = np.asarray(rho, dtype=np.float64)
+    h, k, rho = np.broadcast_arrays(h, k, rho)
+
+    out = np.empty(h.shape, dtype=np.float64)
+
+    # Degenerate correlations handled exactly
+    hi_r = rho >= 1.0 - 1e-12
+    lo_r = rho <= -1.0 + 1e-12
+    mid = ~(hi_r | lo_r)
+
+    if hi_r.any():
+        out[hi_r] = norm.cdf(np.minimum(h[hi_r], k[hi_r]))
+    if lo_r.any():
+        out[lo_r] = np.maximum(0.0, norm.cdf(h[lo_r]) + norm.cdf(k[lo_r]) - 1.0)
+
+    if mid.any():
+        hm, km, rm = h[mid], k[mid], rho[mid]
+        # Avoid division by zero at h == 0 / k == 0 (limit is well-defined;
+        # nudging by ~1e-14 changes Phi2 by O(1e-14))
+        eps = 1e-14
+        hs = np.where(np.abs(hm) < eps, eps, hm)
+        ks = np.where(np.abs(km) < eps, eps, km)
+        den = np.sqrt(1.0 - rm * rm)
+        a_h = (ks - rm * hs) / (hs * den)
+        a_k = (hs - rm * ks) / (ks * den)
+        c = np.where(
+            (hs * ks < 0) | ((hs * ks == 0) & (hs + ks < 0)),
+            0.5, 0.0,
+        )
+        val = (0.5 * (norm.cdf(hs) + norm.cdf(ks))
+               - owens_t(hs, a_h) - owens_t(ks, a_k) - c)
+        # Frechet bounds clip (guards tiny negative values from cancellation)
+        upper = np.minimum(norm.cdf(hs), norm.cdf(ks))
+        lower = np.maximum(0.0, norm.cdf(hs) + norm.cdf(ks) - 1.0)
+        out[mid] = np.clip(val, lower, upper)
+
+    return out
+
+
+def z_eff_from_lobes(
+    mu_l: np.ndarray, sigma_l: np.ndarray,
+    mu_r: np.ndarray, sigma_r: np.ndarray,
+    rho: np.ndarray,
+    threshold: float = 0.0,
+) -> np.ndarray:
+    """Effective z-score for cell SNM = min(L, R) failing below `threshold`.
+
+    Args:
+        mu_l, sigma_l: left-lobe SNM mean / std (any consistent unit)
+        mu_r, sigma_r: right-lobe SNM mean / std
+        rho:           correlation between lobe SNMs (from the same MC run)
+        threshold:     fail threshold on SNM (default 0)
+
+    Returns:
+        Z_eff = Phi^-1(1 - p_fail), vectorized.  Use in place of mu/sigma
+        of the min-statistics (which is optimistically biased, see module
+        comment).  Smooth in all inputs.
+    """
+    from scipy.stats import norm
+
+    z_l = (np.asarray(mu_l, dtype=np.float64) - threshold) / np.asarray(sigma_l, dtype=np.float64)
+    z_r = (np.asarray(mu_r, dtype=np.float64) - threshold) / np.asarray(sigma_r, dtype=np.float64)
+    p_l = norm.sf(z_l)
+    p_r = norm.sf(z_r)
+    p_both = bvn_cdf(-z_l, -z_r, rho)
+    p_fail = np.clip(p_l + p_r - p_both, 1e-300, 1.0 - 1e-16)
+    return norm.isf(p_fail)
+
+
+def effective_mu_sigma(
+    mu_l: np.ndarray, sigma_l: np.ndarray,
+    mu_r: np.ndarray, sigma_r: np.ndarray,
+    rho: np.ndarray,
+    threshold: float = 0.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Map lobe statistics to an effective (mu, sigma) pair.
+
+    Preserves the project-wide y = (N, 2) = [mu, sigma] convention while
+    guaranteeing  mu_eff / sigma_eff == z_eff_from_lobes(...) exactly, so
+    the existing GP + physics-layer pipeline needs no modification.
+
+    sigma_eff is the geometric mean of the lobe sigmas — a smooth,
+    symmetric scale choice (only the mu/sigma RATIO affects Vmin; a
+    worst-lobe sigma would introduce a kink where the lobes cross).
+
+    Note: the fail threshold is ABSORBED into z_eff (downstream code
+    computes z = mu/sigma with an implicit fail-at-zero), so
+    mu_eff = z_eff * sigma_eff with no threshold offset.
+    """
+    z_eff = z_eff_from_lobes(mu_l, sigma_l, mu_r, sigma_r, rho, threshold)
+    sigma_eff = np.sqrt(np.asarray(sigma_l, dtype=np.float64)
+                        * np.asarray(sigma_r, dtype=np.float64))
+    mu_eff = z_eff * sigma_eff
+    return mu_eff, sigma_eff
+
 # PVTA parameter bounds
 COMMON_N_MIN, COMMON_N_MAX = -60.0, 60.0  # mV
 PU_MIN, PU_MAX = -60.0, 60.0  # mV

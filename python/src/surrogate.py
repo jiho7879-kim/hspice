@@ -39,12 +39,32 @@ class Surrogate:
         self.sigma_gp: AdditiveGPModel | None = None
         self._x_train: np.ndarray | None = None
         self._x_scaler = StandardScaler()
+        self._y_noise: np.ndarray | None = None
 
     def _to_tensor(self, arr: np.ndarray) -> torch.Tensor:
         return torch.from_numpy(arr.astype(np.float32)).to(self.device)
 
+    def _make_likelihood(self, col: int):
+        """Homoscedastic likelihood, or noise-aware when y_noise was given.
+
+        y_noise holds per-point observation-noise STDs (e.g. MC standard
+        errors: sem_mu = sigma/sqrt(N), sem_sigma ~ bootstrap).  The GP then
+        automatically downweights high-noise points — this is also how
+        mixed MC budgets (200 vs 10k samples) are unified in one model
+        (noise-aware MC budget allocation, plan sec 3.5/4.4).
+        """
+        if self._y_noise is None:
+            from gpytorch.likelihoods import GaussianLikelihood
+            return GaussianLikelihood()
+        from gpytorch.likelihoods import FixedNoiseGaussianLikelihood
+        noise_var = self._to_tensor(self._y_noise[:, col] ** 2)
+        return FixedNoiseGaussianLikelihood(
+            noise=noise_var, learn_additional_noise=True,
+        )
+
     def fit(self, X_train: np.ndarray, y_train: np.ndarray,
-            n_iter: int = 200, lr: float = 0.1, verbose: bool = True) -> None:
+            n_iter: int = 200, lr: float = 0.1, verbose: bool = True,
+            y_noise: np.ndarray | None = None) -> None:
         """Train both mu and sigma GPs on standardized inputs.
 
         Args:
@@ -52,15 +72,25 @@ class Surrogate:
             y_train: (N, 2) training targets [mu, sigma]
             n_iter: Training iterations
             lr: Learning rate for Adam
+            y_noise: optional (N, 2) per-point observation-noise STDs
+                [sem_mu, sem_sigma].  When given, FixedNoiseGaussianLikelihood
+                is used (noise-aware GP); when None, behaviour is unchanged.
         """
+        if y_noise is not None:
+            y_noise = np.asarray(y_noise, dtype=np.float64)
+            assert y_noise.shape == y_train.shape, (
+                f"y_noise shape {y_noise.shape} != y_train shape {y_train.shape}")
+            assert np.all(y_noise > 0), "y_noise must be positive STDs"
+        self._y_noise = y_noise.copy() if y_noise is not None else None
+
         self._x_train = X_train.copy()
         X_scaled = self._x_scaler.fit_transform(X_train)
         xt = self._to_tensor(X_scaled)
         yt_mu = self._to_tensor(y_train[:, 0])
         yt_sigma = self._to_tensor(y_train[:, 1])
 
-        self.mu_gp = ExactGPModel(xt, yt_mu).to(self.device)
-        self.sigma_gp = AdditiveGPModel(xt, yt_sigma).to(self.device)
+        self.mu_gp = ExactGPModel(xt, yt_mu, likelihood=self._make_likelihood(0)).to(self.device)
+        self.sigma_gp = AdditiveGPModel(xt, yt_sigma, likelihood=self._make_likelihood(1)).to(self.device)
 
         for name, gp in [("mu", self.mu_gp), ("sigma", self.sigma_gp)]:
             gp.train()
@@ -142,13 +172,14 @@ class Surrogate:
         return mu_mean, mu_std, sigma_mean, sigma_std
 
     def save(self, path: str | Path) -> None:
-        """Save trained GP state dicts + scaler to a .pth checkpoint."""
+        """Save trained GP state dicts + scaler (+ noise) to a .pth checkpoint."""
         state = {
             "mu_gp": self.mu_gp.state_dict() if self.mu_gp is not None else None,
             "sigma_gp": self.sigma_gp.state_dict() if self.sigma_gp is not None else None,
             "x_train": self._x_train,
             "x_scaler_mean": self._x_scaler.mean_,
             "x_scaler_std": self._x_scaler.std_,
+            "y_noise": self._y_noise,
         }
         torch.save(state, path)
         print(f"  [save] checkpoint -> {path}")
@@ -160,11 +191,18 @@ class Surrogate:
 
         X_train/y_train must match original training data shape because
         ExactGP requires them at construction.  The checkpoint's scaler
-        is restored so predict() works on raw inputs.
+        (and per-point noise, when the model was noise-aware) is restored
+        so predict() works on raw inputs.
         """
-        state = torch.load(path, map_location=device, weights_only=True)
+        # weights_only=False: this checkpoint bundles numpy metadata
+        # (scaler stats, x_train, y_noise) alongside the tensor state dicts,
+        # which the weights_only unpickler rejects.  These files are always
+        # self-produced by Surrogate.save() (trusted source).
+        state = torch.load(path, map_location=device, weights_only=False)
         surr = cls(device=device)
         surr._x_train = X_train.copy()
+        # old checkpoints (pre noise-aware) have no "y_noise" key
+        surr._y_noise = state.get("y_noise", None)
 
         if state["x_scaler_mean"] is not None:
             surr._x_scaler.mean_ = state["x_scaler_mean"]
@@ -175,8 +213,8 @@ class Surrogate:
         yt_mu = surr._to_tensor(y_train[:, 0])
         yt_sigma = surr._to_tensor(y_train[:, 1])
 
-        surr.mu_gp = ExactGPModel(xt, yt_mu).to(device)
-        surr.sigma_gp = AdditiveGPModel(xt, yt_sigma).to(device)
+        surr.mu_gp = ExactGPModel(xt, yt_mu, likelihood=surr._make_likelihood(0)).to(device)
+        surr.sigma_gp = AdditiveGPModel(xt, yt_sigma, likelihood=surr._make_likelihood(1)).to(device)
 
         if state["mu_gp"] is not None:
             surr.mu_gp.load_state_dict(state["mu_gp"])

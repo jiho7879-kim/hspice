@@ -41,9 +41,53 @@ def save_intermediate(filepath: str | Path, X: np.ndarray, y: np.ndarray) -> Non
 
 
 def load_intermediate(filepath: str | Path) -> tuple[np.ndarray, np.ndarray]:
-    """Load processed data from .npz."""
+    """Load processed data from .npz (X, y only — backward compatible)."""
     data = np.load(filepath)
     return data["X"], data["y"]
+
+
+def save_with_noise(
+    filepath: str | Path,
+    X: np.ndarray,
+    y: np.ndarray,
+    *,
+    y_noise: np.ndarray | None = None,
+    n_mc: np.ndarray | None = None,
+    censored: np.ndarray | None = None,
+    extras: dict[str, np.ndarray] | None = None,
+) -> None:
+    """Save dataset with optional MC-noise / censoring metadata.
+
+    X: (N, d), y: (N, 2) = [mu, sigma].  Optional:
+        y_noise:  (N, 2) per-point observation-noise STDs [sem_mu, sem_sigma]
+                  for noise-aware GP training (Surrogate.fit(y_noise=...)).
+        n_mc:     (N,) MC sample count per condition.
+        censored: (N,) bool — Vmin left-censored below the lowest Vop.
+        extras:   any additional named arrays (e.g. lobe stats mu_L, rho_LR).
+
+    Readable by both load_intermediate (X, y) and load_with_noise.
+    """
+    payload: dict[str, np.ndarray] = {"X": X, "y": y}
+    if y_noise is not None:
+        payload["y_noise"] = y_noise
+    if n_mc is not None:
+        payload["n_mc"] = n_mc
+    if censored is not None:
+        payload["censored"] = censored
+    if extras:
+        payload.update(extras)
+    np.savez_compressed(filepath, **payload)
+
+
+def load_with_noise(filepath: str | Path) -> dict[str, np.ndarray]:
+    """Load a dataset saved by save_with_noise (or a plain X/y npz).
+
+    Returns a dict with at least 'X', 'y' and whichever optional arrays are
+    present ('y_noise', 'n_mc', 'censored', plus any extras).  Missing
+    optional keys are simply absent — callers use dict.get(...).
+    """
+    data = np.load(filepath, allow_pickle=False)
+    return {k: data[k] for k in data.files}
 
 
 def stratified_train_test_split(
