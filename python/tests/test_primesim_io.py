@@ -131,6 +131,42 @@ def test_vtrip_min_join_by_index() -> None:
           f"(< left {vl.mean():.5f}, right {vr.mean():.5f})")
 
 
+def test_vtrip_distinct_columns_a0_a1() -> None:
+    """In-house layout: left value = bwrm_1 in a0, right value = bwrm_2 in a1
+    (a1's bwrm_1 is pinned to Vop and must be ignored)."""
+    rng = np.random.default_rng(5)
+    n = 1200
+    vop = 0.8
+    idx = np.arange(1, n + 1)
+    left_bwrm1 = rng.normal(0.30, 0.03, n)    # a0: the value we want
+    right_bwrm2 = rng.normal(0.31, 0.03, n)   # a1: the value we want
+
+    # a0.mt0 columns: index, bwrm_1 (wanted), bwrm_2 (unused here), temper
+    a0 = np.column_stack([idx, left_bwrm1, rng.normal(0.5, 0.05, n),
+                          np.full(n, 25.0)])
+    # a1.mt0 columns: index, bwrm_1 (== Vop, meaningless), bwrm_2 (wanted), temper
+    a1 = np.column_stack([idx, np.full(n, vop), right_bwrm2,
+                          np.full(n, 25.0)])
+    cols = ["index", "bwrm_1", "bwrm_2", "temper"]
+
+    with tempfile.TemporaryDirectory() as td:
+        pa0 = Path(td) / "cell_a0.mt0"
+        pa1 = Path(td) / "cell_a1.mt0"
+        _write_wrapped_mt0(pa0, cols, a0, per_line=5)
+        _write_wrapped_mt0(pa1, cols, a1, per_line=5)
+        r = vtrip_min_stats(pa0, pa1,
+                            measure_left="bwrm_1", measure_right="bwrm_2")
+
+    expected = np.minimum(left_bwrm1, right_bwrm2)
+    assert r["n"] == n
+    assert abs(r["mu"] - expected.mean()) < 1e-9, "picked wrong columns"
+    assert abs(r["median"] - np.median(expected)) < 1e-9
+    # sanity: if a1's pinned bwrm_1 (=Vop=0.8) had leaked in, min would be
+    # dominated by ~0.30 and mu would differ; guard against that regression
+    assert r["mu"] < 0.31, "a1.bwrm_1 (Vop) may have leaked in"
+    print(f"  [OK] a0.bwrm_1 x a1.bwrm_2 distinct-column min mu={r['mu']:.5f}")
+
+
 def test_vtrip_positional_when_no_index() -> None:
     """No index column -> positional pairing (equal length required)."""
     rng = np.random.default_rng(3)
@@ -173,6 +209,7 @@ if __name__ == "__main__":
     test_wrap_various_widths()
     test_snmr_stats()
     test_vtrip_min_join_by_index()
+    test_vtrip_distinct_columns_a0_a1()
     test_vtrip_positional_when_no_index()
     test_summary_block_ignored()
     print("\n=== ALL PRIMESIM-IO TESTS PASSED ===")

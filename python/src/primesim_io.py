@@ -14,6 +14,13 @@ Two problems this module solves (reported from real PrimeSim runs):
    separate left and right files; the write margin per MC sample is
    min(left, right), and only then do we take the mean/median over samples.
    `vtrip_min_stats` joins the two files by MC index and does exactly that.
+   The two sides may live under different column names — in the in-house
+   layout the left value is `bwrm_1` in `*a0.mt0` and the right value is
+   `bwrm_2` in `*a1.mt0` (whose own `bwrm_1` is pinned to Vop and unused);
+   pass `measure_left`/`measure_right` to select each. Example:
+
+       vtrip_min_stats("cell_a0.mt0", "cell_a1.mt0",
+                       measure_left="bwrm_1", measure_right="bwrm_2")
 
 The wrap handling is format-agnostic; only the column-name matching uses
 HSPICE/PrimeSim conventions (index / temper / alter# / time are treated as
@@ -164,21 +171,31 @@ def vtrip_min_stats(
     left_path: str | Path,
     right_path: str | Path,
     measure: str | None = None,
+    measure_left: str | None = None,
+    measure_right: str | None = None,
 ) -> dict:
-    """Write-margin stats from separate left/right Vtrip MC files.
+    """Write-margin stats from separate left/right MC files.
 
     Per MC index: v_min = min(v_left, v_right). Then aggregate over samples.
     Files are joined by their 'index' column when present (order-independent);
     otherwise samples are paired positionally (both files must then have the
     same length and ordering).
 
+    Column selection (in-house layout, e.g. PrimeSim write margin):
+        the two files may store the wanted quantity under *different* column
+        names — e.g. the left value is `bwrm_1` in `*a0.mt0` while the right
+        value is `bwrm_2` in `*a1.mt0` (whose `bwrm_1` is pinned to Vop and
+        meaningless). Pass `measure_left`/`measure_right` to name each side;
+        `measure` is a shared fallback, and if all are None each file's first
+        non-index/temper/alter# column is used.
+
     Returns mu / median / sigma / n and the raw `min_samples` vector (for QC
     histograms or lobe-style diagnostics).
     """
     cl, ol = parse_mt0_wrapped(left_path)
     cr, orr = parse_mt0_wrapped(right_path)
-    vl = _pick_measure(cl, ol, measure)
-    vr = _pick_measure(cr, orr, measure)
+    vl = _pick_measure(cl, ol, measure_left or measure)
+    vr = _pick_measure(cr, orr, measure_right or measure)
 
     if "index" in cl and "index" in cr:
         pl = _index_order(cl, len(vl))
@@ -229,9 +246,13 @@ def _main() -> None:
     p1.add_argument("--floor", type=float, default=None)
 
     p2 = sub.add_parser("vtrip", help="min-margin stats from left+right files")
-    p2.add_argument("left")
-    p2.add_argument("right")
-    p2.add_argument("--measure", default=None)
+    p2.add_argument("left", help="e.g. *a0.mt0")
+    p2.add_argument("right", help="e.g. *a1.mt0")
+    p2.add_argument("--measure", default=None, help="shared column name")
+    p2.add_argument("--measure-left", default=None,
+                    help="left-file column (e.g. bwrm_1)")
+    p2.add_argument("--measure-right", default=None,
+                    help="right-file column (e.g. bwrm_2)")
 
     p3 = sub.add_parser("show", help="dump parsed columns/shape")
     p3.add_argument("file")
@@ -245,7 +266,9 @@ def _main() -> None:
               + (f"  frac<=floor={r['frac_below_floor']:.4f}"
                  if "frac_below_floor" in r else ""))
     elif args.cmd == "vtrip":
-        r = vtrip_min_stats(args.left, args.right, args.measure)
+        r = vtrip_min_stats(args.left, args.right, measure=args.measure,
+                            measure_left=args.measure_left,
+                            measure_right=args.measure_right)
         print(f"Vtrip(min L,R)  mu={r['mu']:.6g}  median={r['median']:.6g}  "
               f"sigma={r['sigma']:.6g}  n={r['n']}  dropped={r['n_dropped']}")
     elif args.cmd == "show":
