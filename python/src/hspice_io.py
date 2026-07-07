@@ -24,6 +24,7 @@ from src.utils import (
     WLUD_COL, WLUD_FACTORS, N_WLUD,
     TEMP_C, TEMP_C_COLD,
     sample_common_n_pu,
+    z_eff_from_lobes, effective_mu_sigma,
 )
 from src.data import build_dataset, save_intermediate
 
@@ -333,6 +334,212 @@ def histogram_qc(snmr_values: np.ndarray, label: str = "") -> dict:
               f"outliers={outlier_frac:.4f} {status}")
 
     return result
+
+
+# ============================================================================
+# MC statistics: bootstrap SEM, lobe-resolved stats, per-condition QC
+# ============================================================================
+
+def bootstrap_sem(
+    samples: np.ndarray,
+    stat: str = "mean",
+    n_boot: int = 500,
+    seed: int = 0,
+) -> float:
+    """Bootstrap standard error of a statistic ('mean' or 'std').
+
+    Preferred over the Gaussian closed forms (sigma/sqrt(N) for the mean,
+    sigma/sqrt(2N) for the std) because the std SEM in particular is
+    kurtosis-sensitive and MC SNM distributions are not exactly Gaussian
+    (adversarial review C3).
+    """
+    x = np.asarray(samples, dtype=np.float64)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n < 2:
+        return float("nan")
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, n, size=(n_boot, n))
+    resampled = x[idx]
+    if stat == "mean":
+        vals = resampled.mean(axis=1)
+    elif stat == "std":
+        vals = resampled.std(axis=1, ddof=1)
+    else:
+        raise ValueError(f"unknown stat: {stat}")
+    return float(np.std(vals, ddof=1))
+
+
+def condition_qc(samples: np.ndarray, snm_floor: float = 0.0) -> dict:
+    """Per-condition MC QC on a single SNM sample vector.
+
+    Returns mu, sigma (ddof=1), bootstrap SEMs, normality (Anderson-Darling
+    statistic + 5% critical value), skewness, excess kurtosis, and the
+    fraction of samples at/below the fail floor (which flags left-tail
+    fail-mixing that may warrant treating this Vop as censored).
+    """
+    from scipy.stats import anderson, skew, kurtosis
+
+    x = np.asarray(samples, dtype=np.float64)
+    x = x[~np.isnan(x)]
+    n = len(x)
+    if n < 3:
+        return {
+            "mu": float("nan"), "sigma": float("nan"), "n": n,
+            "sem_mu": float("nan"), "sem_sigma": float("nan"),
+            "ad_stat": float("nan"), "ad_crit5": float("nan"),
+            "normal_ok": False, "skew": float("nan"), "kurtosis": float("nan"),
+            "frac_below_floor": float("nan"),
+        }
+
+    import warnings
+
+    mu = float(np.mean(x))
+    sigma = float(np.std(x, ddof=1))
+    try:
+        # Keep the table-based critical_values form (no `method` kwarg).
+        # SciPy >=1.17 warns that a future default will return a p-value
+        # instead; we pin the current behavior and silence that warning
+        # until we migrate the QC report to p-values.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            ad = anderson(x, dist="norm")
+        ad_stat = float(ad.statistic)
+        # critical value at 5% significance (index 2 in scipy's list)
+        ad_crit5 = float(ad.critical_values[2])
+        normal_ok = ad_stat < ad_crit5
+    except Exception:
+        ad_stat = ad_crit5 = float("nan")
+        normal_ok = False
+
+    return {
+        "mu": mu,
+        "sigma": sigma,
+        "n": n,
+        "sem_mu": bootstrap_sem(x, "mean"),
+        "sem_sigma": bootstrap_sem(x, "std"),
+        "ad_stat": ad_stat,
+        "ad_crit5": ad_crit5,
+        "normal_ok": bool(normal_ok),
+        "skew": float(skew(x)),
+        "kurtosis": float(kurtosis(x)),  # excess (0 = Gaussian)
+        "frac_below_floor": float(np.mean(x <= snm_floor)),
+    }
+
+
+def lobe_mc_summary(
+    snm_l: np.ndarray,
+    snm_r: np.ndarray,
+    snm_floor: float = 0.0,
+) -> dict:
+    """Lobe-resolved MC statistics for one condition (adversarial review A1).
+
+    Returns per-lobe (mu, sigma), their correlation rho_LR, the effective
+    (mu, sigma) whose ratio equals the union-based Z_eff, and the SEMs of
+    the effective mu/sigma (bootstrap over paired resamples so rho is
+    preserved).  Use effective (mu, sigma) as the GP target instead of the
+    optimistically-biased min-statistics.
+    """
+    L = np.asarray(snm_l, dtype=np.float64)
+    R = np.asarray(snm_r, dtype=np.float64)
+    mask = ~(np.isnan(L) | np.isnan(R))
+    L, R = L[mask], R[mask]
+    n = len(L)
+    if n < 3:
+        raise ValueError("need >= 3 paired samples for lobe summary")
+
+    mu_l, sg_l = float(np.mean(L)), float(np.std(L, ddof=1))
+    mu_r, sg_r = float(np.mean(R)), float(np.std(R, ddof=1))
+    rho = float(np.corrcoef(L, R)[0, 1]) if (sg_l > 0 and sg_r > 0) else 0.0
+    rho = float(np.clip(rho, -0.999, 0.999))
+
+    mu_eff, sg_eff = effective_mu_sigma(mu_l, sg_l, mu_r, sg_r, rho, snm_floor)
+    z_eff = float(z_eff_from_lobes(mu_l, sg_l, mu_r, sg_r, rho, snm_floor))
+
+    # Paired bootstrap for SEM of the effective statistics (keeps rho)
+    rng = np.random.default_rng(0)
+    n_boot = 400
+    idx = rng.integers(0, n, size=(n_boot, n))
+    Lb, Rb = L[idx], R[idx]
+    mul_b = Lb.mean(1); sgl_b = Lb.std(1, ddof=1)
+    mur_b = Rb.mean(1); sgr_b = Rb.std(1, ddof=1)
+    rho_b = np.array([
+        np.clip(np.corrcoef(Lb[i], Rb[i])[0, 1], -0.999, 0.999)
+        if (sgl_b[i] > 0 and sgr_b[i] > 0) else 0.0
+        for i in range(n_boot)
+    ])
+    mu_eff_b, sg_eff_b = effective_mu_sigma(mul_b, sgl_b, mur_b, sgr_b, rho_b, snm_floor)
+
+    return {
+        "mu_L": mu_l, "sigma_L": sg_l,
+        "mu_R": mu_r, "sigma_R": sg_r,
+        "rho_LR": rho,
+        "mu_eff": float(mu_eff), "sigma_eff": float(sg_eff),
+        "z_eff": z_eff,
+        "sem_mu_eff": float(np.std(mu_eff_b, ddof=1)),
+        "sem_sigma_eff": float(np.std(sg_eff_b, ddof=1)),
+        "n": n,
+    }
+
+
+def write_qc_report(
+    qc_rows: list[dict],
+    out_path: str | Path,
+    title: str = "HSPICE MC QC report",
+) -> None:
+    """Write a markdown QC report from a list of per-condition QC dicts.
+
+    Each row dict should carry identifying fields (e.g. job_id, cn, pu, Vop)
+    plus the keys produced by condition_qc().  A summary table flags any
+    non-normal, high-skew, or fail-mixed conditions.
+    """
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    n = len(qc_rows)
+    n_nonnormal = sum(1 for r in qc_rows if not r.get("normal_ok", True))
+    n_failmix = sum(1 for r in qc_rows if r.get("frac_below_floor", 0.0) > 0.001)
+    n_highskew = sum(1 for r in qc_rows if abs(r.get("skew", 0.0)) > 1.0)
+
+    lines = [
+        f"# {title}",
+        "",
+        f"- conditions: **{n}**",
+        f"- non-normal (AD stat >= 5% crit): **{n_nonnormal}** "
+        f"({100 * n_nonnormal / max(n, 1):.1f}%)",
+        f"- fail-mixed (frac SNM<=floor > 0.1%): **{n_failmix}** "
+        "(candidate for Vop censoring)",
+        f"- high-skew (|skew| > 1): **{n_highskew}**",
+        "",
+        "| job | cn | pu | Vop | n | mu | sigma | sem_mu | sem_sig | "
+        "AD/crit | skew | kurt | fail% | flags |",
+        "|----:|---:|---:|----:|--:|----:|------:|-------:|--------:|"
+        "--------:|-----:|-----:|------:|-------|",
+    ]
+    for r in qc_rows:
+        flags = []
+        if not r.get("normal_ok", True):
+            flags.append("nonnormal")
+        if r.get("frac_below_floor", 0.0) > 0.001:
+            flags.append("failmix")
+        if abs(r.get("skew", 0.0)) > 1.0:
+            flags.append("skew")
+        ad = r.get("ad_stat", float("nan"))
+        crit = r.get("ad_crit5", float("nan"))
+        lines.append(
+            f"| {r.get('job_id', '')} | {r.get('cn', ''):.0f} | "
+            f"{r.get('pu', ''):.0f} | {r.get('vop', float('nan')):.2f} | "
+            f"{r.get('n', 0)} | {r.get('mu', float('nan')):.4f} | "
+            f"{r.get('sigma', float('nan')):.5f} | "
+            f"{r.get('sem_mu', float('nan')):.5f} | "
+            f"{r.get('sem_sigma', float('nan')):.5f} | "
+            f"{ad:.2f}/{crit:.2f} | {r.get('skew', float('nan')):.2f} | "
+            f"{r.get('kurtosis', float('nan')):.2f} | "
+            f"{100 * r.get('frac_below_floor', 0.0):.2f} | "
+            f"{','.join(flags) if flags else 'ok'} |"
+        )
+    out_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"  QC report -> {out_path}")
 
 
 def process_all(
