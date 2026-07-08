@@ -811,10 +811,16 @@ def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
     def col(key: str) -> np.ndarray:
         return df[cm[key]].to_numpy(dtype=np.float64)
 
-    # X (+ optional WLUD from absolute Vwl)
+    # X (+ optional WLUD from absolute Vwl). A blank Vwl cell means "no
+    # assist" (Vwl = Vop, i.e. WLUD = 1.0) rather than a missing value.
     x_list = [col("cn"), col("pu"), col("vop")]
     if "vwl" in cm:
-        x_list.append(col("vwl") / col("vop"))
+        vwl_raw = col("vwl")
+        vop_raw = col("vop")
+        blank = np.isnan(vwl_raw)
+        wlud = np.where(blank, 1.0, np.divide(
+            vwl_raw, vop_raw, out=np.ones_like(vop_raw), where=~blank))
+        x_list.append(wlud)
     X = np.column_stack(x_list)
 
     rho_out = None
