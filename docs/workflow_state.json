@@ -21,13 +21,15 @@
   ],
   "running_background_jobs": [
     {
-      "job": "python scripts/budget_pareto.py --full --seeds 10",
-      "started": "2026-07-08T08:42:12 (local, KST)",
-      "status": "RUNNING as of 2026-07-08T08:48 - not a zombie, verified via CPU time",
-      "progress_at_check": "30/300 cells done (random strategy, physics=off, N<=200)",
-      "eta": "~2.5-3h more (N=400/800 cells cost much more per-cell than N<=200; still need sobol_uniform, stratified_sobol, and all physics=on cells)",
-      "on_completion": "verify results/budget_pareto/pareto_results.json has config.n_seeds==10 and len(records)==300 and a non-empty 'significance' list, then fill docs/decisions/budget_pareto_review.md sec 3-4 and commit both",
-      "note": "this process was started in a PRIOR session and is not tracked by the current session's background-task notifier -- check manually via `Get-CimInstance Win32_Process -Filter \"Name='python.exe'\"` filtering CommandLine for budget_pareto, or just re-check the json's record count"
+      "job": "python scripts/budget_pareto.py --full --seeds 10 --fresh",
+      "started": "2026-07-08T~11:10 (local, KST) -- 2nd attempt, restarted after 1st attempt died",
+      "status": "RUNNING (started this session, background job b6okna3z2)",
+      "history": "1st attempt (no --fresh, no checkpointing) ran ~8000s, reached 190/300 cells, then died with exit code 5 and NO Python traceback in the log -- looks like an OS/session-level kill, not a script bug. Root cause not identified.",
+      "mitigation_added": "budget_pareto.py now checkpoints every cell to results/budget_pareto/pareto_checkpoint.json (gitignored) and skips already-done (strategy,n_cond,physics,seed) keys on relaunch (commit d756661). Verified: fresh run computes cells and writes checkpoint; a second run against the same checkpoint skips everything in 0s.",
+      "eta": "~2-3h total from a --fresh start (N=400/800 x physics-on cells dominate the cost)",
+      "if_this_process_is_dead_when_you_read_this": "just re-run `python scripts/budget_pareto.py --full --seeds 10` WITHOUT --fresh -- it resumes from results/budget_pareto/pareto_checkpoint.json automatically, no time lost on finished cells. Check aliveness via `Get-CimInstance Win32_Process -Filter \"Name='python.exe'\"` filtering CommandLine for budget_pareto, or check checkpoint record count vs 300.",
+      "on_completion": "verify results/budget_pareto/pareto_results.json has config.n_seeds==10, len(records)==300, non-empty 'significance' list; then fill docs/decisions/budget_pareto_review.md sec 3-4 (tables + conclusion) and commit both + delete the now-unneeded checkpoint file",
+      "partial_signal_from_1st_attempt_worth_keeping": "physics-on (random strategy) showed real corner_vmin_rmse_mV improvement vs plain at N=50 (4.95 vs 10.45mV) and N=100 (4.48 vs 5.86mV) -- this is exactly what the corner-only hold-out (added this session) was for: the uniform-hold-out metric alone showed nothing conclusive. Confirm this holds in the full seeds=10 data before citing it."
     }
   ],
   "phase_history": [
