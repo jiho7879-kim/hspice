@@ -21,15 +21,14 @@
   ],
   "running_background_jobs": [
     {
-      "job": "python scripts/budget_pareto.py --full --seeds 10 --fresh",
-      "started": "2026-07-08T~11:10 (local, KST) -- 2nd attempt, restarted after 1st attempt died",
-      "status": "RUNNING (started this session, background job b6okna3z2)",
-      "history": "1st attempt (no --fresh, no checkpointing) ran ~8000s, reached 190/300 cells, then died with exit code 5 and NO Python traceback in the log -- looks like an OS/session-level kill, not a script bug. Root cause not identified.",
-      "mitigation_added": "budget_pareto.py now checkpoints every cell to results/budget_pareto/pareto_checkpoint.json (gitignored) and skips already-done (strategy,n_cond,physics,seed) keys on relaunch (commit d756661). Verified: fresh run computes cells and writes checkpoint; a second run against the same checkpoint skips everything in 0s.",
-      "eta": "~2-3h total from a --fresh start (N=400/800 x physics-on cells dominate the cost)",
-      "if_this_process_is_dead_when_you_read_this": "just re-run `python scripts/budget_pareto.py --full --seeds 10` WITHOUT --fresh -- it resumes from results/budget_pareto/pareto_checkpoint.json automatically, no time lost on finished cells. Check aliveness via `Get-CimInstance Win32_Process -Filter \"Name='python.exe'\"` filtering CommandLine for budget_pareto, or check checkpoint record count vs 300.",
+      "job": "python scripts/budget_pareto.py --full --seeds 10  (NO --fresh -- resuming)",
+      "started_3rd_attempt": "2026-07-08T~15:50 (local, KST), background job bo5gi3snk",
+      "status": "RUNNING, resumed from checkpoint at 235/300 cells (confirmed: resume log shows all 235 skipped in 0s)",
+      "history": "1st attempt (no checkpointing) died at 190/300, exit code 5, no traceback. 2nd attempt (--fresh, with checkpointing added) ran ~5.7h and died at 230-235/300, again exit code 5, no traceback -- confirmed NOT a fixed timeout (different elapsed times) and NOT tied to a specific cell (different stopping points). Likely an external kill (OS/session/power) outside the script's control; root cause still not identified, but no longer matters because of checkpointing.",
+      "remaining_work": "65 cells: sobol_uniform physics=True N in {400,800} (15 seeds-worth), all of stratified_sobol physics=True (50 cells). These include the expensive N=800 cells so allow several more hours.",
+      "if_this_process_is_dead_when_you_read_this": "just re-run `python scripts/budget_pareto.py --full --seeds 10` WITHOUT --fresh again -- resumes automatically from results/budget_pareto/pareto_checkpoint.json, this has now been verified twice to work correctly. Check aliveness via `Get-CimInstance Win32_Process -Filter \"Name='python.exe'\"` filtering CommandLine for budget_pareto; check progress via checkpoint record count vs 300 (python -c \"import json; print(len(json.load(open('results/budget_pareto/pareto_checkpoint.json'))['records']))\" from python/ dir).",
       "on_completion": "verify results/budget_pareto/pareto_results.json has config.n_seeds==10, len(records)==300, non-empty 'significance' list; then fill docs/decisions/budget_pareto_review.md sec 3-4 (tables + conclusion) and commit both + delete the now-unneeded checkpoint file",
-      "partial_signal_from_1st_attempt_worth_keeping": "physics-on (random strategy) showed real corner_vmin_rmse_mV improvement vs plain at N=50 (4.95 vs 10.45mV) and N=100 (4.48 vs 5.86mV) -- this is exactly what the corner-only hold-out (added this session) was for: the uniform-hold-out metric alone showed nothing conclusive. Confirm this holds in the full seeds=10 data before citing it."
+      "partial_signal_worth_keeping": "physics-on (random strategy) shows a real corner_vmin_rmse_mV improvement vs plain, consistent across two independent partial runs: N=50 (4.95 vs 10.45mV), N=100 (4.48 vs 5.86mV), N=200 (5.28 vs 6.22mV), N=400 (3.69 vs 3.99mV), N=800 (3.27 vs 3.17mV -- roughly tied at the high end). This is exactly what the corner-only hold-out (added this session) was for: the uniform-hold-out metric alone showed nothing conclusive. The effect is real and reproduced, but confirm significance via the Wilcoxon test once sobol_uniform and stratified_sobol physics=True data completes those strategies' pairs too."
     }
   ],
   "phase_history": [
