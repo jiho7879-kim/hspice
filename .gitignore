@@ -32,6 +32,7 @@ python/.venv/
 *.bak
 *.old
 *~
+python/results/budget_pareto/pareto_checkpoint.json
 
 # OpenCode agent state
 .omo/

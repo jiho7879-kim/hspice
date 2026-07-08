@@ -266,6 +266,8 @@ def main() -> None:
     ap.add_argument("--n_iter", type=int, default=80)
     ap.add_argument("--seeds", type=int, default=6,
                     help="seed count for --full (error bars; 6 default, 10 for final figure)")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignore any existing checkpoint and start over")
     args = ap.parse_args()
 
     if args.full:
@@ -298,16 +300,41 @@ def main() -> None:
           f"{int(corner_holdout[3].sum())} censored)")
     print(f"  true contour pts: {len(extract_contour(true_grid[2], true_grid[0], true_grid[1], CONTOUR_LEVEL)[0])}")
 
-    records = []
+    # Resume support: this sweep can run for hours (N=800 x physics-on cells
+    # are expensive) and has been killed mid-run by something outside the
+    # script (no traceback in the log -- OS/session level, not a Python
+    # exception). Reload any existing checkpoint and skip cells already
+    # computed, so a re-launch after a kill costs nothing for finished work.
+    ckpt_path = OUT_DIR / "pareto_checkpoint.json"
+    records: list[dict] = []
+    done_keys: set[tuple] = set()
+    if ckpt_path.exists() and not args.fresh:
+        with open(ckpt_path) as f:
+            records = json.load(f)["records"]
+        done_keys = {(r["strategy"], r["n_cond"], r["physics"], r["seed"]) for r in records}
+        print(f"  resuming from checkpoint: {len(records)} cells already done "
+              f"-> {ckpt_path}")
+    n_already_done = len(records)
+
+    def _save_checkpoint() -> None:
+        with open(ckpt_path, "w") as f:
+            json.dump({"records": records}, f)
+
+    total_cells = len(n_list) * len(strategies) * len(physics_opts) * len(seeds)
     t0 = time.time()
     for phys in physics_opts:
         for strat in strategies:
             for n_cond in n_list:
                 for seed in seeds:
+                    key = (strat, n_cond, phys, seed)
+                    if key in done_keys:
+                        continue
                     r = run_cell(strat, n_cond, phys, seed, holdout,
                                 corner_holdout, true_grid, args.n_iter)
                     r.update(strategy=strat, n_cond=n_cond, physics=phys, seed=seed)
                     records.append(r)
+                    done_keys.add(key)
+                    _save_checkpoint()   # cheap (KB-scale json); survives a kill
                 # aggregate print
                 cell = [x for x in records
                         if x["strategy"] == strat and x["n_cond"] == n_cond and x["physics"] == phys]
@@ -318,10 +345,11 @@ def main() -> None:
                       f"Haus={np.nanmean(hv):5.2f}+/-{np.nanstd(hv):4.2f}mV  "
                       f"VminRMSE={np.nanmean(vv):5.2f}+/-{np.nanstd(vv):4.2f}mV  "
                       f"CornerRMSE={np.nanmean(cv):5.2f}+/-{np.nanstd(cv):4.2f}mV  "
-                      f"[{len(records)} cells, {time.time()-t0:.0f}s]", flush=True)
+                      f"[{len(records)}/{total_cells} cells, {time.time()-t0:.0f}s]", flush=True)
 
     elapsed = time.time() - t0
-    print(f"\nDone in {elapsed:.1f}s ({len(records)} cells)")
+    print(f"\nDone in {elapsed:.1f}s ({len(records)} cells total, "
+          f"{len(records) - n_already_done} computed this run)")
 
     sig_tests = _paired_significance(records, n_list, strategies)
 
