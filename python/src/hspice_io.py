@@ -732,8 +732,9 @@ def parse_csv_to_dataset(
 
 _ALIASES = {
     # --- conditions (X) ---
-    "cn": ("common_n_shift", "common_n", "cn", "common n shift"),
-    "pu": ("pu_shift", "pu", "pu shift"),
+    "cn": ("common_n_shift", "common_n", "cn", "common n shift",
+          "vtmskew_n", "vtmskew_pg"),
+    "pu": ("pu_shift", "pu", "pu shift", "vtmskew_pu", "vtmskew_p"),
     "vop": ("vop", "vdd"),
     "vwl": ("vwl", "wl_voltage", "wordline", "wl voltage"),
     "temp": ("temp", "temperature", "temp_c"),
@@ -741,8 +742,9 @@ _ALIASES = {
     "sig_l": ("sigl_mult", "sig_l", "sigmal", "vtsl", "sigl", "local_sigma"),
     "mob": ("mob_mult", "mob", "mobility", "mom", "mom_mult"),
     # --- SNMR results (y) ---
-    "mu": ("mu_snmr", "mu", "mean", "median", "avg"),
-    "sigma": ("sigma_snmr", "sigma", "std", "stdev"),
+    "mu": ("mu_snmr", "mu", "mean", "avg", "snmr_avg"),
+    "sigma": ("sigma_snmr", "sigma", "std", "stdev", "snmr_std"),
+    "median": ("median", "snmr_med", "med"),  # QC only, never trained on
     # --- SNMR lobe-resolved (optional, worst corners only) ---
     "mu_l": ("mu_l", "mu_snmr_l", "mul", "mu_left"),
     "sigma_l": ("sigma_l", "sigma_snmr_l", "sigl", "sigma_left"),
@@ -775,22 +777,66 @@ def _map_columns(df) -> dict[str, str]:
 def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
     """Parse a hand-entered CSV into training arrays + noise + lobe stats.
 
-    Auto-detects the simple vs lobe schema.  Vwl (absolute) is converted to
-    the WLUD ratio (Vwl/Vop).  When n_mc is present, per-point standard
-    errors are derived (sem_mu = sigma/sqrt(N), sem_sigma = sigma/sqrt(2N))
-    for the noise-aware GP.
-
-    Returns a dict with:
-        X        : (N, d)  [cn, pu, Vop, WLUD?]
-        y        : (N, 2)  [mu, sigma]  (effective, if lobe schema)
-        y_noise  : (N, 2) or None
-        rho_LR   : (N,) or None   (lobe schema only; QC/diagnostics)
-        schema   : "simple" | "lobe"
+    See _parse_manual_df for the schema/unit contract. CSV values are
+    assumed already in project units (V, mV as documented in the standard
+    template) -- use parse_manual_xlsx for a sheet in raw MC units (mV).
     """
     import pandas as pd
 
     df = pd.read_csv(csv_path, comment="#")
     df = df.dropna(how="all")
+    return _parse_manual_df(df, source=str(csv_path))
+
+
+def parse_manual_xlsx(
+    xlsx_path: str | Path,
+    sheet_name: str | int = 0,
+    mu_sigma_unit: str = "mV",
+) -> dict:
+    """Parse a hand-transcribed .xlsx sheet (e.g. in-house PrimeSim results
+    copied out by hand) into the same training-array contract as
+    parse_manual_csv.
+
+    mu_sigma_unit: "mV" (default -- matches PrimeSim SNM/Vtrip magnitudes,
+    ~10-200) converts mu/sigma to volts by /1000. "V" leaves them as-is.
+    cn/pu/Vop are read as-is (cn, pu already mV; Vop already V) regardless.
+
+    Runs transcription-error QC (see _median_digit_shift_qc,
+    _vop_interpolation_outlier_qc) and prints (does not silently "fix")
+    any suspected typos -- these are hand-entered numbers and only the
+    user can confirm the correct value.
+    """
+    import pandas as pd
+
+    df = pd.read_excel(xlsx_path, sheet_name=sheet_name)
+    df = df.dropna(how="all")
+    df = df.dropna(axis=1, how="all")  # drop the blank trailing columns
+
+    qc_flags = _manual_data_qc(df)
+
+    result = _parse_manual_df(df, source=str(xlsx_path),
+                              mu_sigma_scale=(1e-3 if mu_sigma_unit == "mV" else 1.0))
+    result["qc_flags"] = qc_flags
+    return result
+
+
+def _parse_manual_df(df, source: str, mu_sigma_scale: float = 1.0) -> dict:
+    """Shared body of parse_manual_csv / parse_manual_xlsx.
+
+    Auto-detects the simple vs lobe schema.  Vwl (absolute) is converted to
+    the WLUD ratio (Vwl/Vop).  When n_mc is present, per-point standard
+    errors are derived (sem_mu = sigma/sqrt(N), sem_sigma = sigma/sqrt(2N))
+    for the noise-aware GP.  mu_sigma_scale multiplies mu/sigma/vtrip_mu/
+    vtrip_sigma only (e.g. 1e-3 for a sheet in mV); cn/pu/Vop are never
+    rescaled (already in project units: mV, mV, V).
+
+    Returns a dict with:
+        X        : (N, d)  [cn, pu, Vop, WLUD?]
+        y        : (N, 2)  [mu, sigma]  (effective, if lobe schema; volts)
+        y_noise  : (N, 2) or None
+        rho_LR   : (N,) or None   (lobe schema only; QC/diagnostics)
+        schema   : "simple" | "lobe"
+    """
     cm = _map_columns(df)
 
     base = ["cn", "pu", "vop"]
@@ -826,12 +872,14 @@ def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
     rho_out = None
     if has_lobe:
         mu, sigma = effective_mu_sigma(
-            col("mu_l"), col("sigma_l"), col("mu_r"), col("sigma_r"), col("rho"),
+            col("mu_l") * mu_sigma_scale, col("sigma_l") * mu_sigma_scale,
+            col("mu_r") * mu_sigma_scale, col("sigma_r") * mu_sigma_scale,
+            col("rho"),
         )
         rho_out = col("rho")
         schema = "lobe"
     else:
-        mu, sigma = col("mu"), col("sigma")
+        mu, sigma = col("mu") * mu_sigma_scale, col("sigma") * mu_sigma_scale
         schema = "simple"
     y = np.column_stack([mu, sigma])
 
@@ -849,7 +897,8 @@ def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
     # optional Vtrip / write-margin results
     y_vtrip = None
     if "vtrip_mu" in cm and "vtrip_sigma" in cm:
-        y_vtrip = np.column_stack([col("vtrip_mu"), col("vtrip_sigma")])
+        y_vtrip = np.column_stack([col("vtrip_mu") * mu_sigma_scale,
+                                   col("vtrip_sigma") * mu_sigma_scale])
 
     if np.isnan(X).any():
         raise ValueError("NaN in X columns")
@@ -857,7 +906,7 @@ def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
     if n_bad:
         print(f"  [WARN] {n_bad} rows with NaN in y — check those conditions")
 
-    print(f"  manual CSV [{schema}] -> X {X.shape}, y {y.shape}"
+    print(f"  {source} [{schema}] -> X {X.shape}, y {y.shape}"
           f"{', y_noise ' + str(y_noise.shape) if y_noise is not None else ''}"
           f"{', +' + ','.join(extras) if extras else ''}"
           f"{', y_vtrip ' + str(y_vtrip.shape) if y_vtrip is not None else ''}")
@@ -866,6 +915,108 @@ def parse_manual_csv(csv_path: str | Path) -> dict[str, np.ndarray]:
               f"(A1: negative rho => larger min-stats bias corrected)")
     return {"X": X, "y": y, "y_noise": y_noise, "rho_LR": rho_out,
             "schema": schema, "extras": extras, "y_vtrip": y_vtrip}
+
+
+# ---------------------------------------------------------------------------
+# Transcription-error QC (hand-entered data only)
+#
+# Two failure modes seen in practice, both are digit/decimal-point slips
+# during manual transcription -- NOT simulator errors:
+#   (a) a "median" column off by 10x or 100x from mu (decimal point moved)
+#   (b) a mu value that jumps off the trend formed by the SAME (cn,pu)
+#       condition's other Vop rows (a single mis-keyed digit)
+# Neither is auto-corrected: only the user who transcribed the sheet can
+# confirm the true value. These just print/return actionable flags.
+# ---------------------------------------------------------------------------
+
+def _median_digit_shift_qc(df, cm: dict) -> list[dict]:
+    """Flag rows where median/mu looks like a decimal-point slip (~10x/100x)."""
+    if "mu" not in cm or "median" not in cm:
+        return []
+    mu = df[cm["mu"]].to_numpy(dtype=np.float64)
+    med = df[cm["median"]].to_numpy(dtype=np.float64)
+    valid = ~(np.isnan(mu) | np.isnan(med)) & (mu != 0)
+    ratio = np.full(len(mu), np.nan)
+    ratio[valid] = med[valid] / mu[valid]
+    flags = []
+    for i in np.where(valid)[0]:
+        for k in (10.0, 100.0):
+            if abs(ratio[i] - k) / k < 0.05:  # within 5% of an exact 10x/100x
+                flags.append({
+                    "row": int(i), "issue": "median_digit_shift",
+                    "mu": float(mu[i]), "median": float(med[i]),
+                    "ratio": float(ratio[i]), "suspected_factor": k,
+                    "note": (f"median is ~{k:.0f}x mu -- likely a misplaced "
+                            f"decimal point in the median column; mu/sigma "
+                            f"(used for training) are unaffected"),
+                })
+                break
+    return flags
+
+
+def _vop_interpolation_outlier_qc(
+    df, cm: dict, rel_threshold: float = 0.5,
+) -> list[dict]:
+    """Flag a mu value that deviates from the trend formed by the SAME
+    (cn, pu) condition's other Vop rows (linear interpolation from the two
+    nearest-Vop neighbours), by more than rel_threshold of the local scale.
+    Needs >= 3 Vop rows for a condition to interpolate; skips otherwise.
+    """
+    for k in ("cn", "pu", "vop", "mu"):
+        if k not in cm:
+            return []
+    cn = df[cm["cn"]].to_numpy(dtype=np.float64)
+    pu = df[cm["pu"]].to_numpy(dtype=np.float64)
+    vop = df[cm["vop"]].to_numpy(dtype=np.float64)
+    mu = df[cm["mu"]].to_numpy(dtype=np.float64)
+
+    flags = []
+    conditions: dict[tuple, list[int]] = {}
+    for i in range(len(cn)):
+        conditions.setdefault((cn[i], pu[i]), []).append(i)
+
+    for (c, p), idxs in conditions.items():
+        if len(idxs) < 3:
+            continue
+        idxs = sorted(idxs, key=lambda i: vop[i])
+        vops = vop[idxs]
+        mus = mu[idxs]
+        scale = max(float(np.median(np.abs(mus))), 1e-9)
+        for j in range(1, len(idxs) - 1):
+            v_lo, v_hi = vops[j - 1], vops[j + 1]
+            m_lo, m_hi = mus[j - 1], mus[j + 1]
+            if v_hi == v_lo:
+                continue
+            t = (vops[j] - v_lo) / (v_hi - v_lo)
+            expected = m_lo + t * (m_hi - m_lo)
+            dev = abs(mus[j] - expected)
+            if dev / scale > rel_threshold:
+                flags.append({
+                    "row": int(idxs[j]), "issue": "vop_trend_outlier",
+                    "cn": float(c), "pu": float(p), "vop": float(vops[j]),
+                    "mu": float(mus[j]), "expected_from_neighbors": float(expected),
+                    "neighbor_vops": [float(v_lo), float(v_hi)],
+                    "neighbor_mus": [float(m_lo), float(m_hi)],
+                    "note": (f"mu={mus[j]:.3g} deviates from the trend set by "
+                            f"the same condition at Vop={v_lo:.2g}->{mus[j-1]:.3g} "
+                            f"and Vop={v_hi:.2g}->{mus[j+1]:.3g} "
+                            f"(expected ~{expected:.3g})"),
+                })
+    return flags
+
+
+def _manual_data_qc(df) -> list[dict]:
+    """Run all transcription-error QC checks and print a summary."""
+    cm = _map_columns(df)
+    flags = _median_digit_shift_qc(df, cm) + _vop_interpolation_outlier_qc(df, cm)
+    if flags:
+        print(f"  [QC] {len(flags)} suspected transcription error(s) "
+              f"(flagged, NOT auto-corrected -- confirm against the source):")
+        for f in flags:
+            print(f"    row {f['row']:5d} [{f['issue']:20s}] {f['note']}")
+    else:
+        print("  [QC] no transcription-error patterns detected")
+    return flags
 
 
 # The one standard transcription form. Fill one row per (condition x Vop).
