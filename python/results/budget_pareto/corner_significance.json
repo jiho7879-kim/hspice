@@ -1,0 +1,98 @@
+[
+  {
+    "strategy": "random",
+    "n_cond": 50,
+    "mean_diff_mV": -5.501373453537992,
+    "wilcoxon_p": 0.037109375
+  },
+  {
+    "strategy": "random",
+    "n_cond": 100,
+    "mean_diff_mV": -1.3774048656652844,
+    "wilcoxon_p": 0.083984375
+  },
+  {
+    "strategy": "random",
+    "n_cond": 200,
+    "mean_diff_mV": -0.9419722130165571,
+    "wilcoxon_p": 0.375
+  },
+  {
+    "strategy": "random",
+    "n_cond": 400,
+    "mean_diff_mV": -0.29217178645673236,
+    "wilcoxon_p": 0.625
+  },
+  {
+    "strategy": "random",
+    "n_cond": 800,
+    "mean_diff_mV": 0.1048229225452626,
+    "wilcoxon_p": 1.0
+  },
+  {
+    "strategy": "sobol_uniform",
+    "n_cond": 50,
+    "mean_diff_mV": -2.044939696901231,
+    "wilcoxon_p": 0.037109375
+  },
+  {
+    "strategy": "sobol_uniform",
+    "n_cond": 100,
+    "mean_diff_mV": -1.4806774578482713,
+    "wilcoxon_p": 0.005859375
+  },
+  {
+    "strategy": "sobol_uniform",
+    "n_cond": 200,
+    "mean_diff_mV": -0.6506898309606101,
+    "wilcoxon_p": 0.16015625
+  },
+  {
+    "strategy": "sobol_uniform",
+    "n_cond": 400,
+    "mean_diff_mV": -0.23714845586747102,
+    "wilcoxon_p": 0.4921875
+  },
+  {
+    "strategy": "sobol_uniform",
+    "n_cond": 800,
+    "mean_diff_mV": -0.36410888375386186,
+    "wilcoxon_p": 0.322265625
+  },
+  {
+    "strategy": "stratified_sobol",
+    "n_cond": 50,
+    "mean_diff_mV": -1.9960686866117032,
+    "wilcoxon_p": 0.083984375
+  },
+  {
+    "strategy": "stratified_sobol",
+    "n_cond": 100,
+    "mean_diff_mV": -2.249095379405266,
+    "wilcoxon_p": 0.00390625
+  },
+  {
+    "strategy": "stratified_sobol",
+    "n_cond": 200,
+    "mean_diff_mV": -1.1564775611149662,
+    "wilcoxon_p": 0.130859375
+  },
+  {
+    "strategy": "stratified_sobol",
+    "n_cond": 400,
+    "mean_diff_mV": -0.6306504906702861,
+    "wilcoxon_p": 0.10546875
+  },
+  {
+    "strategy": "stratified_sobol",
+    "n_cond": 800,
+    "mean_diff_mV": -0.5959311471682045,
+    "wilcoxon_p": 0.275390625
+  },
+  {
+    "strategy": "POOLED",
+    "n_cond": null,
+    "mean_diff_mV": -1.2942591324288784,
+    "wilcoxon_p": 4.722073868795954e-09
+  }
+]
