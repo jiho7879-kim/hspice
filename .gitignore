@@ -26,6 +26,9 @@ python/.venv/
 *.txt
 # ...but keep hand-entry CSV templates (they are code, not data)
 !python/templates/manual_entry_*.csv
+# ...and keep the Python dependency list (was never committed until now --
+# *.txt silently swallowed it since the repo's first commit)
+!python/requirements.txt
 
 # Temporary / intermediate files
 *.tmp
@@ -33,6 +36,10 @@ python/.venv/
 *.old
 *~
 python/results/budget_pareto/pareto_checkpoint.json
+
+# In-house transcribed real HSPICE data (may be proprietary process info --
+# keep local only unless explicitly cleared for release)
+python/data/hspice_real*.xlsx
 
 # OpenCode agent state
 .omo/

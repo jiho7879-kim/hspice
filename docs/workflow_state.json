@@ -1,8 +1,8 @@
 {
   "_format_version": "1.0",
   "project": "HSPICE SRAM Vmin Estimation",
-  "phase": "Phase 2 planning",
-  "phase_label": "Phase 2: HSPICE real-data validation - master plan at docs/plans/phase2_to_paper_plan.md (2026-07-07)",
+  "phase": "Phase 2 Stage A - GO",
+  "phase_label": "Phase 2: Stage A (real HSPICE data Gate) PASSED 2026-07-09. Master plan docs/plans/phase2_to_paper_plan.md.",
   "active_plan": "docs/plans/phase2_to_paper_plan.md",
   "done_2026-07-07_impl": [
     "DONE lobe-resolved Z_eff: utils.bvn_cdf/z_eff_from_lobes/effective_mu_sigma + test_zeff.py (8 tests, A1 bias +0.697 sigma regression-pinned)",
@@ -14,22 +14,19 @@
     "DONE scripts/budget_pareto.py (plan 4.2): N x strategy x physics x seeds sweep, censored-aware Vmin RMSE + contour Hausdorff, seed error bars, --smoke/--full. Smoke verified.",
     "DONE scripts/demo_gradient_inversion.py (plan 4.1): x=(cn,pu,WLUD) autograd inversion through GP posterior + physics layer, sigmoid box reparam, feasibility barriers (C8). GO: 8/8 min-assist manifold convergence, Vmin max err 2.41mV, gradient-vs-bisection WLUD 0.0000."
   ],
-  "next_actions": [
-    "ASAP7 public-PDK parallel track: port deck template (review A4 - insurance + reproducibility)",
-    "papers/paper_en.md v0.4: replace stale ablation numbers (plan sec 6.8)",
-    "HSPICE Step A validation deck incl. per-lobe measures + rho_LR (plan sec 3.2)"
+  "done_2026-07-08_impl3": [
+    "DONE budget_pareto seeds=10 full run (300/300 cells), survived 3 mid-run kills via checkpoint/resume (pareto_checkpoint.json). Headline N-vs-accuracy trend confirmed (RMSE 5.1->1.4mV, N~400 knee). Corner-hold-out Wilcoxon (corner_significance.json, computed post-hoc since original _paired_significance only covered the uniform metric): physics-on beats plain on CORNER Vmin RMSE, pooled diff=-1.29mV p<1e-6, concentrated at N<=100 (matches the review's low-budget hypothesis) and vanishing by N=800. stratified_sobol does NOT beat random/sobol_uniform on either uniform or corner metrics -- that claim is retracted. See docs/decisions/budget_pareto_review.md sec 3-4 (filled)."
   ],
-  "running_background_jobs": [
-    {
-      "job": "python scripts/budget_pareto.py --full --seeds 10  (NO --fresh -- resuming)",
-      "started_4th_attempt": "2026-07-09T~ (local, KST), background job bkj1wkm2n",
-      "status": "RUNNING, resumed from checkpoint at 244/300 cells (confirmed: resume log shows all 244 skipped in 0s, now computing sobol_uniform physics=True N=800)",
-      "history": "Killed 3 times so far, always exit code 5, NEVER a Python traceback -- confirmed not a fixed timeout, not tied to a specific cell/strategy/N. 1st: died 190/300. 2nd (--fresh + checkpointing added): died 230-235/300 after ~5.7h. 3rd (resumed, no --fresh): died 244/300 (only +9 cells that run, notification came back as 'stopped' with no completion record in the transcript -- process likely died between Claude Code sessions/restarts, not mid-computation). Root cause still unidentified but irrelevant given checkpointing.",
-      "remaining_work": "56 cells: sobol_uniform physics=True N=800 (6 seeds left), all of stratified_sobol physics=True (50 cells, all N levels).",
-      "if_this_process_is_dead_when_you_read_this": "just re-run `python scripts/budget_pareto.py --full --seeds 10` WITHOUT --fresh again -- resumes automatically from results/budget_pareto/pareto_checkpoint.json. Verified working correctly 3 times now. Check aliveness via `Get-CimInstance Win32_Process -Filter \"Name='python.exe'\"` filtering CommandLine for budget_pareto; check progress via checkpoint record count vs 300 (python -c \"import json; print(len(json.load(open('results/budget_pareto/pareto_checkpoint.json'))['records']))\" from python/ dir). If it keeps dying every ~1-2h regardless of what's being computed, consider it may be tied to THIS session's lifetime/Claude Code process restarts rather than the script -- if so, running it truly detached from any Claude Code session (e.g. a plain background Windows process the user starts themselves, or Task Scheduler) may be the only fix.",
-      "on_completion": "verify results/budget_pareto/pareto_results.json has config.n_seeds==10, len(records)==300, non-empty 'significance' list; then fill docs/decisions/budget_pareto_review.md sec 3-4 (tables + conclusion) and commit both + delete the now-unneeded checkpoint file",
-      "partial_signal_worth_keeping": "physics-on (random + sobol_uniform strategies) shows a real corner_vmin_rmse_mV improvement vs plain, reproduced across all attempts so far: random N=50 (4.95 vs 10.45mV), N=100 (4.48 vs 5.86mV), N=200 (5.28 vs 6.22mV), N=400 (3.69 vs 3.99mV); sobol_uniform N=50 (5.40 vs 7.45mV), N=100 (4.34 vs 5.82mV), N=200 (4.12 vs 4.77mV), N=400 (3.32 vs 3.56mV). This is exactly what the corner-only hold-out (added this session) was for: the uniform-hold-out metric alone showed nothing conclusive. The effect is real and consistent across 2 of 3 strategies now; confirm significance via the Wilcoxon test once stratified_sobol physics=True completes too."
-    }
+  "done_2026-07-09_impl4": [
+    "DONE Stage 4 real-data Gate: GO (3/3 PASS). User hand-transcribed data/hspice_real.xlsx (201 conditions x 6 Vop = 1206 samples, in-house PrimeSim). Added hspice_io.parse_manual_xlsx + _parse_manual_df (shared with parse_manual_csv) + transcription-error QC (_median_digit_shift_qc, _vop_interpolation_outlier_qc) -- caught 1 avg outlier + 5 median digit-shift typos, user fixed them mid-session before the Gate run (QC flags=0 on the run used for the Gate). scripts/stage4_real_data.py: hold-out mu R2=0.9992, gradient direction physical, FSG confirmed worst corner (matches plan's prediction), ell_pu/ell_cn=1.08 (right direction, weak magnitude -- first-ever real-data PG>>PU signal, informational not a gate). Results: results/stage4_real/. See docs/decisions/stage4_real_data_gate.md."
+  ],
+  "next_actions": [
+    "Stage 5 (4D+Vwl assist) on real data, now that Stage A is GO",
+    "Decide Z_FIXED (6.0) vs derive_z_target() (6.64) as the real-data standard Vmin target (stage4_real_data.py used domain-median as a placeholder contour level)",
+    "Sample near-exact 4-corner conditions (current nearest points are 4-15mV off) for tighter corner validation",
+    "Add n_mc to future hand-entry sheets (manual_entry_standard.csv already supports it) to enable noise-aware GP on real data",
+    "ASAP7 public-PDK parallel track: port deck template (review A4 - insurance + reproducibility) -- still deferred, real data arrived first",
+    "papers/paper_en.md v0.4 -> v0.5: fold in Stage 4 real-data GO + budget_pareto corner-significance results + retract the stratified_sobol claim"
   ],
   "phase_history": [
     {
