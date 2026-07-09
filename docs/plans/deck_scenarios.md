@@ -146,32 +146,76 @@ vs naive (no overlap removal): 200+400+500+2,000 = 3,100 → **~10% sim 절약**
 사용자 선택: **A를 base**로 full 9D sensitivity pilot 실행.
 
 ### 조건
-| 항목 | 값 |
-|------|-----|
-| 차원 | 9D (cn, sk, pu, lpu, lpg, lpd, mpu, mpg, mpd) |
-| Condition | **500 Sobol points in 9D** |
-| Vop | 5레벨 grid |
-| 온도 | 125°C (SNMR) |
-| MC | 2,000 |
-| **Deck 수** | **500 × 5 = 2,500** |
-| 출력 | SNMR (mu, sigma) per condition |
+
+SNMR과 Vtrip은 별도 Sobol set. 상세 quadrant weight는 §1.5 참조.
+
+| 항목 | SNMR pilot | Vtrip pilot |
+|------|:----------:|:-----------:|
+| 차원 | 9D | 9D |
+| Condition | **500 Sobol** (weighted: Q2 45%) | **500 Sobol** (weighted: Q4 45%) |
+| Vop | 5레벨 grid | 5레벨 grid |
+| 온도 | 125°C | −40°C |
+| MC | 2,000 | 2,000 |
+| **Deck 수** | **500 × 5 = 2,500** | **500 × 5 = 2,500** |
+| 출력 | SNMR (mu, sigma) | Vtrip (mu, sigma) |
 
 ### Sampling
+
+SNMR pilot (Q2=45% weighted):
 ```python
 from scipy.stats.qmc import Sobol
-sobol = Sobol(d=9, scramble=True)
-s = sobol.random(500)          # (500, 9)
+import numpy as np
 
-names = ['cn','sk','pu','lpu','lpg','lpd','mpu','mpg','mpd']
-scalars = {
-    'cn':  (-60, 120), 'sk':  (-20, 40),   'pu':  (-60, 120),
-    'lpu': (0.7, 0.6), 'lpg': (0.7, 0.6),  'lpd': (0.7, 0.6),
-    'mpu': (0.7, 0.6), 'mpg': (0.7, 0.6),  'mpd': (0.7, 0.6),
+# Quadrant weights (SNMR: Q2 집중)
+quadrant_weights = {
+    (-1, +1): 0.45,  # Q2 (FSG)
+    (-1, -1): 0.20,  # Q1 (FFG)
+    (+1, +1): 0.15,  # Q3 (SSG)
+    (+1, -1): 0.20,  # Q4 (SFG)
 }
-for i, name in enumerate(names):
-    lo, delta = scalars[name]
-    vals[name] = lo + delta * s[:, i]
+names = ['cn','sk','pu','lpu','lpg','lpd','mpu','mpg','mpd']
+bounds = {
+    'cn':  (-60, 60), 'sk':  (-20, 20), 'pu':  (-60, 60),
+    'lpu': (0.7, 1.3), 'lpg': (0.7, 1.3), 'lpd': (0.7, 1.3),
+    'mpu': (0.7, 1.3), 'mpg': (0.7, 1.3), 'mpd': (0.7, 1.3),
+}
+
+n_total = 500
+points = []
+for (cn_sign, pu_sign), w in quadrant_weights.items():
+    n = int(n_total * w)
+    if n == 0: continue
+    sobol = Sobol(d=9, scramble=True)
+    s = sobol.random(n)                          # (n, 9) uniform in [0,1]^9
+    # quadrant마다 cn과 pu의 부호를 제한
+    for i, name in enumerate(names):
+        lo, hi = bounds[name]
+        if name == 'cn':
+            lo_s = 0.0 if cn_sign > 0 else -60.0
+            hi_s = 60.0 if cn_sign > 0 else 0.0
+        elif name == 'pu':
+            lo_s = 0.0 if pu_sign > 0 else -60.0
+            hi_s = 60.0 if pu_sign > 0 else 0.0
+        else:
+            lo_s, hi_s = lo, hi
+        s[:, i] = lo_s + (hi_s - lo_s) * s[:, i]
+    points.append(s)
+samples = np.vstack(points)  # (500, 9)
 ```
+
+Vtrip pilot (Q4=45% weighted):
+
+```python
+# Quadrant weights (Vtrip: Q4 집중)
+quadrant_weights_vtrip = {
+    (-1, +1): 0.10,  # Q2
+    (-1, -1): 0.15,  # Q1
+    (+1, +1): 0.30,  # Q3
+    (+1, -1): 0.45,  # Q4 (SFG) — Vtrip worst
+}
+# 동일한 구조로 500점 생성
+```
+(SNMR/Vtrip 각각 500점, 소계 1,000점. 서로 다른 온도에서 sim되므로 overlap 허용.)
 
 ### Template 변수 매핑 (deck 1개당)
 ```
@@ -193,15 +237,144 @@ for i, name in enumerate(names):
 ( same for _PU2, _PG2, _PD2 )
 ```
 
-### Vtrip pilot (Vtrip template 준비되면 동일 조건으로 실행)
-동일 500 conditions × 5 Vop = 2,500 decks, 단 −40°C, Vtrip .MEASURE.
-SNMR pilot과 **동시 제출 가능** (조건은 같고 온도만 다름).
+### Vtrip pilot (Vtrip template 준비되면 실행)
+SNMR과 **별도 Sobol set**으로 실행 (quadrant 가중치 상이).
+단 −40°C, Vtrip .MEASURE. 상세는 §1.5 참조.
+
+---
+
+## 1.5. SNMR / Vtrip 분리 구조 — Vmin = smooth_max(SNMR, Vtrip)
+
+### 구조적 분리 이유
+
+SNMR(125°C)과 Vtrip(−40°C)은 **온도가 달라 하나의 deck에서 동시 측정 불가**.
+따라서 두 metric은 별도 deck, 별도 Sobol set으로 GP를 각각 학습한다.
+Sim cost는 전혀 늘지 않는다 — 오히려 각 metric에 최적인 data를 독립적으로
+선택할 수 있어 더 효율적이다.
+
+```
+┌─ Sobol set A (quadrant-weighted for SNMR) → SNMR deck @125°C → GP_SNMR(cn, sk, pu, l*, m*) → mu_SNMR, sigma_SNMR
+└─ Sobol set B (quadrant-weighted for Vtrip) → Vtrip deck @-40°C → GP_Vtrip(cn, sk, pu, l*, m*) → mu_Vtrip, sigma_Vtrip
+```
+
+### Vmin = smooth_max(Vmin_SNMR, Vmin_Vtrip)
+
+Vmin은 두 metric 중 **큰 쪽**으로 결정된다:
+
+```
+Vmin(p) = max( Vmin_SNMR(p),  Vmin_Vtrip(p) )
+```
+
+이 max()는 비볼록(non-convex) 함수이므로 GP surrogate에 그대로 쓰면
+미분 기반 최적화에 문제가 생길 수 있다. 대신 **부드러운 근사**를 사용한다:
+
+```
+Vmin(p) ≈ smooth_max(Vmin_SNMR, Vmin_Vtrip, α)
+         = softplus( Vmin_SNMR - Vmin_Vtrip, α ) + Vmin_Vtrip
+         = α · log(1 + exp((Vmin_SNMR - Vtrip_Vmin) / α)) + Vmin_Vtrip
+```
+
+α → 0: max()에 수렴. α > 0: 항상 미분 가능.
+
+### Worst-corner priority — 비볼록 문제는 없음
+
+SNMR과 Vtrip의 worst corner는 다르므로, **실제 Vmin이 관심 있는 영역에서는
+비볼록 문제가 발생하지 않는다:**
+
+| Quadrant | Corner | SNMR Vmin | Vtrip Vmin | Vmin 결정 | 비고 |
+|----------|--------|:---------:|:----------:|:---------:|------|
+| **Q2** (cn−, pu+) | FSG | **높음** | 낮음 | **SNMR** | SNMR worst, Vtrip min에 가까움 |
+| **Q4** (cn+, pu−) | SFG | 낮음 | **높음** | **Vtrip** | Vtrip worst, SNMR min에 가까움 |
+| Q1 (cn−, pu−) | FFG | 중간~높음 | 중간~높음 | **crossover 가능** |
+| Q3 (cn+, pu+) | SSG | 낮음~중간 | 낮음~중간 | **crossover 가능** |
+
+FSG(→SNMR dominant)와 SFG(→Vtrip dominant)에서는 두 값이 명확히 갈리므로
+smooth_max의 smoothing factor α 영향이 거의 없다. Crossover 가능성이 있는
+Q1/Q3은 Vmin이 낮아 최종 Vmin(Vmin_goal = Vmin @ Z=5)에 영향이 미미하다.
+
+→ **worst Vmin 관점에서는 비볼록 문제가 사실상 없음.**
+α는 수치 안정성(numerical stability)을 위해 작은 값(예: α=0.01)으로 설정.
+
+### Quadrant weighting rationale
+
+Stage 4 real data(201 conditions)의 quadrant별 Vmin 분석 결과:
+
+| Quadrant | cond 수 | SNMR Vmin @Z=5 | Vtrip Vmin @Z=5 | 비고 |
+|----------|:-------:|:--------------:|:---------------:|------|
+| Q1 (FFG) | 58 | 0.53V | 0.46V | Both medium |
+| Q2 (FSG) | 55 | **0.57V** (worst) | 0.37V | **SNMR만 worst** |
+| Q3 (SSG) | 46 | 0.46V | 0.45V | Both low |
+| Q4 (SFG) | 42 | 0.35V | **0.54V** (worst) | **Vtrip만 worst** |
+
+**SNMR**: Q2(FSG)가 Vmin variation의 대부분을 설명 (std=0.058V).
+→ Q2에 높은 가중치를 두어 FSG 영역의 GP 정밀도 확보.
+
+**Vtrip**: Q4(SFG)만이 유일하게 Vtrip worst. 나머지 quadrant는 Vtrip Vmin이
+항상 SNMR보다 낮아 Vmin 결정에 관여하지 않음.
+→ Q4에 집중. Q1~Q3은 Vtrip Vmin이 최종 Vmin에 영향이 없으므로 sampling 밀도 낮춤.
+
+### Quadrant weight table
+
+| Stage | Metric | Q1 (FFG) | Q2 (FSG) | Q3 (SSG) | Q4 (SFG) | 비고 |
+|-------|--------|:--------:|:--------:|:--------:|:--------:|------|
+| B | SNMR | 20% | **45%** | 15% | 20% | SNMR FSG 집중 |
+| C | Vtrip | 15% | 10% | 30% | **45%** | Vtrip SFG 집중 |
+| D-pilot | SNMR | 20% | **45%** | 15% | 20% | B와 동일 |
+| D-pilot | Vtrip | 15% | 10% | 30% | **45%** | C와 동일 |
+| D-full | SNMR | 20% | **45%** | 15% | 20% | |
+| D-full | Vtrip | 15% | 10% | 30% | **45%** | |
+
+총계는 각 stage별로 100%.
+
+### Weighted Sobol generation 방식
+
+Sobol은 균등 분포이므로, quadrant weight를 반영하려면 **rejection sampling**
+또는 **CDF warping**을 사용한다.
+
+```python
+def weighted_sobol_sample(n_total, bounds, quadrant_weights, seed=42):
+    """
+    n_total: 목표 condition 수
+    bounds: {name: (lo, hi)}  # cn, sk, pu, l*, m*
+    quadrant_weights: {(cn_sign, pu_sign): weight}  
+                      예: {(-1, +1): 0.45, ...}  # Q2에 45%
+    """
+    n_per_quadrant = {q: int(n_total * w) for q, w in quadrant_weights.items()}
+    samples = []
+    for (cn_sign, pu_sign), n in n_per_quadrant.items():
+        sobol = Sobol(d=9, scramble=True, seed=seed)
+        s = sobol.random(n)
+        # 각 quadrant의 bounds로 scaling
+        for name, (lo, hi) in bounds.items():
+            s[:, idx] = lo + (hi - lo) * s[:, idx]
+        # cn, pu 방향 보정 (cn_sign, pu_sign로 quadrant 한정)
+        ...
+    return np.vstack(samples)
+```
+
+SNMR과 Vtrip은 **별도 Sobol set을 각자의 quadrant weight로 생성**한다.
+두 set의 overlap은 의도적으로 허용 (다른 온도에서 sim되므로 간섭 없음).
+
+### GP 학습 구조
+
+```
+GP_SNMR:  X_SNMR → y_SNMR  (Matern 5/2 + ARD, 9D)
+GP_Vtrip: X_Vtrip → y_Vtrip (Matern 5/2 + ARD, 9D)
+
+Vmin(p) = smooth_max(GP_SNMR(p), GP_Vtrip(p), α=0.01)
+```
+
+두 GP는 완전히 독립적. Sobol set, 학습, prediction 모두 별도.
+Weight 공유나 multi-task 학습 없음 — 간섭을 피하는 것이 더 중요.
 
 ---
 
 ## 2. Pilot 결과 → Sensitivity 분석
 
 ### 분석 방법
+
+SNMR과 Vtrip은 별도 GP이므로 **각각 독립적으로 sensitivity 분석** 수행.
+
 ```python
 from SALib.analyze import sobol as sobol_analyze
 
@@ -212,10 +385,15 @@ problem = {
                [0.7,1.3],[0.7,1.3],[0.7,1.3],
                [0.7,1.3],[0.7,1.3],[0.7,1.3]]
 }
-Si = sobol_analyze.analyze(problem, Y_vmin, calc_second_order=False)
+
+# SNMR sensitivity
+Si_snmr = sobol_analyze.analyze(problem, Y_snmr_vmin, calc_second_order=False)
+
+# Vtrip sensitivity
+Si_vtrip = sobol_analyze.analyze(problem, Y_vtrip_vmin, calc_second_order=False)
 ```
 
-출력: 각 차원의 **S1 (1차 민감도)** 와 **ST (전효과)**, Vmin 분산 기여도(%).
+출력: 각 metric별 각 차원의 **S1 (1차 민감도)** 와 **ST (전효과)**, Vmin 분산 기여도(%).
 
 ### Device 影響度 사전 정보 (참고)
 | Metric | 1st | 2nd | 3rd |
@@ -272,10 +450,16 @@ device 影響度 PG>PU>PD 반영.
 모든 차원 유지 → 9D GP.
 **2,000 cond × 5 Vop = 10,000 decks** (MC=5K)
 
-### 시나리오 F (Full merge): SNMR + Vtrip 통합 GP
+### 시나리오 F (Full): SNMR + Vtrip 독립 GP → smooth_max
 
-SNMR과 Vtrip을 같은 조건에서 동시 측정. 9D GP.
-**2,000 cond × 5 Vop × 2온도(125, −40) = 20,000 decks**
+SNMR GP와 Vtrip GP를 각각 독립적으로 학습 후 smooth_max로 결합.
+두 GP는 다른 Sobol set, 다른 온도, 다른 quadrant weight를 사용 ( §1.5 ).
+
+| Metric | Cond | Vop | MC | 온도 | Decks |
+|--------|:----:|:---:|:--:|:----:|:-----:|
+| SNMR | 2,000 | 5 | 5K | 125°C | 10,000 |
+| Vtrip | 2,000 | 5 | 5K | −40°C | 10,000 |
+| **Total** | | | | | **20,000** |
 
 ---
 
@@ -293,8 +477,10 @@ Round 1 (동시 제출):
   │            (Stage A 조건과 동일, 온도만 변경 — 전체 신규)
   ├─ Stage D-pilot-SNMR: 9D Sobol (신규 420 cond × 5 Vop = 2,100 decks, MC=2K, 125°C)
   │            + A/B overlap 80 cond 재사용 → 학습용 500 cond
+  │            (quadrant weight: Q2 45% — §1.5 참조)
   └─ Stage D-pilot-Vtrip: 9D Sobol (신규 420 cond × 5 Vop = 2,100 decks, MC=2K, -40°C)
              + A/B overlap 80 cond 재사용 → 학습용 500 cond
+             (quadrant weight: Q4 45% — §1.5 참조)
   Total 신규 sim: 1,750 + 2,000 + 2,100 + 2,100 = 7,950 decks
   Total 학습 cond: Stage-A(200) + B(400) + C(400) + D-SNMR(500) + D-Vtrip(500)
 
@@ -329,8 +515,8 @@ pilot 완료 후 불필요한 dim을 제거하면 full sim 수가 절반으로 �
 | **A** | 4D baseline SNMR | 4D | 200 | 200×5 | **1,000** | 2K | 125°C | SNMR | ✅ 완료 |
 | **B** | 4D SNMR (ext) | 4D | 400 | 350×5 | **1,750** | 5K | 125°C | SNMR | A overlap ~50 재사용 |
 | **C** | Vtrip @-40°C | 4D | 400 | 400×5 | **2,000** | 5K | −40°C | Vtrip | 전체 신규 |
-| **Dp** | 9D pilot SNMR | 9D | 500 | 420×5 | **2,100** | 2K | 125°C | SNMR | A+B overlap ~80 재사용 |
-| **Dp** | 9D pilot Vtrip | 9D | 500 | 420×5 | **2,100** | 2K | −40°C | Vtrip | A+B overlap ~80 재사용 |
+| **Dp** | 9D pilot SNMR | 9D | 500 | 420×5 | **2,100** | 2K | 125°C | SNMR | A+B overlap ~80, Q2=45% weight (§1.5) |
+| **Dp** | 9D pilot Vtrip | 9D | 500 | 420×5 | **2,100** | 2K | −40°C | Vtrip | A+B overlap ~80, Q4=45% weight (§1.5) |
 | | *Subtotal R1* | | | | ***8,950*** | | | | |
 | **Df** | Full reduced | 5~9D | 2,000 | 1,800×5 | **~9,000** | 5K | 각각 | SNMR/Vtrip | A+B+Dp overlap ~200 재사용 |
 | | **Total 신규 sim** | | | | **~17,950** | | | | |
