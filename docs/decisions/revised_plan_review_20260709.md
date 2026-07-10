@@ -121,14 +121,34 @@ Sobol로는 Sobol indices가 편향될 수 있음**.
 
 ## 4. 종합 판정 & 착수 순서
 
-**계획은 건전하고 잘 발전됨.** 착수 전 결정 상태:
+**계획은 건전하고 잘 발전됨.** 착수 전 결정 — **전부 확정 (2026-07-09)**:
 
-1. ✅ **[상류] Z_target 확정** (§3.3) → **6.50 (256Mb@99% Poisson)**. Vop
-   5레벨(0.4~0.8) 확정. `Z_FIXED=6.50` 반영 완료.
-2. ⬜ **skew ±20 근거 확정** (§3.4) → Pelgrom 기반 실제 mismatch 3σ.
-3. ⬜ **n_mc 전사 필수화** (§3.2) → overlap MC 불일치를 noise-aware GP로 처리.
-4. ⬜ **sensitivity는 GP 기반으로** (§3.5) → weighted Sobol의 편향 회피.
+1. ✅ **[상류] Z_target = 6.50** (256Mb@99% Poisson). Vop 5레벨(0.4~0.8)
+   확정. `Z_FIXED=6.50` 반영 완료.
+2. ✅ **skew ±20mV 유지** (사용자 결정). Pelgrom 대략치로는 ~30mV일 수 있어
+   다소 보수적이나 첫 배치로 무난. 실측 mismatch 나오면 재조정.
+3. ✅ **n_mc 전사 필수화**. 비용 ~0(조건별 MC 같으면 헤더 상수 1개), overlap
+   재사용 시 MC 불일치를 noise-aware GP가 처리.
+4. ✅ **sensitivity는 GP-based Sobol로**. weighted Sobol(quadrant 45%)은
+   Saltelli 균등 전제 위반 → 학습된 GP에서 균등 Sobol 재샘플로 S1/ST 계산,
+   추가 sim 0.
 5. ⬜ **[코드] render_deck에 skew 인자** (계획 §6 필수) → Stage B 선행.
+
+### 전사 정밀도 & 워크플로우 (2026-07-09 확정, §3.6 신설)
+
+**핵심 결정**: deck(.in)도 반출 불가 → 조건도 손 전사 대상. 그러나 **Sobol
+설계는 우리가 만들므로** 조건값을 우리가 이미 안다. → **우리가 조건이 미리
+채워진 표(row_id + cn/pu/sk/loc/mom)를 생성 → 사용자는 각 행에 결과
+(snmr_avg, std [, n_mc])만 채움.** 전사량 9D pilot 기준 27,500 → 7,500 숫자
+(**3.7배↓**), loc/mom 정밀도 고민 제거(우리가 full precision 지정).
+
+**전사 정밀도 (조건표를 못 만드는 예외 상황의 안전장치)**:
+| 입력 | 정밀도 | 근거 |
+|------|--------|------|
+| cn, pu, skew | **정수 mV** | 반올림 Vmin 오차 ≤0.7mV ≪ GP RMSE·MC노이즈 |
+| loc, mom (ratio) | **소수 2자리 0.01** | 0.1은 7값뿐(Sobol 해상도 파괴), 0.001은 과잉 |
+| snmr_avg, std | 측정 그대로 (mV) | 결과값, 반올림 금지 |
+| n_mc | 정수 | noise-aware GP SEM 유도용 |
 
 **즉시 반영할 문서 수정**:
 - phase2_to_paper_plan §4.1: inverse "WLUD" → "PG-PD skew tolerance".

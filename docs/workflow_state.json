@@ -27,10 +27,10 @@
   "next_actions": [
     "DONE 2026-07-09: Z_target = 6.50 (256Mb @ 99% Poisson, derive_z_target). Z_FIXED 6.0->6.50 in src/utils.py, all tests pass. Vop 5 levels (0.4-0.8) confirmed necessary+sufficient at this Z (real-data crossing 100% within 0.4-0.8, [0.8,0.9]=0). Poisson==Binomial at array scale. 128Mb(6.40)/256Mb(6.50) switchable via derive_z_target(mb=). Absolute Vmin +~25mV vs old Z=6.0; contour/RMSE unchanged.",
     "Adopt per-corner residual correction (sep) as the production corner-accuracy fix; re-evaluate vs L_boundary training anchors once Phase-4 skew/sigmaL adds many more corners",
-    "Code: add skew_pgpd arg to render_deck/_render_vth_skew (revised plan sec 6, prerequisite for Stage B)",
-    "Require n_mc column on future hand-entry sheets so overlap MC-mismatch (Stage A 2K vs B/D 5K) is handled by the noise-aware GP",
+    "DONE 2026-07-09: launch decisions settled with user -- skew +-20mV kept; n_mc transcription now required; sensitivity via GP-based Sobol (not weighted-Sobol) to avoid Saltelli bias; transcription precision cn/pu/skew=integer mV, loc/mom=2 decimals (Vmin error from integer rounding <=0.7mV, negligible). See revised_plan_review_20260709.md sec 3.6/4.",
+    "DONE 2026-07-09: deck also NOT exportable -> conditions hand-transcribed too. But WE generate the Sobol, so scripts/gen_condition_sheet.py ships a sheet with conditions PRE-FILLED (cn/[sk/]pu/[loc/mom/]vop at the decided precision) + blank snmr_avg/std/n_mc; user fills only results. 3.7x less transcription (9D pilot 27.5k->7.5k numbers), round-trips through parse_manual_xlsx. Stages A/B/D.",
+    "Code: add skew_pgpd arg to render_deck/_render_vth_skew (revised plan sec 6, prerequisite for Stage B decks) -- the only remaining code prereq before Stage B",
     "Reframe inverse demo: phase2_to_paper_plan sec 4.1 'required WLUD' -> 'allowable PG-PD skew tolerance' (WLUD dropped for skew in revised plan)",
-    "Use GP-based (not weighted-Sobol) sensitivity for the Stage-D pilot to avoid biasing Saltelli indices",
     "papers/paper_en.md v0.4 -> v0.5: fold in Stage 4 real-data GO + corner recalibration (sep) + budget_pareto corner-significance + retract stratified_sobol claim",
     "Cleanup: prune inferior corner-retrain result folders/scripts (dup/noise/feat/retrain), keep sep + contour + verification (results recorded in corner_recalibration_20260709.md)"
   ],

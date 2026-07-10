@@ -171,8 +171,37 @@ Vtrip은 조건당 a0(bwrm_1)/a1(bwrm_2) 두 출력 → `vtrip_min_stats`로 병
 
 ## 6. 이 문서와 데이터 파이프라인 연결
 
-- 조건은 `.in` deck에서 자동 파싱(`primesim_io.parse_in_deck`) → 손 전사 불필요.
-- 결과는 `.mt0`에서 파싱(`mc_stats`, `vtrip_min_stats`) → 조건과 merge해 CSV 1개.
-- 그 CSV = 손 전사 표준 형식 = 학습 입력(`hspice_io.parse_manual_csv`).
-- **CSV에는 raw 통계만**(mu_SNMR, sigma_SNMR, vtrip_min_*, n_mc). z-score/Vmin은
-  학습·physical layer가 계산 (지표 정의 바뀌어도 재전사 불필요).
+### 6.1 데이터 흐름 (2026-07-09 확정 — deck도 반출 불가)
+
+deck(.in)·결과(.mt0) **모두 반출 불가**. 그러나 **Sobol 조건 설계는 우리가
+생성**하므로 조건값을 이미 앎 → 사용자는 조건을 재입력할 필요 없이 **결과만**
+채운다:
+
+```
+[우리]  scripts/gen_condition_sheet.py --stage {A|B|D}
+          → 조건이 미리 채워진 xlsx (row_id, cn, [sk,] pu, [loc, mom,] vop)
+             + 빈 결과 컬럼 (snmr_avg, snmr_std, n_mc)
+[사내]  그 조건표대로 deck 생성·HSPICE 실행 (사내 자동)
+[손 전사] 각 행 옆 결과값(snmr_avg, snmr_std, n_mc)만 기입 ← 유일한 손 작업
+[우리]  hspice_io.parse_manual_xlsx → X, y, y_noise → 학습 + physics layer
+```
+
+전사량: 9D pilot 기준 조건까지 적으면 27,500 숫자 → 결과만이면 **7,500 숫자
+(3.7배↓)**. loc/mom 정밀도 고민도 제거(우리가 full precision으로 지정).
+
+### 6.2 전사 정밀도 (조건표를 못 쓰는 예외 상황의 안전장치)
+
+| 입력 | 정밀도 | 근거 |
+|------|--------|------|
+| cn, pu, skew | **정수 mV** | 반올림 Vmin 오차 ≤0.7mV ≪ GP RMSE·MC노이즈 |
+| loc, mom (ratio) | **소수 2자리 (0.01)** | 0.1은 7값뿐(Sobol 해상도 파괴), 0.001 과잉 |
+| snmr_avg / std | 측정 그대로 (mV) | 결과값, 반올림 금지 |
+| n_mc | 정수 (**필수**) | noise-aware GP SEM 유도 + overlap MC 불일치 처리 |
+
+### 6.3 원칙
+
+- **결과 컬럼엔 raw 통계만**(snmr_avg, snmr_std, [vtrip_min_*], n_mc).
+  z-score/Vmin은 학습·physics layer가 계산 (Z_target 정의 바뀌어도 재전사 불필요).
+- **Z_target = 6.50** (256Mb@99% Poisson). Vop 5레벨(0.4~0.8).
+- 전사 오류는 자동 QC(`_median_digit_shift_qc`, `_vop_interpolation_outlier_qc`)로
+  flag만 하고 자동수정 안 함 → 사용자가 원본 확인 후 수정.
