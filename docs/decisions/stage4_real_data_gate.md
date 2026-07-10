@@ -113,11 +113,13 @@ ell_pu / ell_cn = 1.083
 **>>> GO <<<** — Stage 5(4D+Vwl assist) 진행 가능. 상세 기준은
 `docs/plans/hspice_sim_scope.md` Stage A / `phase2_to_paper_plan.md` §3.6.
 
-## 5. 남은 이슈 / 다음 스�텝
+## 5. 남은 이슈 / 다음 스텝
 
-1. **정확한 4-corner 미샘플** — 최근접점(4~15mV 오차)으로 대체 판정. 정밀
-   corner 검증(계획 §3.6 "corner-ring" 요구사항)을 위해서는 정확히
-   (±60,±60) 근방 소수 조건을 추가 시뮬해야 함.
+1. ~~**정확한 4-corner 미샘플**~~ **[정정 2026-07-09]** — ±60은 analytic toy의
+   단순 가정이었고, **이 PDK의 실제 3σ corner VT shift는 측정된 값이 맞다**
+   (FFG(−36,−44), FSG(−29,+39), SFG(+32,−37), SSG(+36,+45) mV). 별도 corner
+   측정(`hspice_real_corner.xlsx`)으로 검증 완료 — corner 외삽 편향 실증 +
+   per-corner residual correction 채택. 상세: `corner_recalibration_20260709.md`.
 2. **Vmin=0.6V 표준 타깃과의 정합** — 이번 스크립트는 임시로 domain
    median(≈0.45V)을 contour level로 사용. Z_FIXED(6.0) 또는
    `derive_z_target()`(6.64) 중 어느 것을 실데이터 표준으로 쓸지 결정

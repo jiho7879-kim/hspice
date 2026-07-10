@@ -20,13 +20,19 @@
   "done_2026-07-09_impl4": [
     "DONE Stage 4 real-data Gate: GO (3/3 PASS). User hand-transcribed data/hspice_real.xlsx (201 conditions x 6 Vop = 1206 samples, in-house PrimeSim). Added hspice_io.parse_manual_xlsx + _parse_manual_df (shared with parse_manual_csv) + transcription-error QC (_median_digit_shift_qc, _vop_interpolation_outlier_qc) -- caught 1 avg outlier + 5 median digit-shift typos, user fixed them mid-session before the Gate run (QC flags=0 on the run used for the Gate). scripts/stage4_real_data.py: hold-out mu R2=0.9992, gradient direction physical, FSG confirmed worst corner (matches plan's prediction), ell_pu/ell_cn=1.08 (right direction, weak magnitude -- first-ever real-data PG>>PU signal, informational not a gate). Results: results/stage4_real/. See docs/decisions/stage4_real_data_gate.md."
   ],
+  "done_2026-07-09_impl5": [
+    "DONE corner recalibration study (5 approaches): GP systematically UNDER-predicts mu at real process corners (extrapolation bias, up to -20mV at Vop=0.9), first real-data confirmation of the review's corner-anchor hypothesis. Vmin impact smaller (FSG +23mV) since Z-crossing Vop is less sensitive. Compared noise-weight/dup-50x/noise-contrast/one-hot-feature/per-corner-residual. WINNER: per-corner residual correction (sep) -- FSG error 0.0mV AND keeps global contour smooth (dup-50x also hits 0mV but WARPS the contour, unsafe for inverse estimation). Corner coords are the PDK's REAL 3-sigma shifts (FFG(-36,-44) FSG(-29,+39) SFG(+32,-37) SSG(+36,+45)mV), NOT the analytic +-60 assumption -- so the earlier 'corners not sampled' note was wrong, corrected in stage4_real_data_gate.md sec 5. See docs/decisions/corner_recalibration_20260709.md.",
+    "DONE reviewed the two revised plans (deck_scenarios.md, revised_sim_plan_20260709.md). Verdict: sound and well-developed. Verified with real data: (a) Vop 0.9 removal justified -- 0/201 conditions cross Vmin in [0.8,0.9] at Z=4/5/6, and [0.7,0.8] has <=1, so Vop 0.4-0.7 (4 levels) may suffice at Z<=5. (b) global-sigma = cn/pu amplitude scaling is physically sound (Pelgrom-linear). (c) smooth_max alpha=0.01V gives 6.93mV crossing bias (numerically verified) -- too large, recommend alpha<=0.002V; fixed in deck_scenarios.md. Risks flagged: MC-mismatch on overlap reuse needs n_mc + noise-aware GP; Z_target still undecided (upstream of everything); weighted-Sobol biases Saltelli sensitivity (use GP-based sensitivity instead). See docs/decisions/revised_plan_review_20260709.md."
+  ],
   "next_actions": [
-    "Stage 5 (4D+Vwl assist) on real data, now that Stage A is GO",
-    "Decide Z_FIXED (6.0) vs derive_z_target() (6.64) as the real-data standard Vmin target (stage4_real_data.py used domain-median as a placeholder contour level)",
-    "Sample near-exact 4-corner conditions (current nearest points are 4-15mV off) for tighter corner validation",
-    "Add n_mc to future hand-entry sheets (manual_entry_standard.csv already supports it) to enable noise-aware GP on real data",
-    "ASAP7 public-PDK parallel track: port deck template (review A4 - insurance + reproducibility) -- still deferred, real data arrived first",
-    "papers/paper_en.md v0.4 -> v0.5: fold in Stage 4 real-data GO + budget_pareto corner-significance results + retract the stratified_sobol claim"
+    "DECIDE Z_target (upstream of all Vmin numbers + Vop level count + quadrant weights): Z_FIXED 6.0 vs derive_z_target 6.64 vs plan's Z=5. Blocks Stage 5 contour target and Vop 4-vs-5 level decision.",
+    "Adopt per-corner residual correction (sep) as the production corner-accuracy fix; re-evaluate vs L_boundary training anchors once Phase-4 skew/sigmaL adds many more corners",
+    "Code: add skew_pgpd arg to render_deck/_render_vth_skew (revised plan sec 6, prerequisite for Stage B)",
+    "Require n_mc column on future hand-entry sheets so overlap MC-mismatch (Stage A 2K vs B/D 5K) is handled by the noise-aware GP",
+    "Reframe inverse demo: phase2_to_paper_plan sec 4.1 'required WLUD' -> 'allowable PG-PD skew tolerance' (WLUD dropped for skew in revised plan)",
+    "Use GP-based (not weighted-Sobol) sensitivity for the Stage-D pilot to avoid biasing Saltelli indices",
+    "papers/paper_en.md v0.4 -> v0.5: fold in Stage 4 real-data GO + corner recalibration (sep) + budget_pareto corner-significance + retract stratified_sobol claim",
+    "Cleanup: prune inferior corner-retrain result folders/scripts (dup/noise/feat/retrain), keep sep + contour + verification (results recorded in corner_recalibration_20260709.md)"
   ],
   "phase_history": [
     {

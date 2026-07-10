@@ -293,7 +293,13 @@ smooth_max의 smoothing factor α 영향이 거의 없다. Crossover 가능성�
 Q1/Q3은 Vmin이 낮아 최종 Vmin(Vmin_goal = Vmin @ Z=5)에 영향이 미미하다.
 
 → **worst Vmin 관점에서는 비볼록 문제가 사실상 없음.**
-α는 수치 안정성(numerical stability)을 위해 작은 값(예: α=0.01)으로 설정.
+α는 수치 안정성(numerical stability)을 위해 작은 값으로 설정.
+
+> **[리뷰 2026-07-09 정정]** α=0.01V는 교차점에서 α·ln2 = **6.93mV 편향**
+> (수치 검증 완료, `revised_plan_review_20260709.md` §3.1). 목표 정확도
+> 대비 큼. Q1/Q3 crossover 영역에서 Vmin을 systematic하게 높게 만듦.
+> **α ≤ 0.002V 권장** (편향 <1.4mV). 평가는 exact max, gradient inversion
+> 최적화에서만 smooth_max 사용. FSG/SFG worst corner는 gap≫20mV라 무관.
 
 ### Quadrant weighting rationale
 
