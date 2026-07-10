@@ -88,13 +88,21 @@ level이 다름. 계획 §0.5도 인지하고 있음(옵션 a/b/c 제시). **명
 - **필수 조건**: Stage A 재전사 시 **n_mc 컬럼 추가** (현 xlsx엔 없음).
   안 하면 MC 불일치를 GP가 모른 채 합쳐 sigma 예측이 왜곡.
 
-### 3.3 Z_target 미결 — 전체 계획의 상류 결정
-Vop 레벨(§2.3), corner Vmin, quadrant weight(§1.5 Vmin 분석)가 모두
-Z_target에 의존하는데 아직 미확정 (Z_FIXED=6.0 vs derive_z_target=6.64 vs
-계획서 §1.5의 Z=5). **가장 먼저 결정해야 하류가 안 흔들림.**
-- 실데이터 근거: 64Mb@99.9% → 6.64가 정확. 하지만 §1.5는 Z=5로 분석.
-- **권고**: 응용 spec에서 Z_target을 확정(용량·yield 목표). 확정 전까지
-  모든 Vmin 수치는 "Z=X 기준" 딱지를 붙여 보고.
+### 3.3 Z_target — **확정됨 (2026-07-09, 사용자 결정)**
+**Z_target = 6.50** = `derive_z_target(mb=256, y_target=0.99, model="poisson")`
+= **256 Mb 어레이, Poisson yield 99%**. 사내 관행(128/256Mb Poisson 99%)
+기준. `Z_FIXED`를 6.0 → 6.50으로 교체 (`src/utils.py`), 전 테스트 통과.
+
+- Poisson = Binomial (이 스케일에서 4자리 일치) → 코드 공식 무변경, `model`
+  인자만 추가.
+- **Vop 레벨 확정**: Z=6.5에서 실데이터 crossing이 0.4~0.8 안에서 100%
+  종료([0.8,0.9]=0개, [0.7,0.8]=6개 존재). → **Vop 5레벨(0.4~0.8)이
+  필요·충분**. 계획서의 5레벨 결정이 Z=6.5에 정확히 부합. (4레벨 0.4~0.7은
+  0.7~0.8 crossing 6조건을 놓치므로 불가.)
+- **절대 Vmin 영향**: Z 6.0→6.5로 median Vmin +~25mV 상향. contour 모양/GP
+  품질지표(RMSE/R²)는 불변 (mu/sigma 기반이라 Z 무관).
+- 128Mb(Z=6.40)와 256Mb(Z=6.50)는 `derive_z_target(mb=)`로 언제든 병기
+  가능 — 지금은 256 단일 표준.
 
 ### 3.4 skew 범위 ±20mV 근거 부재
 cn/pu는 ±60(3σ corner)인데 skew ±20의 물리적 근거가 문서에 없음. PG-PD
@@ -113,13 +121,14 @@ Sobol로는 Sobol indices가 편향될 수 있음**.
 
 ## 4. 종합 판정 & 착수 순서
 
-**계획은 건전하고 잘 발전됨.** 착수 전 4개 결정 + 1개 코드 확인:
+**계획은 건전하고 잘 발전됨.** 착수 전 결정 상태:
 
-1. **[상류] Z_target 확정** (§3.3) → Vop 레벨(4 vs 5), Vmin 기준 결정.
-2. **skew ±20 근거 확정** (§3.4) → Pelgrom 기반 실제 mismatch 3σ.
-3. **n_mc 전사 필수화** (§3.2) → overlap MC 불일치를 noise-aware GP로 처리.
-4. **sensitivity는 GP 기반으로** (§3.5) → weighted Sobol의 편향 회피.
-5. **[코드] render_deck에 skew 인자** (계획 §6 필수) → Stage B 선행.
+1. ✅ **[상류] Z_target 확정** (§3.3) → **6.50 (256Mb@99% Poisson)**. Vop
+   5레벨(0.4~0.8) 확정. `Z_FIXED=6.50` 반영 완료.
+2. ⬜ **skew ±20 근거 확정** (§3.4) → Pelgrom 기반 실제 mismatch 3σ.
+3. ⬜ **n_mc 전사 필수화** (§3.2) → overlap MC 불일치를 noise-aware GP로 처리.
+4. ⬜ **sensitivity는 GP 기반으로** (§3.5) → weighted Sobol의 편향 회피.
+5. ⬜ **[코드] render_deck에 skew 인자** (계획 §6 필수) → Stage B 선행.
 
 **즉시 반영할 문서 수정**:
 - phase2_to_paper_plan §4.1: inverse "WLUD" → "PG-PD skew tolerance".

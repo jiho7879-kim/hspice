@@ -40,39 +40,50 @@ from typing import Tuple
 # Constants
 # ---------------------------------------------------------------------------
 
-# Yield target
-MB = 64  # memory block size in Mb
-Y_TARGET = 0.999  # per-block yield target
-Z_TARGET = 3.0  # simplified single-bit sigma target (adjustable)
+# Yield target — PROJECT STANDARD (decided 2026-07-09 with user):
+#   256 Mb array, Poisson yield 99%  ->  Z_target = 6.50.
+# This is the spec Vmin is judged against for the real-data / paper numbers.
+MB = 256  # memory array size in Mb (project standard)
+Y_TARGET = 0.99  # array yield target (Poisson)
+Z_TARGET = 3.0  # legacy simplified single-bit sigma target (unused by pipeline)
 
 
 def derive_z_target(mb: float = MB, y_target: float = Y_TARGET,
-                    bits_per_mb: float = 1e6) -> float:
-    """Exact Z_target from the Poisson/binomial yield model.
+                    bits_per_mb: float = 1e6, model: str = "poisson") -> float:
+    """Exact Z_target from the array yield model.
 
-    P_fail_per_bit = 1 - y_target^(1/Nbits),  Nbits = mb * bits_per_mb
-    Z_target = Phi^-1(1 - P_fail_per_bit) = norm.isf(P_fail_per_bit)
+    Poisson (default):  Y = exp(-Nbits * p_fail)  ->  p_fail = -ln(Y)/Nbits
+    Binomial:           Y = (1 - p_fail)^Nbits     ->  p_fail = 1 - Y^(1/Nbits)
+    Z_target = Phi^-1(1 - p_fail) = norm.isf(p_fail).
 
-    For 64 Mb @ 99.9%:  P_bit ~ 1.56e-11  ->  Z ~ 6.65.
-    Note: Nbits is the CELL (bit) count — do not multiply by 6 for the
-    six transistors of a 6T cell; the failure unit is the cell.
+    At array scale (Nbits * p_fail << 1) the two models agree to >4 digits,
+    so `model` rarely matters; Poisson is the conventional SRAM choice.
+    Nbits is the CELL (bit) count — a 6T cell is 1 bit, do NOT multiply by 6.
+
+    Project standard 256 Mb @ 99% Poisson -> Z ~ 6.503.
+    (128 Mb @ 99% -> 6.398;  64 Mb @ 99.9% -> 6.640.)
     """
     from scipy.stats import norm
     nbits = mb * bits_per_mb
-    p_fail_bit = 1.0 - y_target ** (1.0 / nbits)
+    if model == "poisson":
+        p_fail_bit = -np.log(y_target) / nbits
+    elif model == "binomial":
+        p_fail_bit = 1.0 - y_target ** (1.0 / nbits)
+    else:
+        raise ValueError(f"unknown yield model: {model}")
     return float(norm.isf(p_fail_bit))
 
 
 # Fixed Z-score threshold used by the physics layer for Vmin interpolation.
 #
-# NOTE: 6.0 is a SIMPLIFIED toy value, kept fixed so results stay comparable
-# across sessions.  The exact value for 64Mb @ 99.9% is derive_z_target()
-# ~ 6.65, i.e. Z_FIXED = 6.0 is slightly OPTIMISTIC (lower Vmin), not
-# "conservative" as earlier comments claimed (higher Z = stricter = higher
-# Vmin).  Switch to derive_z_target() when absolute Vmin accuracy matters
-# (HSPICE deployment / paper numbers); expect a fixed +shift in all Vmin
-# values, no change to contour SHAPES or GP quality metrics.
-Z_FIXED = 6.0
+# PROJECT STANDARD (2026-07-09): 6.50 = derive_z_target() for 256 Mb @ 99%
+# Poisson yield.  Replaces the earlier toy placeholder Z_FIXED = 6.0 (which
+# was carried over from the analytic toy and is ~0.5 sigma optimistic).
+# Raising 6.0 -> 6.50 shifts all absolute Vmin UP by a fixed amount (real
+# data: ~+25 mV at the median) but does NOT change contour SHAPES or GP
+# quality metrics (RMSE/R2), which are computed on mu/sigma, not on Z.
+# Use derive_z_target(mb=..., y_target=...) for a different array spec.
+Z_FIXED = 6.50
 
 
 # ---------------------------------------------------------------------------

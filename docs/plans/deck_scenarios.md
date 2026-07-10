@@ -305,6 +305,11 @@ Q1/Q3은 Vmin이 낮아 최종 Vmin(Vmin_goal = Vmin @ Z=5)에 영향이 미미�
 
 Stage 4 real data(201 conditions)의 quadrant별 Vmin 분석 결과:
 
+> **[Z_target 확정 2026-07-09]** 프로젝트 표준 Z_target = **6.50**
+> (256Mb@99% Poisson, `derive_z_target`). 아래 표는 Z=5 기준의 예전 분석이나,
+> **quadrant 상대순위(FSG=SNMR worst, SFG=Vtrip worst)는 Z와 무관하게 불변**
+> 이므로 weighting 결론은 유효. 절대 Vmin은 Z=6.5에서 median +~25mV 상향.
+
 | Quadrant | cond 수 | SNMR Vmin @Z=5 | Vtrip Vmin @Z=5 | 비고 |
 |----------|:-------:|:--------------:|:---------------:|------|
 | Q1 (FFG) | 58 | 0.53V | 0.46V | Both medium |
