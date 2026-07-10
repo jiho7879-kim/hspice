@@ -224,9 +224,38 @@ PU_MIN, PU_MAX = -60.0, 60.0  # mV
 VOPS = np.array([0.4, 0.5, 0.6, 0.7, 0.8, 0.9], dtype=np.float64)
 N_VOP = len(VOPS)
 
-# Vop column index — always 2 regardless of total dims.
-# NEVER hardcode 2 in physics constraint code; import and use VOP_COL.
-VOP_COL = 2
+# ---------------------------------------------------------------------------
+# Column layout (device-first).  The leading block is the device Vth-shift
+# knobs, ordered [cn, (sk...), pu] -- cn ALWAYS first, pu ALWAYS the last
+# device column.  Vop immediately follows the device block, then the optional
+# operating dims (WLUD, Temp, ...).  So:
+#
+#   Stage A (3D): [cn, pu, Vop]            n_device=2, VOP_COL=2, pu at 1
+#   Stage B (4D): [cn, sk, pu, Vop]        n_device=3, vop_col=3, pu at 2
+#
+# VOP_COL below is the Stage-A default (2).  Layout-sensitive code must NOT
+# hardcode 2/1; use vop_col_for()/pu_col_for() or accept a `vop_col` arg that
+# defaults to VOP_COL, so 3D callers are unchanged and Stage B passes vop_col=3.
+CN_COL = 0                    # common_N shift is always column 0
+SK_COL = 1                    # PG-PD skew (Stage B+ only); between cn and pu
+VOP_COL = 2                   # Stage-A default (Vop index when n_device == 2)
+
+# Reference device-column order per stage (see src/condition_gen.STAGE_COLUMNS).
+STAGE_DEVICE_COLS = {
+    "A": ("cn", "pu"),
+    "B": ("cn", "sk", "pu"),
+    "D": ("cn", "sk", "pu", "lpu", "lpg", "lpd", "mpu", "mpg", "mpd"),
+}
+
+
+def vop_col_for(n_device: int) -> int:
+    """Vop column index given the number of leading device dims (Vop follows)."""
+    return n_device
+
+
+def pu_col_for(vop_col: int = VOP_COL) -> int:
+    """PU_shift column index (pu is the LAST device column, i.e. vop_col - 1)."""
+    return vop_col - 1
 
 # WLUD (wordline underdrive) ratio = Vwl / Vop
 # The 4th input dimension is WLUD ratio (not absolute Vwl).

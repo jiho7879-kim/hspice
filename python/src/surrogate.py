@@ -20,7 +20,7 @@ import torch
 import gpytorch
 
 from src.models import ExactGPModel, AdditiveGPModel
-from src.utils import StandardScaler
+from src.utils import StandardScaler, VOP_COL, vop_col_for
 
 
 class Surrogate:
@@ -33,8 +33,11 @@ class Surrogate:
     Trained checkpoints include the scaler, so load() restores everything.
     """
 
-    def __init__(self, device: str = "cpu") -> None:
+    def __init__(self, device: str = "cpu",
+                 n_device: int = VOP_COL) -> None:
         self.device = device
+        self._n_device = n_device
+        self._vop_col = vop_col_for(n_device)
         self.mu_gp: ExactGPModel | None = None
         self.sigma_gp: AdditiveGPModel | None = None
         self._x_train: np.ndarray | None = None
@@ -90,7 +93,9 @@ class Surrogate:
         yt_sigma = self._to_tensor(y_train[:, 1])
 
         self.mu_gp = ExactGPModel(xt, yt_mu, likelihood=self._make_likelihood(0)).to(self.device)
-        self.sigma_gp = AdditiveGPModel(xt, yt_sigma, likelihood=self._make_likelihood(1)).to(self.device)
+        self.sigma_gp = AdditiveGPModel(xt, yt_sigma,
+                                         likelihood=self._make_likelihood(1),
+                                         n_device=self._n_device).to(self.device)
 
         for name, gp in [("mu", self.mu_gp), ("sigma", self.sigma_gp)]:
             gp.train()
@@ -123,7 +128,12 @@ class Surrogate:
                     ls_str = "  ".join(parts)
                 else:
                     ls = gp.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
-                    labels = ["cn", "pu", "Vop"] + [f"d{i}" for i in range(3, len(ls))]
+                    labels = ["cn"]
+                    if self._n_device > 2:
+                        labels.append("sk")
+                    labels.append("pu")
+                    labels.append("Vop")
+                    labels += [f"d{i}" for i in range(len(labels), len(ls))]
                     ls_str = ", ".join(f"{l}={v:.3f}" for l, v in zip(labels, ls))
                 print(f"  [{name}] done ({elapsed:.1f}s) "
                       f"lengthscales={ls_str} (on scaled X)")
@@ -186,20 +196,23 @@ class Surrogate:
 
     @classmethod
     def load(cls, path: str | Path, X_train: np.ndarray,
-             y_train: np.ndarray, device: str = "cpu") -> "Surrogate":
+             y_train: np.ndarray, device: str = "cpu",
+             n_device: int = VOP_COL) -> "Surrogate":
         """Load trained GP state dicts + scaler from a .pth checkpoint.
 
         X_train/y_train must match original training data shape because
         ExactGP requires them at construction.  The checkpoint's scaler
         (and per-point noise, when the model was noise-aware) is restored
         so predict() works on raw inputs.
+        n_device controls the device/operating kernel split in AdditiveGPModel
+        (Stage A default 2; pass 3 for Stage B with sk).
         """
         # weights_only=False: this checkpoint bundles numpy metadata
         # (scaler stats, x_train, y_noise) alongside the tensor state dicts,
         # which the weights_only unpickler rejects.  These files are always
         # self-produced by Surrogate.save() (trusted source).
         state = torch.load(path, map_location=device, weights_only=False)
-        surr = cls(device=device)
+        surr = cls(device=device, n_device=n_device)
         surr._x_train = X_train.copy()
         # old checkpoints (pre noise-aware) have no "y_noise" key
         surr._y_noise = state.get("y_noise", None)
@@ -214,7 +227,9 @@ class Surrogate:
         yt_sigma = surr._to_tensor(y_train[:, 1])
 
         surr.mu_gp = ExactGPModel(xt, yt_mu, likelihood=surr._make_likelihood(0)).to(device)
-        surr.sigma_gp = AdditiveGPModel(xt, yt_sigma, likelihood=surr._make_likelihood(1)).to(device)
+        surr.sigma_gp = AdditiveGPModel(xt, yt_sigma,
+                                         likelihood=surr._make_likelihood(1),
+                                         n_device=n_device).to(device)
 
         if state["mu_gp"] is not None:
             surr.mu_gp.load_state_dict(state["mu_gp"])

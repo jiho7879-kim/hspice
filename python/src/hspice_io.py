@@ -44,14 +44,20 @@ def _render_vth_skew(
     template: str,
     common_n_shift: float,
     pu_shift: float,
+    skew_pgpd: float = 0.0,
 ) -> str:
     """Replace Vth skew parameters with sampled shift values.
 
     Regex target: .param VTMSKEW_<device><idx> = '(<sys>) + (<rnd>)'
     Mapping (shift convention: positive = slower):
       - PU (PMOS pass-gate pull-up)  → pu_shift
-      - PG (NMOS pass-gate)          → common_n_shift
-      - PD (NMOS pull-down)          → common_n_shift
+      - PG (NMOS pass-gate)          → common_n_shift + skew_pgpd
+      - PD (NMOS pull-down)          → common_n_shift − skew_pgpd
+
+    skew_pgpd is the PER-SIDE PG-PD Vth skew (mV): PG = cn + sk, PD = cn − sk
+    (so |PG−PD| = 2·sk).  This matches the condition sheet's `sk` column and
+    inhouse_deck_gen.condition_to_deck_params (VTMSKEW_PG=cn+sk, PD=cn−sk).
+    Default 0.0 => PG = PD = common_n_shift (Stage A, unchanged).
 
     The second term (random component) stays 0 for deterministic
     analysis; set to MC_RUNS-dependent value for statistical decks.
@@ -67,9 +73,12 @@ def _render_vth_skew(
         # PMOS (PU)
         if param_name.startswith("VTMSKEW_PU"):
             new_val = f"{pu_shift:.3f}"
-        # NMOS (PG, PD)
-        elif param_name.startswith("VTMSKEW_PG") or param_name.startswith("VTMSKEW_PD"):
-            new_val = f"{common_n_shift:.3f}"
+        # NMOS pass-gate (PG): common_N + skew
+        elif param_name.startswith("VTMSKEW_PG"):
+            new_val = f"{common_n_shift + skew_pgpd:.3f}"
+        # NMOS pull-down (PD): common_N − skew
+        elif param_name.startswith("VTMSKEW_PD"):
+            new_val = f"{common_n_shift - skew_pgpd:.3f}"
         else:
             return match.group(0)  # unknown — leave untouched
         # Rebuild: .param VTMSKEW_PU1 = '(sys_shift) + (rnd_shift)'
@@ -92,13 +101,16 @@ def render_deck(
     vwl: float | None = None,
     temp: float | None = None,
     output_prefix: str = "",
+    skew_pgpd: float = 0.0,
 ) -> str:
     """Render template with parameter values.
 
     When vwl is provided, also replaces {{ VWL }}.
     When temp is provided, replaces {{ TEMP }} (otherwise uses TEMP_C default).
+    skew_pgpd (mV, Stage B+): per-side PG-PD Vth skew -> PG = cn + sk,
+    PD = cn − sk. Default 0 keeps PG = PD = common_n_shift (Stage A).
     """
-    deck = _render_vth_skew(template, common_n_shift, pu_shift)
+    deck = _render_vth_skew(template, common_n_shift, pu_shift, skew_pgpd)
     deck = deck.replace("{{ COMMON_N_SHIFT }}", f"{common_n_shift:.3f}")
     deck = deck.replace("{{ PU_SHIFT }}", f"{pu_shift:.3f}")
     deck = deck.replace("{{ VOP }}", f"{vop:.4f}")
@@ -734,6 +746,8 @@ _ALIASES = {
     # --- conditions (X) ---
     "cn": ("common_n_shift", "common_n", "cn", "common n shift",
           "vtmskew_n", "vtmskew_pg"),
+    "sk": ("sk", "skew", "skew_pgpd", "pg_pd_skew", "pgpd_skew",
+          "pg-pd skew", "skew_pg_pd"),
     "pu": ("pu_shift", "pu", "pu shift", "vtmskew_pu", "vtmskew_p"),
     "vop": ("vop", "vdd"),
     "vwl": ("vwl", "wl_voltage", "wordline", "wl voltage"),
@@ -857,9 +871,21 @@ def _parse_manual_df(df, source: str, mu_sigma_scale: float = 1.0) -> dict:
     def col(key: str) -> np.ndarray:
         return df[cm[key]].to_numpy(dtype=np.float64)
 
-    # X (+ optional WLUD from absolute Vwl). A blank Vwl cell means "no
-    # assist" (Vwl = Vop, i.e. WLUD = 1.0) rather than a missing value.
-    x_list = [col("cn"), col("pu"), col("vop")]
+    # X is device-first: [cn, (sk,) pu] then Vop, then optional WLUD.
+    # sk (PG-PD skew) is a Stage-B+ DEVICE dim -> placed between cn and pu, so
+    # Vop shifts to index 3 (n_device=3).  Without sk it's the 3D layout
+    # (n_device=2, Vop at 2).  See src.utils device-first layout / VOP_COL.
+    has_sk = "sk" in cm
+    if has_sk:
+        x_list = [col("cn"), col("sk"), col("pu"), col("vop")]
+        x_names = ["cn", "sk", "pu", "vop"]
+        vop_col = 3
+    else:
+        x_list = [col("cn"), col("pu"), col("vop")]
+        x_names = ["cn", "pu", "vop"]
+        vop_col = 2
+    # optional WLUD from absolute Vwl. A blank Vwl cell means "no assist"
+    # (Vwl = Vop, i.e. WLUD = 1.0) rather than a missing value.
     if "vwl" in cm:
         vwl_raw = col("vwl")
         vop_raw = col("vop")
@@ -867,6 +893,7 @@ def _parse_manual_df(df, source: str, mu_sigma_scale: float = 1.0) -> dict:
         wlud = np.where(blank, 1.0, np.divide(
             vwl_raw, vop_raw, out=np.ones_like(vop_raw), where=~blank))
         x_list.append(wlud)
+        x_names.append("wlud")
     X = np.column_stack(x_list)
 
     rho_out = None
@@ -914,7 +941,10 @@ def _parse_manual_df(df, source: str, mu_sigma_scale: float = 1.0) -> dict:
         print(f"    rho_LR range [{rho_out.min():+.2f}, {rho_out.max():+.2f}]  "
               f"(A1: negative rho => larger min-stats bias corrected)")
     return {"X": X, "y": y, "y_noise": y_noise, "rho_LR": rho_out,
-            "schema": schema, "extras": extras, "y_vtrip": y_vtrip}
+            "schema": schema, "extras": extras, "y_vtrip": y_vtrip,
+            # layout so downstream knows the device/operating split (Stage B
+            # has sk -> n_device=3, Vop at col 3). Pass n_device to AdditiveGP.
+            "x_cols": x_names, "vop_col": vop_col, "n_device": vop_col}
 
 
 # ---------------------------------------------------------------------------
@@ -969,11 +999,15 @@ def _vop_interpolation_outlier_qc(
     pu = df[cm["pu"]].to_numpy(dtype=np.float64)
     vop = df[cm["vop"]].to_numpy(dtype=np.float64)
     mu = df[cm["mu"]].to_numpy(dtype=np.float64)
+    # Stage B: sk is part of the condition identity, so the same (cn, pu) with
+    # different skew must NOT be merged into one Vop trend. Include sk in the key.
+    sk = df[cm["sk"]].to_numpy(dtype=np.float64) if "sk" in cm else None
 
     flags = []
     conditions: dict[tuple, list[int]] = {}
     for i in range(len(cn)):
-        conditions.setdefault((cn[i], pu[i]), []).append(i)
+        key = (cn[i], pu[i]) if sk is None else (cn[i], sk[i], pu[i])
+        conditions.setdefault(key, []).append(i)
 
     for (c, p), idxs in conditions.items():
         if len(idxs) < 3:

@@ -24,6 +24,8 @@ from src.utils import (
     WLUD_COL, WLUD_FACTORS, N_WLUD,
     Z_FIXED,
     COMMON_N_MIN, COMMON_N_MAX, PU_MIN, PU_MAX,
+    CN_COL,
+    vop_col_for, pu_col_for,
 )
 
 
@@ -142,39 +144,48 @@ def compute_vmin_on_grid(
     common_n_range: tuple[float, float] = (COMMON_N_MIN, COMMON_N_MAX),
     pu_range: tuple[float, float] = (PU_MIN, PU_MAX),
     wlud_fixed: float | None = None,
+    vop_col: int = VOP_COL,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute Vmin over a regular grid of (common_N, PU) values.
 
     3D mode (wlud_fixed=None): core cn, pu, Vop — original behaviour.
     4D mode (wlud_fixed=float): cn, pu, Vop + WLUD ratio (Vwl/Vop) held constant.
 
+    vop_col controls column layout:
+        vop_col=2 (Stage A, default): [cn, pu, Vop, ...]
+        vop_col=3 (Stage B):          [cn, sk=0, pu, Vop, ...]
+
     Args:
         surrogate_fn: callable(X_grid) -> mu_grid, sigma_grid
-                      X_grid shape: (n_total * N_VOP, d) where d=3 or d=4.
         n_grid: Number of grid points per axis.
-        common_n_range: (min, max) in mV.
-        pu_range: (min, max) in mV.
-        wlud_fixed: If given, WLUD column is populated with this ratio (Vwl/Vop).
+        common_n_range, pu_range: (min, max) in mV.
+        wlud_fixed: If given, WLUD column is populated with this ratio.
+        vop_col: Vop column index (default VOP_COL=2 for Stage A).
 
     Returns:
         common_n_grid: (n_grid, n_grid) meshgrid
         pu_grid: (n_grid, n_grid) meshgrid
         vmin_grid: (n_grid, n_grid) Vmin values
     """
+    n_device = vop_col
+    pu_col = vop_col - 1
     cna = np.linspace(common_n_range[0], common_n_range[1], n_grid)
     pua = np.linspace(pu_range[0], pu_range[1], n_grid)
     CN, PU = np.meshgrid(cna, pua, indexing="xy")
 
-    n_dims = 4 if wlud_fixed is not None else 3
+    has_wlud = wlud_fixed is not None
+    n_dims = (n_device + 1) + (1 if has_wlud else 0)  # device + Vop + optional WLUD
     n_total = n_grid * n_grid
     X_grid = np.zeros((n_total * N_VOP, n_dims), dtype=np.float64)
     for i in range(n_grid):
         for j in range(n_grid):
             idx = (i * n_grid + j) * N_VOP
-            X_grid[idx: idx + N_VOP, 0] = CN[i, j]
-            X_grid[idx: idx + N_VOP, 1] = PU[i, j]
-            X_grid[idx: idx + N_VOP, VOP_COL] = VOPS
-            if wlud_fixed is not None:
+            X_grid[idx: idx + N_VOP, CN_COL] = CN[i, j]
+            if n_device > 2:
+                X_grid[idx: idx + N_VOP, SK_COL] = 0.0  # nominal sk
+            X_grid[idx: idx + N_VOP, pu_col] = PU[i, j]
+            X_grid[idx: idx + N_VOP, vop_col] = VOPS
+            if has_wlud:
                 X_grid[idx: idx + N_VOP, WLUD_COL] = wlud_fixed
 
     mu_grid, sigma_grid = surrogate_fn(X_grid)
@@ -198,12 +209,15 @@ def compute_vmin_vs_vwl(
     common_n_range: tuple[float, float] = (COMMON_N_MIN, COMMON_N_MAX),
     pu_range: tuple[float, float] = (PU_MIN, PU_MAX),
     wlud_levels: np.ndarray | None = None,
+    vop_col: int = VOP_COL,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute Vmin as a function of WLUD ratio over a (cn, pu) grid.
 
     For each (cn, pu, WLUD) the surrogate predicts mu/sigma across all Vop
     levels (with Vwl = WLUD * Vop implicit in the GP input), then Vmin is
     interpolated from Zscore = Z_FIXED.
+
+    vop_col controls column layout (default VOP_COL=2 for Stage A).
 
     Returns:
         CN: (n_grid, n_grid) meshgrid
@@ -215,19 +229,24 @@ def compute_vmin_vs_vwl(
         wlud_levels = WLUD_FACTORS
     n_vwl = len(wlud_levels)
 
+    n_device = vop_col
+    pu_col = vop_col - 1
     cna = np.linspace(common_n_range[0], common_n_range[1], n_grid)
     pua = np.linspace(pu_range[0], pu_range[1], n_grid)
     CN, PU = np.meshgrid(cna, pua, indexing="xy")
 
     n_total = n_grid * n_grid
-    full_X = np.zeros((n_total * N_VOP * n_vwl, 4), dtype=np.float64)
+    n_dims = n_device + 2  # device + Vop + WLUD
+    full_X = np.zeros((n_total * N_VOP * n_vwl, n_dims), dtype=np.float64)
     for i in range(n_grid):
         for j in range(n_grid):
             for k, wlud in enumerate(wlud_levels):
                 base = ((i * n_grid + j) * n_vwl + k) * N_VOP
-                full_X[base: base + N_VOP, 0] = CN[i, j]
-                full_X[base: base + N_VOP, 1] = PU[i, j]
-                full_X[base: base + N_VOP, VOP_COL] = VOPS
+                full_X[base: base + N_VOP, CN_COL] = CN[i, j]
+                if n_device > 2:
+                    full_X[base: base + N_VOP, SK_COL] = 0.0
+                full_X[base: base + N_VOP, pu_col] = PU[i, j]
+                full_X[base: base + N_VOP, vop_col] = VOPS
                 full_X[base: base + N_VOP, WLUD_COL] = wlud
 
     mu_pred, sigma_pred = surrogate_fn(full_X)
@@ -316,23 +335,31 @@ def estimate_required_assist(
 def gradient_check(
     surr,  # Surrogate object with predict()
     eps: float = 1e-3,
+    vop_col: int = VOP_COL,
 ) -> dict:
     """Check dVmin/dcommon_N and dVmin/dPU via finite differences.
 
     Args:
         surr: Surrogate object with predict() method.
         eps: Step size for finite difference.
+        vop_col: Vop column index (default VOP_COL=2 for Stage A).
 
     Returns:
         dict with gradient values and sanity check.
     """
+    n_device = vop_col
+    pu_col = vop_col - 1
     base_cn = 0.0
     base_pu = 0.0
 
     def _vmin_at(cn: float, pu: float) -> float:
-        X = np.zeros((len(VOPS), 3), dtype=np.float64)
+        X = np.zeros((len(VOPS), n_device + 1), dtype=np.float64)
         for k, vop in enumerate(VOPS):
-            X[k] = [cn, pu, vop]
+            X[k, CN_COL] = cn
+            if n_device > 2:
+                X[k, SK_COL] = 0.0
+            X[k, pu_col] = pu
+            X[k, vop_col] = vop
         mu, _, sigma, _ = surr.predict(X)
         z = mu / (sigma + 1e-12)
         v = compute_vmin_from_z(z.reshape(1, -1), z_target=Z_FIXED)

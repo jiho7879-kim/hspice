@@ -21,6 +21,8 @@ from src.utils import (
     VOP_COL,
     WLUD_COL,
     Z_FIXED,
+    CN_COL,
+    vop_col_for, pu_col_for,
 )
 from src.physics_layer import (
     compute_vmin_on_grid,
@@ -137,12 +139,14 @@ def compute_full_pipeline(
     contour_level: float = 0.6,
     wlud_fixed: float | None = None,
     holdout_wlud: np.ndarray | None = None,
+    vop_col: int = VOP_COL,
 ) -> dict:
     """Run full contour pipeline and compute validation metrics.
 
     3D mode (wlud_fixed=None): standard cn, pu, Vop.
     4D mode (wlud_fixed=float): WLUD ratio (Vwl/Vop) held constant.
         If holdout_wlud is provided, it overrides wlud_fixed per holdout point.
+    vop_col controls column layout (default VOP_COL=2 for Stage A).
 
     Returns:
         dict with keys:
@@ -151,8 +155,11 @@ def compute_full_pipeline(
             - 'max_vmin_error_mV'
             - 'rmse_vmin_mV'
     """
+    n_device = vop_col
+    pu_col = vop_col - 1
     CN, PU, vmin_grid = compute_vmin_on_grid(
         surrogate_fn, n_grid=n_grid, wlud_fixed=wlud_fixed,
+        vop_col=vop_col,
     )
 
     pred_cn, pred_pu = extract_contour(vmin_grid, CN, PU, contour_level)
@@ -176,14 +183,17 @@ def compute_full_pipeline(
     h = hausdorff_distance(true_cn, true_pu, pred_cn, pred_pu)
     overlap = area_overlap_ratio(true_cn, true_pu, pred_cn, pred_pu)
 
-    n_dims = 4 if wlud_fixed is not None else 3
+    has_wlud = wlud_fixed is not None
+    n_dims = (n_device + 1) + (1 if has_wlud else 0)
     holdout_vmin_pred = np.full(len(holdout_cn), np.nan)
     for i in range(len(holdout_cn)):
         X_pt = np.zeros((len(VOPS), n_dims))
-        X_pt[:, 0] = holdout_cn[i]
-        X_pt[:, 1] = holdout_pu[i]
-        X_pt[:, VOP_COL] = VOPS
-        if wlud_fixed is not None:
+        X_pt[:, CN_COL] = holdout_cn[i]
+        if n_device > 2:
+            X_pt[:, SK_COL] = 0.0
+        X_pt[:, pu_col] = holdout_pu[i]
+        X_pt[:, vop_col] = VOPS
+        if has_wlud:
             wlud = holdout_wlud[i] if holdout_wlud is not None else wlud_fixed
             X_pt[:, WLUD_COL] = wlud
         mu, _, sigma, _ = surrogate_fn(X_pt)

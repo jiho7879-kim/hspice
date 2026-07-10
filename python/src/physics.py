@@ -36,6 +36,8 @@ import gpytorch
 from src.utils import (
     VOPS, VOP_COL, WLUD_COL, WLUD_FACTORS, N_WLUD,
     COMMON_N_MIN, COMMON_N_MAX, PU_MIN, PU_MAX,
+    CN_COL, SK_COL,
+    vop_col_for, pu_col_for,
     StandardScaler,
 )
 from src.models import ExactGPModel, AdditiveGPModel
@@ -77,28 +79,57 @@ def analytic_snmr(
 # Probe points for monotonicity constraint
 # ---------------------------------------------------------------------------
 
-def generate_probe_points(n_per_dim: int = 8, n_extra: int = 0) -> np.ndarray:
+def generate_probe_points(n_per_dim: int = 8, n_extra: int = 0,
+                          vop_col: int = VOP_COL) -> np.ndarray:
     """Generate (N, 3 + n_extra) probe points for L_mono constraint.
 
-    Core dims [common_N, PU, Vop] spread across full domain.
-    When n_extra >= 1, WLUD ratio (Vwl/Vop) grid at index WLUD_COL.
-    Extra dims beyond WLUD_COL filled with 0.0 (nominal after scaling).
+    Device-first layout: cn (col 0), then sk (if n_device >= 3 at col 1),
+    then pu (last device col = vop_col-1), then Vop, then optional ext.
+
+    vop_col determines n_device (vop_col = n_device) and thus layout:
+        vop_col=2 (Stage A): [cn, pu, Vop, ...]
+        vop_col=3 (Stage B): [cn, sk=0, pu, Vop, ...]
     """
+    n_device = vop_col
+    pu_col = vop_col - 1
+
     cn = np.linspace(COMMON_N_MIN, COMMON_N_MAX, n_per_dim)
     pu = np.linspace(PU_MIN, PU_MAX, n_per_dim)
     vop = VOPS
-    CN, PU_arr, VOP = np.meshgrid(cn, pu, vop, indexing="ij")
-    probes = np.column_stack([CN.ravel(), PU_arr.ravel(), VOP.ravel()])
+    n_vop = len(vop)
+
+    if n_device == 2:
+        # Stage A: [cn, pu, Vop]
+        CN, PU_arr, VOP = np.meshgrid(cn, pu, vop, indexing="ij")
+        probes = np.column_stack([CN.ravel(), PU_arr.ravel(), VOP.ravel()])
+    else:
+        # Stage B+: [cn, sk=0, pu, Vop]  (sk nominal at 0)
+        sk_val = 0.0
+        CN, SK, PU_arr, VOP = np.meshgrid(
+            cn, np.array([sk_val]), pu, vop, indexing="ij",
+        )
+        probes = np.column_stack([
+            CN.ravel(), SK.ravel(), PU_arr.ravel(), VOP.ravel(),
+        ])
 
     if n_extra >= 1:
         n_wlud = min(n_per_dim, N_WLUD)
-        wlud_levels = WLUD_FACTORS[:n_wlud]  # ratios, not absolute Vwl
-        CN_e, PU_e, VOP_e, WLUD_e = np.meshgrid(
-            cn, pu, vop, wlud_levels, indexing="ij",
-        )
-        probes_4d = np.column_stack([
-            CN_e.ravel(), PU_e.ravel(), VOP_e.ravel(), WLUD_e.ravel(),
-        ])
+        wlud_levels = WLUD_FACTORS[:n_wlud]
+        if n_device == 2:
+            CN_e, PU_e, VOP_e, WLUD_e = np.meshgrid(
+                cn, pu, vop, wlud_levels, indexing="ij",
+            )
+            probes_4d = np.column_stack([
+                CN_e.ravel(), PU_e.ravel(), VOP_e.ravel(), WLUD_e.ravel(),
+            ])
+        else:
+            CN_e, SK_e, PU_e, VOP_e, WLUD_e = np.meshgrid(
+                cn, np.array([0.0]), pu, vop, wlud_levels, indexing="ij",
+            )
+            probes_4d = np.column_stack([
+                CN_e.ravel(), SK_e.ravel(), PU_e.ravel(),
+                VOP_e.ravel(), WLUD_e.ravel(),
+            ])
         if n_extra > 1:
             extra = np.zeros((len(probes_4d), n_extra - 1), dtype=np.float64)
             probes_4d = np.concatenate([probes_4d, extra], axis=1)
@@ -119,7 +150,8 @@ GLOBAL_CORNERS_MV = [
 ]
 
 
-def generate_corner_anchor_data(n_extra: int = 0) -> tuple[np.ndarray, np.ndarray]:
+def generate_corner_anchor_data(n_extra: int = 0,
+                                 vop_col: int = VOP_COL) -> tuple[np.ndarray, np.ndarray]:
     """Generate virtual observations at global corners x Vop x WLUD.
 
     3D (n_extra=0): 4 corners x 6 Vop = 24 points, X = [cn, pu, Vop].
@@ -127,24 +159,36 @@ def generate_corner_anchor_data(n_extra: int = 0) -> tuple[np.ndarray, np.ndarra
         Extra dims beyond WLUD_COL filled with 0.0 (nominal after scaling).
         Vwl for analytic_snmr computed as WLUD * Vop per point.
 
+    vop_col determines layout (see generate_probe_points):
+        vop_col=2 (Stage A): [cn, pu, Vop, ...]
+        vop_col=3 (Stage B): [cn, sk=0, pu, Vop, ...]
+
     Returns:
-        X_corner: (24 or 120, 3 + n_extra) [common_N, PU, Vop, (WLUD, ...)]
+        X_corner: (24 or 120, 3 + n_extra) [...]
         y_corner: (24 or 120, 2) [mu_SNMR, sigma_SNMR] from analytic model
     """
+    n_device = vop_col
     n_wlud = N_WLUD if n_extra >= 1 else 1
     wlud_levels = WLUD_FACTORS if n_extra >= 1 else [0.0]
     n = len(GLOBAL_CORNERS_MV) * len(VOPS) * n_wlud
-    X = np.zeros((n, 3 + n_extra), dtype=np.float64)
+    X = np.zeros((n, n_device + 1 + n_extra), dtype=np.float64)
     y = np.zeros((n, 2), dtype=np.float64)
     idx = 0
     for cn, pu in GLOBAL_CORNERS_MV:
         for vop in VOPS:
             for wlud in wlud_levels:
-                if n_extra >= 1:
-                    X[idx] = [cn, pu, vop, wlud] + [0.0] * (n_extra - 1)
+                if n_device == 2:
+                    if n_extra >= 1:
+                        X[idx] = [cn, pu, vop, wlud] + [0.0] * (n_extra - 1)
+                    else:
+                        X[idx] = [cn, pu, vop]
                 else:
-                    X[idx] = [cn, pu, vop]
-                # Vwl = WLUD * Vop for each point
+                    # n_device >= 3: insert sk=0 between cn and pu
+                    sk_val = 0.0
+                    if n_extra >= 1:
+                        X[idx] = [cn, sk_val, pu, vop, wlud] + [0.0] * (n_extra - 1)
+                    else:
+                        X[idx] = [cn, sk_val, pu, vop]
                 vwl = wlud * vop if n_extra >= 1 else None
                 mu, sigma = analytic_snmr(cn, pu, vop, vwl_v=vwl)
                 y[idx] = [mu, sigma]
@@ -167,9 +211,22 @@ class PhysicsConstrainedSurrogate:
         Directory for model checkpoint .pth files (None = no checkpointing).
     """
 
-    def __init__(self, device: str = "cpu", checkpoint_dir: str | None = None) -> None:
+    def __init__(self, device: str = "cpu", checkpoint_dir: str | None = None,
+                 n_device: int = VOP_COL) -> None:
+        """Physics-constrained GP surrogate.
+
+        Args:
+            device: 'cpu' or 'cuda'.
+            checkpoint_dir: Directory for .pth checkpoint files.
+            n_device: Number of leading device dims.
+                Stage A (3D): n_device=2 -> [cn, pu | Vop, ...], Vop at col 2.
+                Stage B (4D): n_device=3 -> [cn, sk, pu | Vop, ...], Vop at col 3.
+        """
         self.device = device
         self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
+        self._n_device = n_device
+        self._vop_col = vop_col_for(n_device)
+        self._pu_col = pu_col_for(self._vop_col)
         self.mu_gp: ExactGPModel | None = None
         self.sigma_gp: AdditiveGPModel | None = None
         self._x_train: np.ndarray | None = None
@@ -220,11 +277,14 @@ class PhysicsConstrainedSurrogate:
         self._x_train = X_train.copy()
         self._use_mono = use_mono
         self._use_pelgrom = use_pelgrom
-        n_extra = max(0, X_train.shape[1] - 3)
+        # n_extra counts dimensions PAST Vop (the last required dim).
+        # Vop is at self._vop_col, so required dims = self._vop_col + 1.
+        n_extra = max(0, X_train.shape[1] - (self._vop_col + 1))
 
         # Data augmentation for corner anchors
         if use_boundary:
-            X_corner, y_corner = generate_corner_anchor_data(n_extra=n_extra)
+            X_corner, y_corner = generate_corner_anchor_data(
+                n_extra=n_extra, vop_col=self._vop_col)
             X_aug = np.concatenate([X_train, X_corner], axis=0)
             y_aug = np.concatenate([y_train, y_corner], axis=0)
             n_aug = len(X_corner)
@@ -238,7 +298,8 @@ class PhysicsConstrainedSurrogate:
 
         # Pre-generate probe points for L_mono (raw units; scaled below)
         if use_mono:
-            self._probe_points = generate_probe_points(n_per_dim=n_probe, n_extra=n_extra)
+            self._probe_points = generate_probe_points(
+                n_per_dim=n_probe, n_extra=n_extra, vop_col=self._vop_col)
             n_pp = len(self._probe_points)
             if verbose:
                 print(f"  [mono] {n_pp} probe points "
@@ -254,7 +315,7 @@ class PhysicsConstrainedSurrogate:
         # L_pelgrom target is a data-fixed function of the RAW Vop column;
         # precompute once (it does not depend on model parameters).
         pelgrom_target_t = self._to_tensor(
-            SIGMA0 + SIGMA_VOP_SLOPE * (0.9 - X_aug[:, VOP_COL])
+            SIGMA0 + SIGMA_VOP_SLOPE * (0.9 - X_aug[:, self._vop_col])
         )
 
         # Train mu GP
@@ -276,7 +337,8 @@ class PhysicsConstrainedSurrogate:
         # Train sigma GP
         if verbose:
             print("\n--- Training sigma GP ---")
-        self.sigma_gp = AdditiveGPModel(xt_aug, yt_aug_sigma).to(self.device)
+        self.sigma_gp = AdditiveGPModel(xt_aug, yt_aug_sigma,
+                                         n_device=self._n_device).to(self.device)
         self._train_gp(
             self.sigma_gp, xt_aug, yt_aug_sigma,
             n_iter=n_iter, lr=lr, verbose=verbose,
@@ -443,7 +505,7 @@ class PhysicsConstrainedSurrogate:
         output = gp(probe_grad)
         mean = output.mean
         grad = torch.autograd.grad(mean.sum(), probe_grad, create_graph=True)[0]
-        dmu_dvop = grad[:, VOP_COL]
+        dmu_dvop = grad[:, self._vop_col]
         penalty = torch.relu(-dmu_dvop).pow(2).mean()
 
         if was_training:
@@ -524,14 +586,29 @@ class PhysicsConstrainedSurrogate:
             ls_dev = gp.covar_module.kernels[1].base_kernel.lengthscale.detach()
             n_op = ls_op.shape[-1]
             n_dev = ls_dev.shape[-1]
-            op_labels = (["Vop"] + [f"d{3 + i}" for i in range(n_op - 1)])[:n_op]
-            dev_labels = (["cn", "pu"] + [f"d{2 + i}" for i in range(n_dev - 2)])[:n_dev]
-            op_str = ", ".join(f"{l}={ls_op[0, i].item():.3f}" for i, l in enumerate(op_labels))
-            dev_str = ", ".join(f"{l}={ls_dev[0, i].item():.3f}" for i, l in enumerate(dev_labels))
+            op_labels = (["Vop"] + [f"d{self._vop_col + 1 + i}"
+                                     for i in range(n_op - 1)])[:n_op]
+            # Device labels: always starts with cn, then sk if present, then pu
+            dev_base = ["cn"]
+            if self._n_device > 2:
+                dev_base.append("sk")
+            dev_base.append("pu")
+            dev_labels = (dev_base + [f"d{len(dev_base) + i}"
+                                      for i in range(n_dev - len(dev_base))])[:n_dev]
+            op_str = ", ".join(f"{l}={ls_op[0, i].item():.3f}"
+                               for i, l in enumerate(op_labels))
+            dev_str = ", ".join(f"{l}={ls_dev[0, i].item():.3f}"
+                                for i, l in enumerate(dev_labels))
             return f"op=[{op_str}]  dev=[{dev_str}]"
         else:
+            # ExactGPModel: all dims in one kernel
             ls = gp.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
-            labels = ["cn", "pu", "Vop"] + [f"d{i}" for i in range(3, len(ls))]
+            labels = ["cn"]
+            if self._n_device > 2:
+                labels.append("sk")
+            labels.append("pu")
+            labels.append("Vop")
+            labels += [f"d{i}" for i in range(len(labels), len(ls))]
             return ", ".join(f"{l}={v:.3f}" for l, v in zip(labels, ls))
 
     def get_lengthscales(self, model: str = "mu") -> np.ndarray:
