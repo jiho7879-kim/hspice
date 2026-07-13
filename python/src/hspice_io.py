@@ -1009,7 +1009,8 @@ def _vop_interpolation_outlier_qc(
         key = (cn[i], pu[i]) if sk is None else (cn[i], sk[i], pu[i])
         conditions.setdefault(key, []).append(i)
 
-    for (c, p), idxs in conditions.items():
+    for key, idxs in conditions.items():
+        c, s, p = (key[0], None, key[1]) if sk is None else key
         if len(idxs) < 3:
             continue
         idxs = sorted(idxs, key=lambda i: vop[i])
@@ -1027,7 +1028,9 @@ def _vop_interpolation_outlier_qc(
             if dev / scale > rel_threshold:
                 flags.append({
                     "row": int(idxs[j]), "issue": "vop_trend_outlier",
-                    "cn": float(c), "pu": float(p), "vop": float(vops[j]),
+                    "cn": float(c), "pu": float(p),
+                    **({"sk": float(s)} if s is not None else {}),
+                    "vop": float(vops[j]),
                     "mu": float(mus[j]), "expected_from_neighbors": float(expected),
                     "neighbor_vops": [float(v_lo), float(v_hi)],
                     "neighbor_mus": [float(m_lo), float(m_hi)],
