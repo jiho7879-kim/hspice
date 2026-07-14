@@ -241,11 +241,30 @@ SK_COL = 1                    # PG-PD skew (Stage B+ only); between cn and pu
 VOP_COL = 2                   # Stage-A default (Vop index when n_device == 2)
 
 # Reference device-column order per stage (see src/condition_gen.STAGE_COLUMNS).
+#
+# Stage D (v2.1, 2026-07-14): the ratio dims are (PU, common, PG-PD skew), NOT
+# independent per-device ratios:
+#     lpg = l_com + l_sk    lpd = l_com - l_sk    (same for mobility)
+# PG and PD are the same NMOS flavor, so their dominant variation sources are
+# shared (common) with imperfect tracking (skew); implied corr(lpg,lpd) ~ 0.88.
+# com and skew are sampled INDEPENDENTLY (no clamp; derived ratios may spill
+# to [0.625, 1.375]).  The legacy 2026 batches used the same axes but a flawed
+# clamp and a shared-seed quadrant stream -- superseded by the final rerun.
+# See docs/decisions/legacy_design_audit_20260714.md.
 STAGE_DEVICE_COLS = {
     "A": ("cn", "pu"),
     "B": ("cn", "sk", "pu"),
-    "D": ("cn", "sk", "pu", "lpu", "lpg", "lpd", "mpu", "mpg", "mpd"),
+    "D": ("cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk"),
 }
+
+# Stage-D ratio bounds (VTSL local sigma / MOM mobility), as actually sampled.
+LOC_MIN, LOC_MAX = 0.7, 1.3
+MOM_MIN, MOM_MAX = 0.7, 1.3
+LSK_MIN, LSK_MAX = -0.075, 0.075
+MSK_MIN, MSK_MAX = -0.075, 0.075
+
+# Vop levels of the REAL (in-house) batches: 5 levels, 0.9 dropped.
+VOPS_REAL = np.array([0.4, 0.5, 0.6, 0.7, 0.8], dtype=np.float64)
 
 
 def vop_col_for(n_device: int) -> int:

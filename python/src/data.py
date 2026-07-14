@@ -111,3 +111,35 @@ def stratified_train_test_split(
     train_mask = ~test_mask
 
     return X[train_mask], X[test_mask], y[train_mask], y[test_mask]
+
+
+def grouped_train_test_split(
+    X: np.ndarray, y: np.ndarray, groups: np.ndarray,
+    test_frac: float = 0.2, seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Train/test split that keeps every member of a GROUP on the same side.
+
+    REQUIRED for the in-house legacy batches (StageD n=500, final n=2000,
+    seed=2026).  Those designs re-used one Sobol stream across all four
+    (cn, pu) quadrants, so each base Sobol point k appears 2-4 times, differing
+    ONLY in the sign of cn and/or pu -- the other 7 coordinates
+    (sk, lpu, l_com, l_sk, mpu, m_com, m_sk) are byte-identical.  A random or
+    condition-level split therefore puts mirror twins on both sides and
+    inflates test scores.
+
+    Pass groups = gen_idx (the Sobol row index, column `gen_idx` of the
+    regenerated condition table): 900 groups for n=2000, 225 for n=500.
+    See docs/decisions/legacy_design_audit_20260714.md.
+    """
+    groups = np.asarray(groups)
+    if len(groups) != len(X):
+        raise ValueError(f"groups length {len(groups)} != X length {len(X)}")
+    rng = np.random.default_rng(seed)
+    uniq = np.unique(groups)
+    rng.shuffle(uniq)
+    n_test = max(1, int(round(len(uniq) * test_frac)))
+    test_groups = set(uniq[:n_test].tolist())
+
+    test_mask = np.array([g in test_groups for g in groups])
+    train_mask = ~test_mask
+    return X[train_mask], X[test_mask], y[train_mask], y[test_mask]

@@ -33,7 +33,12 @@ STAGES
 ------
   A (3D): cn, pu                          + Vop grid downstream
   B (4D): cn, sk, pu
-  D (9D): cn, sk, pu, lpu,lpg,lpd, mpu,mpg,mpd
+  D (9D): cn, sk, pu, lpu, l_com, l_sk, mpu, m_com, m_sk      [v2.1 layout]
+          PG/PD ratios are DERIVED:  lpg = l_com + l_sk, lpd = l_com - l_sk
+                                     mpg = m_com + m_sk, mpd = m_com - m_sk
+          com and skew sampled independently (no clamp; derived ratios may
+          spill to [0.625, 1.375]).  v1.0 sampled lpg/lpd independently --
+          retired; see the STAGE_COLUMNS comment and the 2026-07-14 audit.
 
 Quadrant weighting (SNMR -> Q2/FSG focus, Vtrip -> Q4/SFG focus) is optional
 and applied to the (cn, pu) plane only.
@@ -43,24 +48,63 @@ from __future__ import annotations
 
 import numpy as np
 
-CONDITION_GEN_VERSION = "1.0"
+CONDITION_GEN_VERSION = "2.1"
 
 # --- ranges (mV for shifts, ratio for loc/mom) ---
 CN_MIN, CN_MAX = -60.0, 60.0
 PU_MIN, PU_MAX = -60.0, 60.0
-SK_MIN, SK_MAX = -20.0, 20.0        # PG-PD skew
-LOC_MIN, LOC_MAX = 0.7, 1.3         # VTSL local-sigma ratio
-MOM_MIN, MOM_MAX = 0.7, 1.3         # MOM mobility ratio
+SK_MIN, SK_MAX = -20.0, 20.0        # PG-PD Vth skew (mV)
+LOC_MIN, LOC_MAX = 0.7, 1.3         # VTSL local-sigma ratio (common)
+MOM_MIN, MOM_MAX = 0.7, 1.3         # MOM mobility ratio (common)
+LSK_MIN, LSK_MAX = -0.075, 0.075    # PG-PD local-sigma skew (ratio)
+MSK_MIN, MSK_MAX = -0.075, 0.075    # PG-PD mobility skew (ratio)
 
 # quadrant weights on (cn_sign, pu_sign); keys: -1 = negative half, +1 = positive
+# SNMR decks weight FSG=(-1,+1); Vtrip decks (SEPARATE deck set, user-confirmed
+# 2026-07-14) weight SFG=(+1,-1).
 QW_SNMR = {(-1, +1): 0.45, (-1, -1): 0.20, (+1, +1): 0.15, (+1, -1): 0.20}
 QW_VTRIP = {(-1, +1): 0.10, (-1, -1): 0.15, (+1, +1): 0.30, (+1, -1): 0.45}
 
+# STAGE D PARAMETERIZATION (v2.x)
+# -------------------------------
+# The ratio dims are (PU, common, PG-PD skew), NOT independent per-device
+# ratios:   lpg = l_com + l_sk,  lpd = l_com - l_sk   (same for mobility).
+# Rationale: PG and PD are the same NMOS flavor -- their dominant variation
+# sources are shared (common), with imperfect tracking (skew).  The implied
+# corr(lpg, lpd) ~ 0.88 sits in the physically plausible 0.85-0.95 band, and
+# independent sampling would waste points on impossible states (e.g. PG -30%
+# while PD +30%).
+#
+# v2.1 (decided 2026-07-14): com and skew are sampled INDEPENDENTLY (no clamp).
+# Derived lpg/lpd may spill to [0.625, 1.375] when common is within 0.075 of
+# a range edge.  This keeps com (upper bound) skew independence (required for
+# Saltelli sensitivity) and keeps mismatch information at BOTH nominal common
+# and extreme-common corners.  The legacy batch's clamp |sk| <= |com-1| (which
+# zeroed mismatch at nominal) is retired -- see
+# docs/decisions/legacy_design_audit_20260714.md.
 STAGE_COLUMNS = {
     "A": ["cn", "pu"],
     "B": ["cn", "sk", "pu"],
-    "D": ["cn", "sk", "pu", "lpu", "lpg", "lpd", "mpu", "mpg", "mpd"],
+    "D": ["cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk"],
 }
+
+
+def in_design_domain(l_com, l_sk, m_com, m_sk) -> np.ndarray:
+    """True where a Stage-D query lies inside the v2.1 training support.
+
+    Support is the independent box: common in [0.7, 1.3], |skew| <= 0.075.
+    Derived per-device ratios then lie in [0.625, 1.375]; validity of the
+    compact model over the spill band [0.625, 0.7) / (1.3, 1.375] is a fab
+    model-card question, confirmed acceptable for the rerun (2026-07-14).
+    """
+    l_com, l_sk = np.asarray(l_com, float), np.asarray(l_sk, float)
+    m_com, m_sk = np.asarray(m_com, float), np.asarray(m_sk, float)
+    return (
+        (l_com >= LOC_MIN - 1e-9) & (l_com <= LOC_MAX + 1e-9)
+        & (m_com >= MOM_MIN - 1e-9) & (m_com <= MOM_MAX + 1e-9)
+        & (np.abs(l_sk) <= LSK_MAX + 1e-9)
+        & (np.abs(m_sk) <= MSK_MAX + 1e-9)
+    )
 
 
 def _unit_samples(n: int, d: int, seed: int, method: str) -> np.ndarray:
@@ -137,16 +181,23 @@ def generate_conditions(
     if stage == "A":
         return STAGE_COLUMNS["A"], np.column_stack([cn, pu]).astype(float)
 
-    # extra dims (sk for B; sk + 6 ratios for D) from an independent stream
+    # extra dims (sk for B; sk + 6 ratio dims for D) from an independent stream
     n_extra = 1 if stage == "B" else 7
     e = _unit_samples(n_cond, n_extra, seed + 100, method)
     sk = np.round(SK_MIN + (SK_MAX - SK_MIN) * e[:, 0]).astype(int)
     if stage == "B":
         return STAGE_COLUMNS["B"], np.column_stack([cn, sk, pu]).astype(float)
 
-    loc = np.round(LOC_MIN + (LOC_MAX - LOC_MIN) * e[:, 1:4], 2)
-    mom = np.round(MOM_MIN + (MOM_MAX - MOM_MIN) * e[:, 4:7], 2)
-    arr = np.column_stack([cn, sk, pu, loc, mom]).astype(float)
+    # D (v2.1): PU ratio + (common, PG-PD skew) for local-sigma and mobility.
+    # com and skew are independent draws (no clamp) -- see module comment.
+    lpu = np.round(LOC_MIN + (LOC_MAX - LOC_MIN) * e[:, 1], 2)
+    l_com = np.round(LOC_MIN + (LOC_MAX - LOC_MIN) * e[:, 2], 2)
+    l_sk = np.round(LSK_MIN + (LSK_MAX - LSK_MIN) * e[:, 3], 2)
+    mpu = np.round(MOM_MIN + (MOM_MAX - MOM_MIN) * e[:, 4], 2)
+    m_com = np.round(MOM_MIN + (MOM_MAX - MOM_MIN) * e[:, 5], 2)
+    m_sk = np.round(MSK_MIN + (MSK_MAX - MSK_MIN) * e[:, 6], 2)
+
+    arr = np.column_stack([cn, sk, pu, lpu, l_com, l_sk, mpu, m_com, m_sk]).astype(float)
     return STAGE_COLUMNS["D"], arr
 
 
@@ -184,7 +235,7 @@ def conditions_to_records(
 
 
 if __name__ == "__main__":
-    # tiny self-test: determinism + precision
+    # tiny self-test: determinism + precision + design-domain constraint
     for st in ("A", "B", "D"):
         c1 = generate_conditions(st, 16, seed=42)[1]
         c2 = generate_conditions(st, 16, seed=42)[1]
@@ -194,7 +245,10 @@ if __name__ == "__main__":
     cols, cond = generate_conditions("D", 16, seed=42)
     assert np.array_equal(cond[:, :3], np.round(cond[:, :3])), "cn/sk/pu not integer"
     assert np.allclose(cond[:, 3:], np.round(cond[:, 3:], 2)), "loc/mom not 2-dec"
+    i = {c: k for k, c in enumerate(cols)}
+    assert in_design_domain(cond[:, i["l_com"]], cond[:, i["l_sk"]],
+                            cond[:, i["m_com"]], cond[:, i["m_sk"]]).all(), "domain violated"
     print(f"condition_gen v{CONDITION_GEN_VERSION}: self-test OK "
-          f"(deterministic, seed-sensitive, precision correct)")
+          f"(deterministic, seed-sensitive, precision correct, domain satisfied)")
     print("D columns:", cols)
     print("D[0]:", cond[0])

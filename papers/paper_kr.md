@@ -1,220 +1,342 @@
-# SRAM Vmin 추정을 위한 물리 기반 GP 대리 모델
+# 물리 제약 가우시안 프로세스 대리모델을 이용한 SRAM Vmin 역추정
 
-> **버전**: 2026-07-02 (v0.3)
-> **상태**: Toy project 완료, HSPICE 실데이터 추출 준비 완료
+> 버전 v0.5 (2026-07-14). final 9D 실데이터 기준으로 전면 재구성한 초안.
+> 구조 변경: 점진(3D→4D→9D) 서사 폐기, 기여 중심 구성 (audit 문서 D6 결정).
+> `[TBD]`는 final 배치 결과 전사 후 채운다. `[Fig N]`은 자리만 잡아둔 것.
+
+---
+
+## 초록
+
+SRAM의 최소 동작 전압(Vmin)은 대용량 어레이의 수율을 결정하는 핵심 지표이지만,
+공정 변동 하에서 Vmin을 추정하려면 조건마다 수천 회의 Monte Carlo(MC) 회로
+시뮬레이션이 필요하고, 설계자가 실제로 묻는 질문 — 어떤 변동 조합이 목표
+Vmin을 위반하는가 — 은 역문제여서 순방향 MC만으로는 답하기 어렵다. 본 논문은
+공정 변동 파라미터에서 읽기 정적 잡음 여유(SNM)의 통계량으로 가는 가우시안
+프로세스(GP) 대리모델과, 통계량을 수율 조건의 Vmin으로 변환하는 미분 가능한
+물리 계층을 결합하여, 단 한 번의 고정된 시뮬레이션 예산으로 순방향 예측과
+gradient 기반 역추정을 모두 수행하는 파이프라인을 제안한다. 버터플라이 곡선의
+두 lobe를 분해한 유효 z-score로 min-통계의 낙관 편향(Z≈6에서 최대 +1.9σ)을
+폐형식으로 제거하고, 조건별 MC 표준오차를 이용하는 noise-aware GP로 이질적
+MC 예산을 단일 모델에 통합한다. 첨단 FinFET 노드의 공정 보정 MC 데이터
+2,000 조건 × 5 전압에서 제안 기법은 hold-out 조건에 대해 μ 결정계수 [TBD],
+Vmin 등고선 Hausdorff 거리 [TBD] mV를 달성하였으며, gradient 역추정은
+bisection 교차검증과 [TBD] mV 이내에서 일치한다.
 
 ---
 
 ## 1. 서론
 
-### 1.1 연구 배경
+SRAM은 SoC에서 가장 큰 면적을 차지하며 칩 수율을 지배한다. 셀이 읽기/쓰기를
+안정적으로 수행하는 최저 전압인 Vmin은 공정 변동에 강하게 의존하고, 256 Mb급
+어레이가 요구하는 6σ대 꼬리 수율을 MC로 직접 확인하는 것은 계산적으로
+불가능에 가깝다. 더 근본적인 문제는 질문의 방향이다. 통상의 시뮬레이션 흐름은
+주어진 변동 조건의 Vmin을 알려줄 뿐이고, 설계·공정 엔지니어가 원하는 것은
+그 역 — 목표 Vmin을 만족하는(혹은 위반하는) 변동 공간의 경계, 그리고 경계에
+도달하기 위한 최소 어시스트 — 이다.
 
-SRAM (Static Random Access Memory)은 시스템 반도체에서 가장 큰 면적을 차지하는 블록으로, 전체 칩의 수율(yield)에 지배적인 영향을 미친다. SRAM의 동작을 결정하는 가장 중요한 지표 중 하나가 **Vmin (최소 동작 전압)** 이다. Vmin은 셀이 읽기/쓰기 동작을 안정적으로 수행할 수 있는 최저 전압으로, 공정 변동(process variation)에 크게 의존한다.
+본 연구는 대리모델을 한 번 학습한 뒤 추가 시뮬레이션 없이 순방향과 역방향
+질의를 모두 처리한다. GP가 변동 파라미터에서 SNM 통계량 (μ, σ)로 가는 매핑을
+학습하고, 미분 가능한 물리 계층이 (μ, σ)를 z-score 수율 모델을 통해 Vmin으로
+정확히(학습된 근사가 아니라 해석적 제약으로) 변환한다. 전체 파이프라인이
+입력에 대해 미분 가능하므로, 목표 Vmin 등고선 위의 점을 gradient로 직접
+찾아갈 수 있다.
 
-전통적인 SRAM Vmin 추정은 Monte Carlo (MC) HSPICE 시뮬레이션에 의존한다. 수천 회의 MC 시뮬레이션을 각 PVTA 조건(process, voltage, temperature, aging)에 대해 반복하므로 계산 비용이 매우 크다. 특히 6-sigma 수율 분석(tail estimation)을 위해서는 수백만 회의 MC가 필요해 실질적으로 불가능에 가깝다.
+기여는 다음과 같다.
 
-### 1.2 제안 방법: GP 대리 모델 + 미분 가능 물리 레이어
+1. **미분 가능 물리 계층을 통한 Vmin 역추정.** 설계 변수 → GP 사후 평균 →
+   Vmin 변환의 end-to-end 자동미분. 1차원 bisection과의 교차검증으로 정확도를
+   보이고, grid 탐색이 불가능한 다변수 역문제로 확장한다.
+2. **역추정 정확도의 지표 정의 체계.** 설계범위 feasibility, 표본 전압 범위
+   아래의 좌측 censoring, 어시스트-활성 채점을 규정한다. 이를 무시한 소박한
+   지표는 동일한 예측을 약 60배 과대 보고한다(0.16 V vs 2.6 mV).
+3. **Lobe 분해 유효 z-score.** 읽기 SNM은 두 lobe의 최소값이므로 min의
+   (μ, σ)에 가우시안 z를 적용하면 Z≈6에서 +0.7σ(독립)~+1.9σ(역상관)만큼
+   낙관적이다. 두 lobe의 결합 실패확률에서 정확한 유효 z를 폐형식(Owen's T)으로
+   계산하며 미분 가능성을 유지한다.
+4. **이질적 MC 예산을 통합하는 noise-aware GP.** 조건별 MC 표준오차가
+   heteroscedastic 우도로 들어가 저예산/고예산 조건이 한 모델에 공존한다.
+   fidelity 차이가 표본 수뿐일 때 co-kriging을 대체하는 원리적 선택이다.
+5. **물리 제약의 정직한 ablation과 실데이터 검증.** 입력 표준화를 통제한 뒤
+   corner-anchor 증강이 저예산·꼬리 구간에서 집중적으로 기여함을 보인다
+   (해석적 testbed에서 Vmin RMSE −27%, p95 −37%; 실데이터 [TBD]).
 
-본 연구는 Gaussian Process (GP) 대리 모델(surrogate model)과 미분 가능한 물리 레이어(differentiable physics layer)를 결합하여 SRAM Vmin을 효율적으로 추정하는 방법을 제안한다.
+추가로, deck 반출이 불가능한 사내 팹 환경을 위한 **조건 무전사 실험 프로토콜**
+(결정적 조건 생성의 seed 공유로 조건 손 전사를 제거)과, 파일럿 설계에서 발견한
+**mirror-twin 누수**와 그에 따른 그룹 분할 평가 규율을 §3.5에 보고한다. 이는
+산업 데이터로 대리모델을 검증하는 후속 연구에 실무적으로 유효한 교훈이다.
 
-**핵심 아이디어**:
-1. **GP 대리 모델**: PVTA 파라미터 → SNMR(mu, sigma) 매핑 학습
-2. **미분 가능 물리 레이어**: SNMR(mu, sigma) → Vmin 변환 (Z-score 기반 선형 보간)
-3. **물리 기반 손실 함수**: monotonicity (L_mono), corner anchor (L_boundary), Pelgrom scaling (L_pelgrom) 제약 조건
-
-### 1.3 논문 기여도 (예상)
-
-| 기여 항목 | 중요도 | 설명 |
-|----------|--------|------|
-| 미분 가능 Vmin 변환 | ⭐⭐⭐ | GP 출력 → Vmin의 end-to-end 미분 가능 파이프라인 |
-| 가산 커널 델타 sigma GP | ⭐⭐⭐ | Vop(전압) + (cn, pu) 주소성 분리로 sigma 예측 정확도 향상 |
-| 역 Vmin 등고선 추출 | ⭐⭐⭐⭐ | Vmin=0.6V contour 기준 Hausdorff 거리 기반 검증 |
-| 예측-실측 격차 진단 | ⭐⭐ | lengthscale, gradient 방향, corner bias 분석 체계 |
-| 물리 기반 GP 제약 | ⭐⭐⭐ | L_boundary → 20.9% Vmin RMSE 개선 (실험 검증 완료) |
-
----
-
-## 2. 방법론
-
-### 2.1 입력 공간
-
-**Core 3D** (항상 포함):
-| 변수 | 기호 | 범위 | 단위 |
-|------|------|------|------|
-| NMOS 공통 시프트 | common_N | [-60, 60] | mV |
-| PMOS 시프트 | PU | [-60, 60] | mV |
-| 동작 전압 | Vop | [0.4, 0.9] | V |
-
-**확장 차원** (indices 3+, 선택적):
-| 변수 | 기호 | 범위 | 설명 |
-|------|------|------|------|
-| NMOS 폭 | W | nominal ±10% | PG/PU 트랜지스터 폭 변동 |
-| 게이트 길이 변동 | σL_mult | [0.8, 1.2] | 공정 변동에 따른 L variation |
-| 임계 전압 변동 | σG | [0.8, 1.2] | Global Vth variation |
-| 이동도 변동 | μ_mobility_mult | [0.8, 1.2] | Carrier mobility variation |
-| 온도 | Temp | {-40, 25, 85, 125, 150} | °C (이산 값, continuous kernel) |
-
-**출력**: y = [mu_SNMR (V), sigma_SNMR (V)] — (N, 2), 고정 불변.
-
-### 2.2 GP 모델 구조
-
-**mu GP** (`ExactGPModel`):
-- 커널: Matern 5/2 + ARD (d 차원 자동 적응)
-- 모든 입력 차원에 대해 독립 lengthscale 학습
-
-**sigma GP** (`AdditiveGPModel`):
-- 가산 커널: k_Vop(Vop) + k_cnpu(cn, pu)
-- Vop 의존성과 (common_N, PU) 의존성을 분리하여 sigma의 Pelgrom scaling 학습
-
-두 GP 모두 GPyTorch 기반의 `ExactMarginalLogLikelihood` + Adam optimizer로 학습.
-
-### 2.3 미분 가능 물리 레이어
-
-Vmin은 다음과 같이 계산된다:
-1. 각 (common_N, PU) 조건에서 GP가 mu(Vop), sigma(Vop) 예측 (Vop ∈ {0.4, 0.5, ..., 0.9})
-2. Zscore(Vop) = mu(Vop) / sigma(Vop)
-3. Vmin = linear_interpolate({Vop | Zscore(Vop) = Z_target}), Z_target = 6.0 (64Mb @ 99.9% yield 대응)
-
-이 과정은 mu, sigma를 통해 **완전 미분 가능**하며, GP → Vmin의 end-to-end gradient 흐름이 보장된다.
-
-### 2.4 물리 기반 제약 조건
-
-**L_mono (단조성)**:
-- ∂μ/∂Vop > 0 (Vop 증가 → mu_SNMR 증가)
-- Probe point collocation (PINN 스타일)으로 전체 입력 공간에서 평가
-- 패널티: ReLU(-∂μ/∂Vop)²
-
-**L_boundary (코너 앵커)**:
-- 4개 글로벌 코너 (FSG, SFG, FFG, SSG) × 6 Vop = 24개 가상 관측
-- 학습 데이터에 직접 추가 (data augmentation)
-- Ground truth: `analytic_snmr()` 함수
-
-**L_pelgrom (Sigma 스케일링)**:
-- σ(Vop) = SIGMA₀ + SIGMA_VOP_SLOPE × (0.9 − Vop)
-- sigma GP 학습 시 약한 정규화(regularization)
-
-**통합 손실 함수**:
-```
-L_total = -log p(y|X,θ) + λ_mono·L_mono + λ_pelgrom·L_pelgrom
-```
-
-### 2.5 입력 정규화 (StandardScaler)
-
-각 입력 차원의 스케일 차이(mV, V, °C, 무차원 비율)로 인한 GP 학습 불안정을 방지하기 위해 **StandardScaler**를 도입:
-- 각 차원별 평균 0, 분산 1로 정규화
-- 학습 데이터 통계(fit) → 동일 통계로 변환(transform)
-- 역변환(inverse_transform)으로 원래 스케일 복원
-- numpy-only 구현 (sklearn 의존성 없음)
-
-### 2.6 GP → NN 전환 조건
-
-GP로 충분하지 않을 때 Neural Network + PINN으로 전환:
-
-| 조건 | 기준 | 현재 상태 |
-|------|------|-----------|
-| Hausdorff 거리 | > 3-5mV | ✅ 1.2-1.8mV (촉발 안 됨) |
-| ℓ_pu / ℓ_cn 비율 | > 2.0 | ✅ ~1.0 (toy data 한계) |
-| 코너 Vmin 오차 | > 3σ | ✅ 통과 |
+`[Fig 1 — 전체 파이프라인 개요: 변동 파라미터 → GP(μ,σ) → 물리 계층 → Vmin,
+순방향/역방향 화살표. 자리]`
 
 ---
 
-## 3. 실험 결과
+## 2. 문제 설정
 
-### 3.1 Ablation Study (5 Configs)
+### 2.1 읽기 안정성과 lobe 통계
 
-| Config | mu R² | σ R² | Vmin RMSE | Hausdorff | 설명 |
-|--------|-------|------|-----------|-----------|------|
-| Baseline | 0.9973 | 0.6301 | 6.52mV | 1.8mV | 참조 |
-| +L_mono | 0.9973 | 0.6292 | 6.46mV | 2.1mV | 단독 효과 미미 |
-| +L_boundary | 0.9978 | 0.6340 | **5.16mV** | 1.3mV | **20.9% 개선** |
-| +Mono+Boundary | 0.9978 | 0.6313 | 5.10mV | 1.2mV | 복합 효과 |
-| +Mono+Boundary+Pelgrom | 0.9978 | 0.6365 | **4.91mV** | 1.3mV | **전체: 24.7% 개선** |
+6T 셀의 읽기 SNM은 버터플라이 곡선 좌우 lobe의 최소값이다. MC에서 관례적으로
+수집하는 것은 min의 (μ, σ)이지만, min 분포의 좌측 꼬리는 모멘트를 맞춘
+가우시안보다 무거워서 z = μ/σ는 실패확률을 체계적으로 과소평가한다. lobe별
+통계 (μ_L, σ_L, μ_R, σ_R, ρ_LR)에서
 
-**핵심 발견**:
-- **L_boundary가 개선의 95% 설명** (6.52→5.16mV, 나머지 0.25mV는 L_mono+L_pelgrom)
-- L_mono 효과 없음 (penalty = 0): toy data가 이미 단조 함수이므로
-- σ R² < 0.64: sigma 예측이 mu보다 어려움 (향후 개선 필요)
+p_fail = P(L<0) + P(R<0) − P(L<0, R<0),  Z_eff = Φ⁻¹(1 − p_fail)
 
-### 3.2 물리적 일관성 검증
+로 유효 z를 계산하면 이 편향이 제거된다. 결합항은 이변량 정규 CDF(Owen's T)로
+폐형식이며 모든 입력에 대해 매끄럽다. Z_eff를 (μ_eff, σ_eff) 쌍으로 되돌리는
+사상(μ_eff/σ_eff ≡ Z_eff, σ_eff = √(σ_Lσ_R))을 쓰면 하류 파이프라인은 수정
+없이 유지된다.
 
-**Gradient 방향 검증** (중앙점 (0,0)에서 finite difference):
-- ∂Vmin/∂common_N < 0: NMOS 느려짐 → PG leakage 감소 → Vmin 감소 ✅
-- ∂Vmin/∂PU > 0: PMOS 느려짐 → PU strength 감소 → Vmin 증가 ✅
-- Cos similarity ≈ 1.0: GP가 true gradient 방향 정확히 포착 ✅
+### 2.2 Vmin 정의와 수율 목표
 
-**Lengthscale 분석**:
-- ℓ_cn ≈ ℓ_pu ≈ 1.0 (모든 config): toy data에서 cn/pu coefficient 유사 → **실 data에서 재검증 필요**
-- ℓ_Vop ≈ 0.65 (작음): Vop sensitivity를 GP가 정확히 포착
+조건 x에서 전압 격자 Vop ∈ {0.4, …, 0.8} V의 z(Vop) = μ/σ가 목표 Z_t와
+교차하는 전압을 선형 보간한 것이 Vmin(x)다. Z_t는 어레이 수율 모델에서
+유도한다: 256 Mb, Poisson 수율 99%에서 p_fail = −ln(0.99)/(256·10⁶),
+Z_t = Φ⁻¹(1−p_fail) ≈ 6.50. 실패 단위는 셀(비트)이며 트랜지스터 수 6을
+곱하는 것은 오류다. z(0.4 V) > Z_t인 조건은 Vmin이 표본 범위 아래에 있으므로
+좌측 censoring으로 표시하고 연속 오차 지표에서 제외한다.
 
-### 3.3 StandardScaler + 8D 확장 검증
+### 2.3 역문제
 
-- StandardScaler 3D/8D 정규화: mean=0, std=1, inverse_transform 정확 ✅
-- `ExactGPModel` 8D: `ard_num_dims=8` 자동 설정, loss 감소 확인 ✅
-- `AdditiveGPModel` 8D: extra dims unmodeled, loss 감소 확인 ✅
-- `generate_probe_points(n_extra=5)`: 8D probe 생성, extra dims=0 ✅
-- `generate_corner_anchor_data(n_extra=5)`: 8D anchor 생성 ✅
-- Full pipeline (GP train → contour): 오류 없음 ✅
+목표 전압 V*에 대해 {x : Vmin(x) = V*}는 변동 공간의 초곡면(등고선)이다.
+역추정은 (i) 이 등고선의 기하를 추출하는 것, (ii) 주어진 동작점에서 등고선에
+도달하는 최소 어시스트(예: WLUD)를 찾는 것 두 형태로 정식화한다. 두 경우 모두
+미분 가능한 Vmin(x)에 대한 gradient 하강으로 푼다.
 
 ---
 
-## 4. 논의
+## 3. 데이터 설계
 
-### 4.1 L_boundary가 효과적인 이유
+### 3.1 입력 공간
 
-GP의 extrapolation 취약점: 학습 데이터는 common_N, PU ∈ [-60, 60]에 분포하지만 코너(FSG: cn=-60, pu=+60)는 domain 극단. 24개 가상 관측만으로 큰 보정 효과. 실 HSPICE data에서도 적은 수의 코너 시뮬레이션으로 큰 효과를 볼 가능성 높음.
+셀 트랜지스터는 PU(PMOS pull-up), PD(NMOS pull-down), PG(NMOS pass-gate)다.
+입력은 장치 변동 9차원과 동작 전압 1차원이다.
 
-### 4.2 L_mono가 toy data에서 효과 없는 이유
+| 변수 | 의미 | 범위 |
+|---|---|---|
+| cn | NMOS 공통 Vth 시프트 (PG=PD 기저) | ±60 mV |
+| sk | PG−PD Vth skew | ±20 mV |
+| pu | PMOS Vth 시프트 | ±60 mV |
+| lpu | PU local-σ 배율 | [0.7, 1.3] |
+| l_com, l_sk | NMOS local-σ 공통/PG−PD skew | [0.7, 1.3] / ±0.075 |
+| mpu | PU 이동도 배율 | [0.7, 1.3] |
+| m_com, m_sk | NMOS 이동도 공통/PG−PD skew | [0.7, 1.3] / ±0.075 |
+| Vop | 동작 전압 | {0.4, 0.5, 0.6, 0.7, 0.8} V |
 
-Toy data의 `analytic_snmr()`는 ∂μ/∂Vop = A_MU = 0.15 > 0이 항상 만족. 실 data에서는 non-monotonic 영역이 존재할 가능성 (Vop saturation, 저전압 extreme) → L_mono 효과 기대.
+deck 파라미터는 파생으로 정해진다: Vth는 PG = cn+sk, PD = cn−sk;
+local-σ는 PG = l_com+l_sk, PD = l_com−l_sk; 이동도도 동형.
 
-### 4.3 PG >> PU 미반영
+### 3.2 common+skew 파라미터화의 근거
 
-Toy data 자체가 common_N과 PU의 계수를 유사하게 설정 (B_MU=0.001, C_MU=-0.0015). 실 data에서는 PG(Pass Gate) variation이 PU(Pull-Up)보다 Vmin에 2-3배 더 큰 영향을 미치므로, ℓ_cn < ℓ_pu가 관측되어야 함.
+PG와 PD는 같은 NMOS flavor로서 지배적 변동 원인(게이트 스택, 채널 도핑,
+애닐, 리소 CD)을 공유하고, W/L·레이아웃 환경·flavor 차이가 불완전한 추적을
+만든다. 장치별 독립 샘플링은 같은 flavor가 mismatch 수준에서 ±30%씩 반대로
+갈라지는, 실공정에 존재하지 않는 상태에 설계점을 낭비한다. 공통+skew 분해가
+만드는 암묵적 상관 corr(l_PG, l_PD) ≈ 0.88은 동일 flavor 추적 상관의 통상
+범위(0.85~0.95)에 있으며, Vth의 cn/sk 구조(ρ≈0.80)와 일관된다. 공통과 skew는
+독립으로 샘플링하며(§5.6의 분산 기반 민감도가 요구하는 성질), 파생 장치
+배율은 공통이 범위 경계 근처일 때 [0.625, 1.375]까지 확장될 수 있다 —
+compact model의 유효 범위 내임을 확인했다.
 
-### 4.4 GP → NN 전환 시점
+`[Fig 2 — 설계 시각화: (a) (cn,pu) 평면 quadrant 가중, (b) (l_com, l_sk) 독립
+박스와 파생 (l_PG, l_PD) 대각 띠. 자리]`
 
-세 가지 transition trigger 모두 아직 만족되지 않음:
-1. Hausdorff > 5mV: ❌ (현재 1.2-1.8mV)
-2. ℓ_pu/ℓ_cn > 2.0: ❌ (현재 ~1.0, toy data 한계)
-3. Corner Vmin error > 3σ: ❌
+### 3.3 실험계획
 
-실 HSPICE data 도착 후 재평가 필요.
+읽기(SNMR)와 쓰기(Vtrip) 열화의 최악 사분면이 다르므로 metric별로 deck을
+분리하고 (cn, pu) 사분면 가중을 달리한다. SNMR deck은 FSG(cn<0, pu>0)에
+45%, 쓰기 deck은 SFG(cn>0, pu<0)에 45%를 배정한다. 각 deck은 2,000 조건 ×
+5 Vop = 10,000 시뮬레이션이고, 조건은 quadrant별 독립 스트림의 결정적
+난수(PCG64)로 생성한다. 조건당 MC는 N_MC = [TBD]이며, lobe별 통계와 ρ_LR을
+함께 수집한다 [가능 여부 TBD — D8].
+
+### 3.4 조건 무전사 프로토콜
+
+시뮬레이션은 netlist와 결과가 반출 불가능한 팹 환경에서 실행된다. 조건
+생성기가 결정적이므로, (stage, n_cond, seed, metric, method)만 공유하면 팹
+측 deck 생성과 모델 측 조건표가 바이트 단위로 일치한다. 결과는 (Vop, deck
+번호)만으로 라벨되어 돌아오고 조건 손 전사는 발생하지 않는다. 파일럿에서
+조건을 손으로 전사했을 때의 행 오류율이 약 9%였음을 고려하면(§3.5), 이
+프로토콜은 편의가 아니라 데이터 무결성 요건이다.
+
+### 3.5 설계 함정과 평가 규율
+
+초기 파일럿 설계는 하나의 QMC 스트림을 네 사분면에 재사용하고 cn, pu의
+부호만 반전시켰다. 그 결과 조건의 75%가 나머지 7개 좌표를 공유하는
+mirror-twin을 갖게 되었고, 무작위 hold-out에서는 test 조건의 약 74%가 train에
+쌍둥이를 두어 정확도 지표가 낙관적으로 오염된다. 우리는 이를 전사된 조건과
+생성기의 포렌식 대조로 발견하였고, (i) 본 배치의 설계에서 스트림을 사분면별로
+독립화하여 원인을 제거하고, (ii) legacy 데이터를 쓰는 모든 평가에 mirror-group
+단위 분할을 강제했다. 대리모델 검증에서 유사한 설계 유래 누수는 지표를
+조용히 부풀리므로, 실험 설계의 재현 코드와 분할 규칙을 함께 보고하는 것을
+권고한다.
+
+### 3.6 측정과 QC
+
+조건×전압별 MC 히스토그램에 대해 z-교차 근방 전압에서 Anderson–Darling
+정규성 검정과 Q-Q 확인을 수행한다 [TBD 요약]. 전사 결과값은 (Vop, deck 번호)
+키로 조건표에 재부착되며, 파생 통계(z, censoring 플래그)는 파서가 재계산한다.
 
 ---
 
-## 5. 결론 및 향후 계획
+## 4. 방법
 
-### 5.1 현재까지 달성
+### 4.1 GP 대리모델
 
-- ✅ GP + 미분 가능 물리 레이어 기반 Vmin 추정 파이프라인 구축
-- ✅ 물리 기반 제약 조건 (L_mono, L_boundary, L_pelgrom) 구현
-- ✅ Ablation study: L_boundary 20.9% Vmin RMSE 개선 확인
-- ✅ 3D → 8D 입력 공간 확장 인터페이스 준비
-- ✅ 입력 정규화 (StandardScaler) 도입
-- ✅ 검증 파이프라인 구축 (test_pipeline.py, demo_pvta_contour.py)
+μ GP는 Matern-5/2 + ARD, σ GP는 동작 전압 그룹과 장치 변동 그룹을 분리한
+가산 커널을 쓴다. 모든 입력은 학습 통계로 표준화한다 — mV, V, 무차원 배율이
+혼재한 입력에서 표준화 생략은 lengthscale 초기화가 감당하지 못하는 조용한
+미수렴을 만들며, 우리 초기 실험에서 물리 제약의 효과로 오인됐던 개선의
+대부분이 실은 표준화였다(§5.5).
 
-### 5.2 남은 과제
+### 4.2 미분 가능 물리 계층
 
-| 우선순위 | 과제 | 설명 |
-|----------|------|------|
-| 🔴 1순위 | **HSPICE 실데이터 수집** | Option A (486 conditions × 800 MC) or Option B (1200 cond × 240 MC) |
-| 🟡 2순위 | **실데이터 기반 Lengthscale 재분석** | ℓ_cn < ℓ_pu 검증 |
-| 🟡 2순위 | **GP→NN 전환 평가** | 실데이터에서 Hausdorff, lengthscale 재측정 |
-| 🟢 3순위 | **PINN 구현** | NN + PDE residual (L_boundary contour loss) |
-| 🟢 3순위 | **논문 초안 작성** | DAC/ISCAS 타겟 |
+조건당 5개 전압의 (μ, σ) 예측 → z(Vop) → Z_t 교차 선형 보간이 Vmin이다.
+교차 구간 선택은 이산이지만 구간 내부에서 1차 미분이 잘 정의되며, censored
+조건은 플래그로 분리된다. 사후 gradient가 필요한 모든 경로(단조 패널티,
+gradient 역추정)는 eval-mode 사후를 통해 입력까지 미분을 흘린다.
+
+### 4.3 물리 제약
+
+corner anchoring은 4개 글로벌 코너 × 5 Vop의 가상 관측을 학습 데이터에
+증강한다(exact GP의 하드 제약). 단조 패널티 ReLU(−∂μ/∂Vop)²는 probe 점에서
+사후 미분으로 평가하고, Pelgrom 계열 σ(Vop) 선형 경향은 약한 정규화로 건다.
+각 제약의 기여는 §5.5에서 분리 평가한다.
+
+### 4.4 Noise-aware GP
+
+조건별 부트스트랩 표준오차(sem_μ, sem_σ)가 FixedNoise 우도로 들어간다.
+σ의 SEM은 첨도에 민감하므로 해석식 대신 부트스트랩을 쓴다. MC 저예산
+조건은 자동으로 하향 가중되며, 이 메커니즘이 곧 혼합 예산의 통합이다:
+저fidelity가 같은 시뮬레이터의 적은 표본일 뿐이라면 편향항이 없는
+heteroscedastic 단일 GP가 옳은 모델이고 Kennedy–O'Hagan 구조는 불필요하다.
+
+### 4.5 Gradient 역추정
+
+x를 leaf 텐서로 두고 sigmoid 박스 재매개화와 feasibility 장벽 하에서
+(Vmin(x) − V*)²을 Adam으로 최소화한다. 다중 시작점에서 등고선 수렴을
+확인하고, 각 수렴점을 해당 슬라이스의 1차원 bisection과 대조한다.
 
 ---
 
-## 6. 참조
+## 5. 실험
 
-| 문서 | 위치 | 설명 |
-|------|------|------|
-| Master Plan | `sram_vmin_inverse_estimation_plan.md` | 전체 프로젝트 계획 |
-| Ablation Log | `toy_project/physics_ablation/DECISIONS.md` | Ablation trial & error |
-| Orchesration Guide | `AGENT.md` | Agent 전환 가이드 |
-| 데이터 추출 Spec | `toy_project/HSPICE_DATA_EXTRACTION_DETAILS.md` | PDK 엔지니어용 매뉴얼 |
-| Agent 정의 | `~/.config/opencode/oh-my-openagent.json` | Atlas/Prometheus/Hephaestus 설정 |
+### 5.1 프로토콜
+
+hold-out은 조건 단위로 분할하며(한 조건의 5개 Vop 행은 같은 쪽), 비율은
+15%다. 본 배치는 §3.5의 설계 수정으로 mirror-twin이 없으므로 조건 단위
+분할로 충분하다. legacy 파일럿 데이터를 참조하는 실험은 전부 mirror-group
+분할을 쓴다. Vmin 오차는 censored 조건을 제외한 non-censored 집합에서
+보고하고, censoring 비율을 병기한다.
+
+### 5.2 순방향 정확도
+
+`[표: hold-out μ R², μ RMSE, σ R², σ RMSE — TBD]`
+`[Fig 3 — 예측 vs 실측 산점 (μ, σ), hold-out. 자리]`
+
+### 5.3 Vmin 등고선 (역문제 i)
+
+목표 등고선 Vmin = [TBD] V에서 GP 등고선과 hold-out MC 등고선의 Hausdorff
+거리 [TBD] mV. 4개 코너 근방 실측 조건에서 |Vmin_pred − Vmin_MC| [TBD] mV
+(anchor 이중사용을 피하기 위해 boundary-off 구성으로 평가).
+
+`[Fig 4 — (cn, pu) 평면 Vmin 등고선: GP vs MC hold-out 중첩 + 코너 4점,
+sk=0, 배율 nominal 슬라이스. 자리]`
+
+### 5.4 Gradient 역추정 (역문제 ii)
+
+해석적 testbed에서 8개 시작점 전부가 Vmin = 0.6 V 다양체 위 최소 어시스트
+설계로 수렴하고(최대 |Vmin − 목표| 2.41 mV), 각 수렴점은 1차원 bisection과
+소수점 4자리까지 일치했다. 실데이터 재현: [TBD].
+
+`[Fig 5 — 역추정 궤적: (cn, pu) 평면 위 다중 시작 gradient 경로와 목표
+등고선. 자리]`
+
+### 5.5 물리 제약 ablation과 예산 곡선
+
+해석적 testbed(표준화 통제 후): baseline Vmin RMSE 1.26 mV, corner anchor
++가 0.92 mV(−27%), 개선은 p95에서 −37%로 꼬리에 집중된다. 단조 패널티는
+단조 데이터에서 불활성이다. 실데이터 ablation: [TBD]. 학습 조건 수를
+부표본화한 예산-정확도 곡선에서 anchor의 기여가 저예산 구간에 집중되는지
+확인한다: [TBD].
+
+`[Fig 6 — 예산-정확도 Pareto: 조건 수 × (Vmin RMSE, Hausdorff), 제약
+on/off. 자리]`
+
+### 5.6 민감도
+
+ARD lengthscale의 역수를 그룹(Vth, local-σ, 이동도 × 공통/skew/PU)별로
+보고하고, 공통⊥skew 독립 설계이므로 분산 기반 Sobol 지수도 병행한다: [TBD].
+특히 (i) ℓ_cn < ℓ_pu (PG 지배 계층)의 성립 여부, (ii) l_sk/m_sk의 2차성
+여부가 관심 대상이다. PG−PD 배율 mismatch가 SNMR에 2차적이라면 그 자체가
+설계 파라미터 우선순위에 대한 발견이다.
+
+`[Fig 7 — 그룹별 민감도: ARD 기반 vs Sobol 지수 병렬 막대. 자리]`
+
+### 5.7 외부 검증: nominal-slice와 차원 확장
+
+본 배치와 독립적으로 설계·실행된 4D 배치(cn, sk, pu, Vop; 348 조건, 배율
+nominal)는 9D 공간의 (l=m=1, skew=0) 평면 위 실측점이다. 9D 모델을 이 평면에
+사영한 예측과 4D 실측의 일치도 [TBD]는 학습 분포 밖 평면에서의 일반화를
+직접 검증한다. 아울러 3D/4D/9D 순의 hold-out 정확도 비교로 고정 예산에서
+차원이 늘 때의 열화 양상을 보고한다 [TBD]. 4D 배치는 파일럿 세대 설계이므로
+자체 지표는 mirror-group 분할로 재산출했다 [TBD].
+
+`[Fig 8 — nominal-slice 외부 검증: 9D 모델 사영 예측 vs 4D 실측. 자리]`
+
+### 5.8 MC QC
+
+`[Fig 9 — z-교차 근방 Vop의 MC 히스토그램 + Q-Q, censored 분류 예시. 자리]`
 
 ---
 
-*이 문서는 프로젝트 진행에 따라 지속적으로 업데이트됩니다.*
+## 6. 한계와 위협
+
+z = μ/σ의 가우시안 외삽은 절대 실패율 예측기가 아니라 업계 표준의 마진
+지표로 쓰며, z-교차 근방 전압의 정규성 QC와 선택적 importance-sampling
+스팟체크로 방어한다. lobe 분해 z_eff가 계통 편향의 최대 성분을 제거한다.
+결과는 단일 노드·단일 셀 토폴로지·읽기 metric 중심이고, 쓰기 마진은 별도
+deck의 [TBD] 상태다. 배율 파라미터의 스필 구간 [0.625, 0.7)∪(1.3, 1.375]은
+compact model 보정 범위의 가장자리이므로 해당 영역 예측의 신뢰도는 보수적으로
+해석해야 한다. PDK 비공개로 절대값 재현은 불가능하며, 해석적 testbed 코드와
+정규화 축 결과를 공개해 상대 비교 재현성을 확보한다.
+
+## 7. 관련 연구
+
+Guo et al.(ISEDA'24)의 MFNN+IS, Yin et al.(DAC'22, ASPDAC'23)의 Bayesian
+active learning은 순방향 수율 추정에 집중하며, 본 연구는 물리 공간의
+역추정과 미분 가능 파이프라인이라는 점에서 구별된다. Liu et al.(DAC'23,
+OPTIMIS)의 꼬리 정밀 IS는 상보적이며 마진-지표 대리모델과 결합 가능하다.
+Gupta & Calhoun(TCAS-I'21)의 해석적 Vmin 모델 대비 GP는 물리 파라미터 확장과
+제약 주입의 유연성을 갖는다. 표준 QMC 수율 해석(Singhee & Rutenbar,
+TCAD'10)과 공간충전 설계(Kinoshita, TSM'25)는 본 설계의 기반이다.
+
+## 8. 결론
+
+GP 대리모델과 미분 가능 물리 계층으로 SRAM Vmin의 순방향·역방향 질의를
+단일 시뮬레이션 예산에서 처리하는 파이프라인을 제안하고, 첨단 노드 공정
+보정 데이터 [TBD] 조건에서 검증했다. lobe 분해 유효 z, noise-aware 예산
+통합, censoring을 포함한 지표 체계, 그리고 산업 환경의 조건 무전사
+프로토콜과 누수 없는 평가 규율은 대리모델 기반 수율 방법론을 실데이터로
+가져갈 때 반복 사용 가능한 구성 요소다.
+
+---
+
+## 부록 A. 지표 정의
+
+설계범위 feasibility 일치율, 좌측 censoring 처리, 어시스트-활성 채점의 형식
+정의. 동일 예측에 대한 소박한 지표와의 60× 격차 재현표.
+
+## 부록 B. 재현성 계약
+
+조건 생성기 버전, seed, 사분면 가중, 범위, deck 번호 규약. 해석적 testbed
+전체 코드 공개 [저장소 TBD].
+
+## 내부 참조 (제출 전 삭제)
+
+| 문서 | 위치 |
+|---|---|
+| 설계 감사·재실행 결정 | `docs/decisions/legacy_design_audit_20260714.md` |
+| Phase-2 → 논문 계획 | `docs/plans/phase2_to_paper_plan.md` |
+| 근본원인 수정 | `docs/decisions/session_20260706_root_cause_fixes.md` |
+| 적대적 리뷰 | `docs/decisions/adversarial_review_20260707.md` |

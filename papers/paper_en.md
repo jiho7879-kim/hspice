@@ -1,329 +1,402 @@
-# Physics-Constrained GP Surrogate for Inverse SRAM Vmin Estimation
+# Physics-Constrained Gaussian Process Surrogates for Inverse SRAM Vmin Estimation
 
-> **Version**: 2026-07-07 (v0.4)
-> **Status**: Toy (Gate 0) complete and audited; Phase-2 (real-data) infrastructure implemented; HSPICE farm data pending.
-> **Change log v0.3 → v0.4**: ablation numbers replaced after fixing a GP
-> input-scaling bug and an L_pelgrom no-op (all v0.3 physics-constraint
-> figures were confounded); added lobe-resolved effective z-score, the
-> noise-aware GP, gradient-based inversion, and the metric-definition
-> framework; corrected the Z_target derivation. See
-> `docs/decisions/session_20260706_root_cause_fixes.md` and
-> `docs/decisions/adversarial_review_20260707.md`.
+> Version v0.5 (2026-07-14). Restructured around the final 9-D real-data
+> batch; the progressive (3D→4D→9D) narrative is retired in favor of a
+> contribution-driven structure (audit decision D6). `[TBD]` marks numbers
+> pending transcription of the final batch; `[Fig N]` blocks are placeholders.
+
+---
+
+## Abstract
+
+The minimum operating voltage (Vmin) of SRAM governs the yield of large
+arrays, yet estimating it under process variation requires thousands of
+Monte-Carlo (MC) circuit simulations per condition — and the question
+designers actually ask, *which variation combinations violate a target
+Vmin*, is an inverse problem that forward MC does not answer. We combine a
+Gaussian-process (GP) surrogate from process-variation parameters to
+read static-noise-margin (SNM) statistics with a differentiable physics
+layer that converts those statistics into a yield-referenced Vmin, so that
+one fixed simulation budget serves both forward prediction and
+gradient-based inverse estimation. A lobe-resolved effective z-score removes
+the optimistic bias of min-statistics (up to +1.9σ at Z≈6) in closed form,
+and a noise-aware GP absorbs heterogeneous MC budgets through per-condition
+standard errors. On production-calibrated MC data from an advanced FinFET
+node — 2,000 conditions × 5 supply voltages — the method reaches a hold-out
+μ coefficient of determination of [TBD] and a Vmin-contour Hausdorff
+distance of [TBD] mV, and gradient inversion agrees with bisection
+cross-checks to within [TBD] mV.
 
 ---
 
 ## 1. Introduction
 
-### 1.1 Motivation
+SRAM occupies the largest area in modern SoCs and dominates chip yield.
+Vmin — the lowest voltage at which a cell reads and writes reliably —
+depends strongly on process variation, and verifying the ~6σ tail yield
+demanded by 256 Mb-class arrays with direct MC is computationally
+impractical. The deeper problem is the direction of the question. A
+simulation flow reports the Vmin of a given variation condition; what
+design and process engineers want is the reverse — the boundary in
+variation space where a target Vmin is violated, and the minimum assist
+required to move an operating point back across it.
 
-SRAM occupies the largest area in modern SoCs and dominates chip yield. The
-**Vmin** — the lowest voltage at which a cell operates reliably — is the
-single most critical yield metric, yet it is strongly affected by process,
-voltage, temperature, and aging (PVTA) variation. Conventional Vmin
-estimation runs Monte-Carlo (MC) HSPICE per PVTA condition across corners;
-this is prohibitive for the ~6-sigma tails that large arrays require, and it
-only tells the designer the Vmin *after* the fact — not which parameters to
-tighten to *reach* a target Vmin.
+We train the surrogate once and answer both forward and inverse queries
+with no further simulation. A GP learns the map from variation parameters
+to SNM statistics (μ, σ); a differentiable physics layer converts (μ, σ)
+into Vmin through a z-score yield model — exactly, as an analytic
+constraint rather than a learned approximation. Because the entire pipeline
+is differentiable in its inputs, points on a target-Vmin contour can be
+reached directly by gradient descent.
 
-### 1.2 Proposed Approach
+Our contributions:
 
-We learn a surrogate once (fixed one-time simulation cost) and then answer
-both forward and **inverse** Vmin questions with zero further simulation:
+1. **Inverse Vmin estimation through a differentiable physics layer.**
+   End-to-end autograd from design variables through the GP posterior mean
+   and the Vmin transform; accuracy is cross-checked against 1-D bisection
+   and the method extends to multivariable inverse problems where grid
+   search is infeasible.
+2. **A metric-definition framework for inverse accuracy.** Design-range
+   feasibility, left-censoring of Vmin below the sampled voltage range, and
+   assist-active scoring. A naive metric over-reports the error of
+   identical predictions by roughly 60× (0.16 V vs 2.6 mV).
+3. **Lobe-resolved effective z-score.** Read SNM is the minimum of two
+   butterfly lobes; a Gaussian z on the min's (μ, σ) is optimistic by
+   +0.7σ (independent lobes) to +1.9σ (anticorrelated) at Z≈6. We compute
+   the exact union-fail z in closed form (Owen's T), preserving
+   differentiability.
+4. **A noise-aware GP that unifies heterogeneous MC budgets.**
+   Per-condition MC standard errors enter a heteroscedastic likelihood, so
+   low- and high-budget conditions coexist in one model — a principled
+   replacement for co-kriging when fidelities differ only in sample count.
+5. **Honestly ablated physics constraints, validated on real data.** With
+   input standardization controlled for, corner-anchor augmentation
+   contributes mainly at low budgets and in the tail (Vmin RMSE −27%, p95
+   −37% on the analytic testbed; real data [TBD]).
 
-1. **GP surrogate** maps PVTA parameters → read-SNM statistics (μ, σ).
-2. **Differentiable physics layer** converts (μ, σ) → Vmin through a
-   z-score / yield model, exactly (a hard analytic constraint, not a
-   learned approximation).
-3. **Inverse estimation** back-propagates through the whole pipeline to
-   recover the feasible design region (and the minimum assist) for a target
-   Vmin.
+In addition, §3.5 reports a **transcription-free experiment protocol** for
+fab environments from which decks and results cannot be exported (a shared
+seed for deterministic condition generation eliminates hand-transcription
+of conditions), and the **mirror-twin leakage** we discovered in a pilot
+design together with the group-split evaluation discipline it necessitates.
+Both are practically reusable lessons for validating surrogates on
+industrial data.
 
-The inverse formulation is the core novelty: prior surrogate/active-learning
-work (Guo 2024, Yin 2022/2023) addresses *forward* yield only.
-
-### 1.3 Contributions
-
-| # | Contribution | Description |
-|---|--------------|-------------|
-| C1 | **Inverse Vmin estimation via a differentiable physics layer** | End-to-end autograd from design variables through GP posterior mean and the Vmin transform; recovers the minimum-assist design on the Vmin=target manifold. Demonstrated to match a 1-D bisection to <5×10⁻³ WLUD while scaling to multiple free variables where grid search does not. |
-| C2 | **A metric-definition framework for inverse accuracy** | Design-range feasibility, left-censoring of Vmin below the sampled Vop range, and assist-active scoring. Without these, a naive metric over-reports error by ~60× (0.16 V vs 2.6 mV on identical predictions). |
-| C3 | **Lobe-resolved effective z-score** | Read SNM = min(left, right lobe); a Gaussian z on the min's (μ,σ) is optimistically biased by +0.7σ (independent) to +1.9σ (anticorrelated lobes) at Z≈6 — 70–190 mV of Vmin. We compute the exact union-fail z, closed-form and differentiable. |
-| C4 | **Noise-aware GP unifying MC budgets** | Per-condition MC standard errors enter a FixedNoiseGaussianLikelihood, so low-budget and high-budget conditions coexist in one model (a principled alternative to co-kriging when the only difference is sample count, not model fidelity). |
-| C5 | **Physics-constrained GP, honestly ablated** | With input standardization fixed, corner-anchor augmentation gives a real ~27% Vmin-RMSE reduction, concentrated in the tail (p95 −37%); L_mono/L_pelgrom are marginal on monotone analytic data. |
-
----
-
-## 2. Methodology
-
-### 2.1 Input Space
-
-**Core 3D** (always present, Vop at column `VOP_COL = 2`):
-
-| Variable | Symbol | Range | Unit |
-|----------|--------|-------|------|
-| NMOS common shift (PG=PD) | common_N | [−60, 60] | mV |
-| PMOS shift | PU | [−60, 60] | mV |
-| Operating voltage | Vop | [0.4, 0.9] | V |
-
-**Extended dims** (added stage by stage): WLUD ratio (Vwl/Vop assist),
-Temp, then W, σL, σG, μ_mobility for the full 8-D DOE.
-
-**Output**: y = [μ_SNMR, σ_SNMR] ∈ (N, 2), fixed. The optional lobe-resolved
-path (§2.7) preserves this shape.
-
-All inputs are **StandardScaler-normalized before GP training** — this is
-not cosmetic (§2.5).
-
-### 2.2 GP Model Architecture
-
-- **μ GP** (`ExactGPModel`): Matern-5/2 + ARD over all dims.
-- **σ GP** (`AdditiveGPModel`): k_op(Vop, [WLUD…]) + k_dev(common_N, PU),
-  separating voltage from corner dependence.
-- Both trained by `ExactMarginalLogLikelihood` + Adam, independently.
-
-For any posterior-gradient use (L_mono, gradient inversion) we evaluate in
-eval mode with `prediction_strategy = None` so the Cholesky is rebuilt with
-current parameters and gradients flow to the inputs — `gp.forward()` returns
-the constant-mean prior and must not be used.
-
-### 2.3 Differentiable Physics Layer (Vmin)
-
-Per condition: predict μ(Vop), σ(Vop) on the 6 Vop levels →
-Z(Vop) = μ/σ → Vmin = interpolate{Vop | Z(Vop) = Z_target}.
-
-**Z_target derivation** (corrected in v0.4). For an array of N_bits cells at
-per-block yield Y:
-
-  p_fail_per_bit = 1 − Y^(1/N_bits),  N_bits = Mb·10⁶,
-  Z_target = Φ⁻¹(1 − p_fail_per_bit) = norm.isf(p_fail_per_bit).
-
-For 64 Mb @ 99.9%, **Z_target ≈ 6.64** (`derive_z_target()`). The toy runs
-keep a fixed Z=6.0 for cross-session comparability; note this is slightly
-*optimistic* (lower Vmin), not "conservative" as v0.3 stated — switching to
-6.64 shifts all Vmin uniformly and leaves contour shapes and GP-quality
-metrics unchanged. The "×6 transistors" factor sometimes applied to N_bits
-is wrong: the failure unit is the cell.
-
-**Left-censoring.** When Z(Vop_min) already exceeds Z_target, the true Vmin
-lies below the sampled range; the transform returns a floor placeholder that
-must be flagged (`compute_vmin_from_z(return_censored=True)`) and excluded
-from continuous error metrics (§3.5).
-
-### 2.4 Physics-Informed Losses
-
-- **L_boundary** (corner anchoring): 4 global corners × 6 Vop virtual
-  observations augmented into the training set (exact-GP hard constraint).
-- **L_mono**: ReLU(−∂μ/∂Vop)² on probe collocation points (posterior
-  gradient).
-- **L_pelgrom**: posterior σ(Vop) pulled toward SIGMA₀ + slope·(0.9−Vop).
-  (v0.4 fix: the historical implementation computed this under
-  `torch.no_grad()` on the train-mode prior — a zero-gradient no-op; it is
-  now an eval-mode posterior penalty with a data-fixed target.)
-
-### 2.5 Input Standardization — a first-order effect, not a detail
-
-Raw inputs span mV (cn, pu ≈ ±60) to volts (Vop) to dimensionless ratios
-(WLUD ≈ 0.1 wide). GPyTorch's default lengthscale init cannot bridge this in
-a normal iteration budget, so unstandardized training silently
-under-converges. This was the root cause of the earlier "Stage-3 NO-GO"
-(4-D μ RMSE 0.049 vs 0.0023). With standardization the plain GP already
-reaches the observation-noise floor; **most of what v0.3 attributed to
-physics constraints was really this fix** (§3.1). All inputs, probe points,
-and prediction inputs share one fitted scaler.
-
-### 2.6 GP → NN/PINN Transition Criteria
-
-Switch to NN+PINN only when GP is demonstrably insufficient:
-
-| Criterion | Threshold | Toy status |
-|-----------|-----------|------------|
-| Contour Hausdorff | > HSPICE noise floor (3–5 mV) | 0.35–0.5 mV — not triggered |
-| ℓ_pu/ℓ_cn (PG≫PU) | > 2.0 in the *wrong* direction | see §4.3 |
-| Corner Vmin bias | > 3σ vs other corners | not triggered |
-
-### 2.7 Lobe-Resolved Effective Z-score (optional y-definition)
-
-Read SNM is the **minimum** of the two butterfly lobes. Applying a Gaussian
-z to the min's (μ, σ) is optimistically biased because the min's left tail
-is heavier than a moment-matched Gaussian. From per-lobe statistics
-(μ_L, σ_L, μ_R, σ_R, ρ_LR):
-
-  p_fail = P(L<0) + P(R<0) − P(L<0, R<0),   Z_eff = Φ⁻¹(1 − p_fail),
-
-with the joint term from the bivariate-normal CDF (Owen's T; matches SciPy
-to 4×10⁻¹⁵). `effective_mu_sigma()` maps this back to the (μ, σ) convention
-(μ_eff/σ_eff ≡ Z_eff, σ_eff = √(σ_L σ_R)) so the downstream pipeline is
-untouched. The bias, verified in closed form and by MC:
-
-| ρ_LR | Z_gauss(min) | Z_true | bias | ≈ Vmin |
-|:----:|:------------:|:------:|:----:|:------:|
-| −0.7 | 7.77 | 5.89 | +1.89σ | +189 mV |
-| 0.0 | 6.58 | 5.89 | +0.70σ | +70 mV |
-| +0.9 | 5.92 | 5.90 | +0.02σ | +2 mV |
-
-Since real lobes respond oppositely to asymmetric mismatch (ρ ≤ 0 is
-plausible), this is a first-order correction, not a nicety. ρ_LR is measured
-in the Phase-2 pilot; the per-lobe `.MEASURE` requirement is fixed before
-the farm run.
-
-### 2.8 Noise-Aware GP
-
-Per condition we record N_MC and bootstrap standard errors (sem_μ, sem_σ;
-bootstrap rather than σ/√(2N) because the σ-SEM is kurtosis-sensitive).
-These variances feed a `FixedNoiseGaussianLikelihood` (with
-`learn_additional_noise`), so the GP down-weights noisy/low-budget
-conditions automatically. This is also the mechanism that unifies mixed MC
-budgets in one model: because MC low-fidelity differs only in *variance*
-(same simulator, fewer samples), a heteroscedastic single GP is the correct
-model — the Kennedy–O'Hagan bias term is unnecessary. (On corrupted
-synthetic data: μ RMSE 0.0059 → 0.0020 vs a homoscedastic GP.)
+`[Fig 1 — Pipeline overview: variation parameters → GP(μ,σ) → physics
+layer → Vmin, forward and inverse arrows. Placeholder.]`
 
 ---
 
-## 3. Experimental Results
+## 2. Problem Setup
 
-> Headline numbers below are on the controlled **analytic testbed**; real
-> HSPICE numbers replace them in Phase 2. Analytic results are used only to
-> validate the machinery and metric definitions, never as the paper's final
-> accuracy claims.
+### 2.1 Read stability and lobe statistics
 
-### 3.1 Ablation (re-run after the v0.4 fixes)
+The read SNM of a 6T cell is the minimum of the two butterfly-curve lobes.
+MC flows conventionally record the min's (μ, σ), but the min's left tail is
+heavier than a moment-matched Gaussian, so z = μ/σ systematically
+underestimates the failure probability. From per-lobe statistics
+(μ_L, σ_L, μ_R, σ_R, ρ_LR),
 
-| Config | μ R² | Vmin RMSE | Hausdorff | Note |
-|--------|:----:|:---------:|:---------:|------|
-| Baseline | 0.999 | **1.26 mV** | 0.50 mV | standardized GP at noise floor |
-| +L_mono | 0.999 | 1.59 mV | 0.59 mV | adds only training noise on monotone data |
-| +L_boundary | 0.999 | **0.92 mV** | 0.40 mV | −27% vs baseline |
-| +Mono+Boundary | 0.999 | 1.32 mV | 0.46 mV | — |
-| +All (··+Pelgrom) | 0.999 | **0.90 mV** | 0.35 mV | best |
+p_fail = P(L<0) + P(R<0) − P(L<0, R<0),  Z_eff = Φ⁻¹(1 − p_fail),
 
-**Corrected findings** (contrast the retracted v0.3 "L_boundary = 20.9%"):
-input standardization is the primary factor (baseline alone 6.52 → 1.26 mV);
-on top of that, corner anchoring gives a genuine ~27% reduction, largest in
-the tail. L_mono is inert on strictly monotone analytic data (re-evaluate on
-real data). μ RMSE sits at the 0.002 observation-noise floor throughout.
+which removes the bias; the joint term is the bivariate-normal CDF via
+Owen's T — closed-form and smooth in all inputs. Mapping Z_eff back to an
+effective (μ, σ) pair (μ_eff/σ_eff ≡ Z_eff, σ_eff = √(σ_Lσ_R)) leaves the
+downstream pipeline untouched.
 
-### 3.2 Physical Consistency
+### 2.2 Vmin definition and yield target
 
-- ∂Vmin/∂common_N < 0 and ∂Vmin/∂PU > 0 (both physical), cosine similarity
-  ≈ 1.0 vs the analytic gradient.
-- After standardization the GP recovers a sensitivity **hierarchy**: on
-  asymmetric synthetic data (PG 2×/3×), ℓ_pu/ℓ_cn tracks the imposed ratio
-  (0.86 → 1.31), where the unstandardized GP had frozen it at ≈1.0. The
-  current toy coefficients make PU slightly *more* sensitive, so the
-  PG≫PU lengthscale test is deferred to real data (§4.3) rather than used as
-  a gate.
+For a condition x, Vmin(x) linearly interpolates the voltage at which
+z(Vop) = μ/σ over the grid Vop ∈ {0.4, …, 0.8} V crosses a target Z_t.
+Z_t derives from the array yield model: for 256 Mb at 99% Poisson yield,
+p_fail = −ln(0.99)/(256·10⁶) and Z_t = Φ⁻¹(1 − p_fail) ≈ 6.50. The failure
+unit is the cell (bit); multiplying by six transistors is incorrect.
+Conditions with z(0.4 V) > Z_t have Vmin below the sampled range and are
+flagged as left-censored, excluded from continuous error metrics.
 
-### 3.3 Inverse Assist Estimation (Stage 3)
+### 2.3 The inverse problem
 
-Target Vmin = 0.60 V, WLUD design range [0.90, 1.00], corrected metrics:
-
-| Surrogate | Feasibility agree | WLUD RMSE | Vmin RMSE (assist-active) | p95 |
-|-----------|:-----------------:|:---------:|:-------------------------:|:---:|
-| plain GP | 99.9% | 0.0016 | 3.14 mV | 6.15 mV |
-| physics-constrained | **100.0%** | 0.0013 | **2.55 mV** | **3.87 mV** |
-
-Physics constraints help most in the tail (p95 −37%), consistent with
-corner anchoring correcting extrapolation.
-
-### 3.4 Gradient-Based Inversion (C1 demonstration)
-
-Three free variables x = (common_N, PU, WLUD), Adam through the
-differentiable pipeline with a sigmoid box reparameterization and
-feasibility barriers for the flat (censored / read-fail) regions. From 8
-starts across the plane, all converge to the minimum-assist design on the
-Vmin = 0.6 V manifold: **max |Vmin − target| = 2.41 mV**, and every
-converged design matches a 1-D WLUD bisection at its own (cn,pu) slice to
-**0.0000**. Gradient and grid agree, but the gradient walk is O(iters) per
-start vs O(K³) for a 3-D grid — the basis for scaling inversion to higher-
-dimensional design spaces.
-
-### 3.5 Why the Metric Definition Is a Contribution (C2)
-
-The same predictions score 0.16–0.26 V RMSE under a naive definition and
-2.6–4.9 mV under the corrected one — a ~60× difference — because the naive
-version (i) compared a GP that searches WLUD∈[0.9,1] against ground truth
-over [0.5,1], (ii) treated the censored 0.35 V floor as a measurement, and
-(iii) counted no-assist-needed cells (natural margin) as error. Reporting
-inverse accuracy therefore *requires* specifying design-range feasibility,
-censoring, and assist-active scoring.
-
-### 3.6 Variable-Dimensionality
-
-StandardScaler, both GP kernels, probe/anchor generators, and the full
-train→contour pipeline are verified 3-D through 8-D (auto ARD, additive
-kernel group growth). Six test suites pass.
+For a target V*, the set {x : Vmin(x) = V*} is a hypersurface (contour) in
+variation space. We formalize inversion as (i) extracting the geometry of
+this contour and (ii) finding the minimum assist (e.g., wordline
+underdrive) that returns a given operating point to it. Both are solved by
+gradient descent on the differentiable Vmin(x).
 
 ---
 
-## 4. Discussion
+## 3. Data Design
 
-### 4.1 Corner anchoring: cheap and tail-focused
-24 virtual corner points buy a ~27% Vmin-RMSE reduction concentrated at
-p95. For real PDKs this argues that a handful of corner simulations are
-worth their cost — but the effect is now correctly separated from the
-standardization fix that dominates the baseline.
+### 3.1 Input space
 
-### 4.2 L_mono on monotone data
-Zero penalty throughout on the analytic model; on real data with
-near-threshold non-monotonicity it may matter. Kept, but not claimed.
+The cell transistors are PU (PMOS pull-up), PD (NMOS pull-down), and PG
+(NMOS pass-gate). Inputs are nine device-variation dimensions plus the
+supply voltage.
 
-### 4.3 PG ≫ PU hierarchy — deferred, not failed
-The toy generator lacks the hierarchy, so its lengthscales cannot show it
-(and the standardized GP *does* recover imposed asymmetry, §3.2). This is a
-real-data measurement, reported in Discussion rather than used as a Go gate.
+| Variable | Meaning | Range |
+|---|---|---|
+| cn | NMOS common Vth shift (PG=PD baseline) | ±60 mV |
+| sk | PG−PD Vth skew | ±20 mV |
+| pu | PMOS Vth shift | ±60 mV |
+| lpu | PU local-σ multiplier | [0.7, 1.3] |
+| l_com, l_sk | NMOS local-σ common / PG−PD skew | [0.7, 1.3] / ±0.075 |
+| mpu | PU mobility multiplier | [0.7, 1.3] |
+| m_com, m_sk | NMOS mobility common / PG−PD skew | [0.7, 1.3] / ±0.075 |
+| Vop | supply voltage | {0.4, 0.5, 0.6, 0.7, 0.8} V |
 
-### 4.4 Tail validity of the z-score
-The z=μ/σ Gaussian extrapolation is a **margin metric** (industry-standard
-for Vmin spec setting), not an absolute fail-rate predictor. We defend it by
-(i) framing, (ii) Anderson–Darling/Q-Q QC in the z-crossing Vop band, and
-(iii) optional importance-sampling spot checks. The lobe-resolved z (§2.7)
-removes the largest *systematic* component of the error.
+Deck parameters are derived: Vth PG = cn+sk, PD = cn−sk; local-σ
+PG = l_com+l_sk, PD = l_com−l_sk; mobility likewise.
+
+### 3.2 Rationale for the common+skew parameterization
+
+PG and PD are the same NMOS flavor: their dominant variation sources (gate
+stack, channel doping, anneal, litho CD) are shared, and W/L, layout
+environment, and flavor differences produce imperfect tracking. Sampling
+the two devices independently would spend design points on states that do
+not occur in silicon — the same flavor diverging by ±30% in opposite
+directions at the mismatch level. The common+skew decomposition implies
+corr(l_PG, l_PD) ≈ 0.88, inside the plausible 0.85–0.95 tracking band and
+consistent with the Vth treatment (ρ ≈ 0.80). Common and skew are sampled
+independently — a property required by the variance-based sensitivity
+analysis of §5.6 — and the derived per-device multipliers may extend to
+[0.625, 1.375] when the common sits near a range edge, confirmed to be
+within the compact model's validity.
+
+`[Fig 2 — Design visualization: (a) quadrant weighting in the (cn, pu)
+plane; (b) independent (l_com, l_sk) box and the induced diagonal
+(l_PG, l_PD) band. Placeholder.]`
+
+### 3.3 Design of experiments
+
+Read (SNMR) and write (Vtrip) degrade in different worst-case quadrants, so
+they use separate deck sets with different (cn, pu) quadrant weights: the
+SNMR set allocates 45% to FSG (cn<0, pu>0), the write set 45% to SFG
+(cn>0, pu<0). Each set is 2,000 conditions × 5 Vop = 10,000 simulations;
+conditions are generated by deterministic pseudo-random draws (PCG64) with
+an independent stream per quadrant. Per-condition MC is N_MC = [TBD], with
+per-lobe statistics and ρ_LR collected [availability TBD].
+
+### 3.4 A transcription-free protocol
+
+Simulations run inside a fab from which neither netlists nor raw results
+can be exported. Because condition generation is deterministic, sharing
+only (stage, n_cond, seed, metric, method) makes the fab-side deck loop and
+the model-side condition table byte-identical; results come back labeled
+only by (Vop, deck number), and no condition is ever hand-transcribed. In a
+pilot where conditions *were* transcribed by hand, the row error rate was
+about 9% (§3.5) — the protocol is a data-integrity requirement, not a
+convenience.
+
+### 3.5 Design pitfalls and evaluation discipline
+
+An early pilot design re-used one QMC stream across all four quadrants,
+flipping only the signs of cn and pu. As a result, 75% of conditions had a
+mirror twin sharing the remaining seven coordinates, and under a random
+hold-out about 74% of test conditions had a twin in training — silently
+inflating accuracy metrics. We discovered this by forensic comparison of
+transcribed conditions against the reconstructed generator, then (i)
+removed the cause in the present design by giving each quadrant an
+independent stream and (ii) enforced mirror-group splits for any evaluation
+that touches the legacy data. Because design-induced leakage of this kind
+inflates metrics without any implementation bug, we recommend that
+surrogate-validation studies report their design-generation code and split
+rule together.
+
+### 3.6 Measurement and QC
+
+Per condition × voltage, MC histograms are checked with Anderson–Darling
+normality tests and Q-Q inspection at voltages near the z-crossing
+[summary TBD]. Transcribed results re-attach to the condition table by the
+(Vop, deck number) key; derived statistics (z, censoring flags) are
+recomputed by the parser.
 
 ---
 
-## 5. Status & Roadmap
+## 4. Method
 
-### 5.1 Done
-- GP + differentiable physics layer; corrected Z_target; censoring-aware
-  Vmin.
-- Root-cause fixes (input scaling, L_pelgrom) and honest ablation.
-- Metric-definition framework; inverse assist GO (2.55 mV).
-- Lobe-resolved Z_eff, noise-aware GP, MC-stats parser/QC (all tested).
-- Budget-vs-accuracy sweep and gradient-inversion demos.
+### 4.1 GP surrogate
 
-### 5.2 Next (see `docs/plans/phase2_to_paper_plan.md`)
-| Priority | Task |
-|----------|------|
-| 🔴 | HSPICE Step A validation deck **with per-lobe measures + ρ_LR** |
-| 🔴 | Stage-4/5 real-data forward + inverse validation (noise-aware GP) |
-| 🟡 | Active-learning (contour-targeted) and budget-allocation experiments |
-| 🟡 | Write-margin (WSNM) pilot → Vmin = max(read, write) |
-| 🟢 | 8-D Sobol DOE + sensitivity; PINN only if a transition trigger fires |
+The μ GP uses Matern-5/2 with ARD; the σ GP uses an additive kernel
+separating the operating-voltage group from the device-variation group.
+All inputs are standardized with training statistics. This is not
+cosmetic: with mV, V, and dimensionless multipliers in one input,
+unstandardized training under-converges silently, and most of what our
+early experiments attributed to physics constraints was in fact this fix
+(§5.5).
 
-### 5.3 Venue
-IEEE TCAD (primary, full method+experiments); DAC/ICCAD as a compressed
-alternative. Draft starts once Phase-2 forward/inverse and the §3.4/§3.5
-methodology results are in on real data.
+### 4.2 Differentiable physics layer
+
+Per condition, (μ, σ) predictions on the five voltages give z(Vop), whose
+crossing with Z_t is linearly interpolated into Vmin. Interval selection is
+discrete, but the first derivative is well-defined inside each interval;
+censored conditions are flagged out. Every path that needs posterior
+gradients (monotonicity penalty, gradient inversion) evaluates the
+eval-mode posterior so gradients flow to the inputs.
+
+### 4.3 Physics constraints
+
+Corner anchoring augments training with virtual observations at the four
+global corners × 5 Vop (a hard constraint under an exact GP). The
+monotonicity penalty ReLU(−∂μ/∂Vop)² is evaluated on probe points through
+the posterior; a Pelgrom-style linear σ(Vop) trend enters as weak
+regularization. Contributions are isolated in §5.5.
+
+### 4.4 Noise-aware GP
+
+Per-condition bootstrap standard errors (sem_μ, sem_σ) feed a fixed-noise
+likelihood; bootstrap rather than the analytic σ/√(2N) because the σ-SEM is
+kurtosis-sensitive. Low-budget conditions are automatically down-weighted,
+and this same mechanism unifies mixed budgets: when low fidelity is merely
+fewer samples from the same simulator, a heteroscedastic single GP is the
+correct model and the Kennedy–O'Hagan bias term is unnecessary.
+
+### 4.5 Gradient inversion
+
+With x as a leaf tensor under a sigmoid box reparameterization and
+feasibility barriers, Adam minimizes (Vmin(x) − V*)². Convergence to the
+contour is checked from multiple starts, and each converged point is
+compared against a 1-D bisection on its own slice.
 
 ---
 
-## 6. References (internal)
+## 5. Experiments
+
+### 5.1 Protocol
+
+Hold-out splits are condition-level (all five Vop rows of a condition stay
+on one side), at 15%. The present batch contains no mirror twins by
+construction (§3.5), so condition-level splitting suffices; every
+experiment that references legacy pilot data uses mirror-group splits.
+Vmin errors are reported on the non-censored set with the censoring rate
+alongside.
+
+### 5.2 Forward accuracy
+
+`[Table: hold-out μ R², μ RMSE, σ R², σ RMSE — TBD]`
+`[Fig 3 — Predicted vs measured scatter (μ, σ), hold-out. Placeholder.]`
+
+### 5.3 Vmin contours (inverse problem i)
+
+Hausdorff distance between GP and hold-out MC contours at the target level
+Vmin = [TBD] V: [TBD] mV. At measured conditions nearest the four corners,
+|Vmin_pred − Vmin_MC| = [TBD] mV, evaluated with the boundary-off
+configuration to avoid double-use of anchors.
+
+`[Fig 4 — Vmin contours in the (cn, pu) plane: GP vs hold-out MC overlay
+with the four corner points, at sk=0 and nominal multipliers.
+Placeholder.]`
+
+### 5.4 Gradient inversion (inverse problem ii)
+
+On the analytic testbed, all eight starting points converge to the
+minimum-assist design on the Vmin = 0.6 V manifold (max |Vmin − target| =
+2.41 mV), and every converged point matches a 1-D bisection on its slice to
+four decimal places. Real-data reproduction: [TBD].
+
+`[Fig 5 — Inversion trajectories: multi-start gradient paths over the
+(cn, pu) plane with the target contour. Placeholder.]`
+
+### 5.5 Constraint ablation and budget curves
+
+On the analytic testbed (standardization controlled): baseline Vmin RMSE
+1.26 mV; corner anchoring 0.92 mV (−27%), with the gain concentrated at
+p95 (−37%). The monotonicity penalty is inert on monotone data. Real-data
+ablation: [TBD]. Budget-accuracy curves obtained by subsampling training
+conditions test whether the anchor gain concentrates at low budgets:
+[TBD].
+
+`[Fig 6 — Budget–accuracy Pareto: number of conditions × (Vmin RMSE,
+Hausdorff), constraints on/off. Placeholder.]`
+
+### 5.6 Sensitivity
+
+Inverse ARD lengthscales are reported by group (Vth, local-σ, mobility ×
+common/skew/PU), alongside variance-based Sobol indices — valid here
+because common ⊥ skew by design: [TBD]. Of particular interest are
+(i) whether ℓ_cn < ℓ_pu (the PG-dominance hierarchy) holds, and
+(ii) whether l_sk/m_sk act at second order. If PG−PD multiplier mismatch
+proves second-order for read SNM, that is itself a finding about design
+parameter prioritization.
+
+`[Fig 7 — Grouped sensitivity: ARD-based vs Sobol indices, side-by-side
+bars. Placeholder.]`
+
+### 5.7 External validation: the nominal slice and dimension scaling
+
+A 4-D batch (cn, sk, pu, Vop; 348 conditions, multipliers nominal),
+designed and executed independently of the present batch, provides
+measured points on the (l=m=1, skew=0) plane of the 9-D space. Agreement
+between the 9-D model projected onto this plane and the 4-D measurements
+([TBD]) directly tests generalization on a plane outside the training
+draw. We additionally report hold-out accuracy across the 3D/4D/9D batches
+to show degradation with dimensionality at fixed budget [TBD]. The 4-D
+batch is a pilot-generation design, so its own metrics are recomputed
+under mirror-group splits [TBD].
+
+`[Fig 8 — Nominal-slice external validation: projected 9-D predictions vs
+4-D measurements. Placeholder.]`
+
+### 5.8 MC QC
+
+`[Fig 9 — MC histograms + Q-Q near the z-crossing voltage, with an example
+of censored classification. Placeholder.]`
+
+---
+
+## 6. Limitations and Threats
+
+The Gaussian extrapolation in z = μ/σ is used as an industry-standard
+margin metric, not an absolute fail-rate predictor; we defend it with
+normality QC at the z-crossing voltages and optional importance-sampling
+spot checks, and the lobe-resolved z_eff removes the largest systematic
+component. Results concern one node, one cell topology, and primarily the
+read metric; the write-margin deck set is [TBD]. The multiplier spill band
+[0.625, 0.7) ∪ (1.3, 1.375] sits at the edge of compact-model calibration,
+so predictions there should be read conservatively. The PDK is
+proprietary; absolute values are not reproducible, so we release the
+analytic testbed in full and report normalized-axis results for relative
+comparison.
+
+## 7. Related Work
+
+MFNN+IS (Guo et al., ISEDA'24) and Bayesian active learning (Yin et al.,
+DAC'22, ASPDAC'23) target forward yield estimation; we differ in the
+inverse formulation over physical parameters and the differentiable
+pipeline. Tail-accurate importance sampling (Liu et al., DAC'23, OPTIMIS)
+is complementary to a margin-metric surrogate. Against analytic Vmin
+models (Gupta & Calhoun, TCAS-I'21), the GP offers flexibility in physical
+parameter extension and constraint injection. Standard QMC yield analysis
+(Singhee & Rutenbar, TCAD'10) and space-filling designs (Kinoshita,
+TSM'25) underpin our DOE.
+
+## 8. Conclusion
+
+We proposed a pipeline that serves forward and inverse SRAM Vmin queries
+from a single simulation budget, combining a GP surrogate with a
+differentiable physics layer, and validated it on production-calibrated
+data from an advanced node ([TBD] conditions). The lobe-resolved effective
+z, noise-aware budget unification, the censoring-aware metric framework,
+and the transcription-free protocol with leakage-free evaluation
+discipline are reusable components for carrying surrogate-based yield
+methodology onto real industrial data.
+
+---
+
+## Appendix A. Metric definitions
+
+Formal definitions of design-range feasibility agreement, left-censoring
+handling, and assist-active scoring; the reproduction table for the ~60×
+gap of the naive metric on identical predictions.
+
+## Appendix B. Reproducibility contract
+
+Condition-generator version, seed, quadrant weights, ranges, and the deck
+numbering convention. Full analytic-testbed code released [repository TBD].
+
+## Internal references (remove before submission)
 
 | Document | Location |
-|----------|----------|
-| Master plan | `sram_vmin_inverse_estimation_plan.md` |
+|---|---|
+| Design audit and rerun decision | `docs/decisions/legacy_design_audit_20260714.md` |
 | Phase-2 → paper plan | `docs/plans/phase2_to_paper_plan.md` |
 | Root-cause fixes | `docs/decisions/session_20260706_root_cause_fixes.md` |
 | Adversarial review | `docs/decisions/adversarial_review_20260707.md` |
-| Ablation log | `docs/decisions/physics_ablation.md` |
-| Deck generation | `docs/plans/deck_generation_plan.md` |
-
-External: Singhee & Rutenbar TCAD'10 (QMC); Guo ISEDA'24 (MFNN+IS); Yin
-DAC'22 / ASPDAC'23 (Bayesian AL); Liu DAC'23 (OPTIMIS/IS); Gupta & Calhoun
-TCAS-I'21 (dynamic Vmin); Kinoshita TSM'25 (space-filling LHD).
-
----
-
-*Living document; revised each major phase. v0.4 supersedes v0.3's
-physics-constraint numbers in full.*
