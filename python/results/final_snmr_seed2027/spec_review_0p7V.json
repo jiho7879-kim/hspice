@@ -1,0 +1,37 @@
+{
+  "spec_t0_V": 0.625,
+  "spec_eol_V": 0.675,
+  "z_target": 6.5,
+  "raw_0p8V_changes_spec_decision": {
+    "t0_disagreements": 0,
+    "eol_disagreements": 0,
+    "max_abs_z_diff_t0": 0.0,
+    "max_abs_z_diff_eol": 0.0
+  },
+  "population": {
+    "n": 2000,
+    "pass_t0": 1624,
+    "pass_eol": 1771,
+    "fail_eol": 229
+  },
+  "gp_from_0p7V_spec_agreement": {
+    "t0": {
+      "agreement": 295,
+      "n": 300,
+      "tp": 252,
+      "tn": 43,
+      "fp": 4,
+      "fn": 1
+    },
+    "eol": {
+      "agreement": 298,
+      "n": 300,
+      "tp": 268,
+      "tn": 30,
+      "fp": 1,
+      "fn": 1
+    },
+    "z_rmse_t0": 0.569449614637621,
+    "z_rmse_eol": 0.314797544449119
+  }
+}

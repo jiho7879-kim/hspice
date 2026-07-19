@@ -1,0 +1,8 @@
+{
+  "n_conditions": 2000,
+  "n_newly_resolved_by_0p8V": 90,
+  "gp_from_0p7V_rmse_mV_all_resolved": 10.14783712408191,
+  "gp_from_0p7V_rmse_mV_newly_resolved": 20.770774549160034,
+  "gp_from_0p7V_rmse_mV_already_resolved": 9.143717739078522,
+  "n_newly_resolved_gp_also_finite": 90
+}

@@ -1,0 +1,124 @@
+{
+  "_format_version": "1.0",
+  "project": "HSPICE SRAM Vmin Estimation",
+  "phase": "Phase 2 Stage C - GO",
+  "phase_label": "Phase 2: Stage C (read-write integrated Vmin, SNMR+Vtrip) PASSED 2026-07-13. Stage B (4D +skew) PASSED 2026-07-13. Stage A PASSED 2026-07-09. Master plan docs/plans/phase2_to_paper_plan.md.",
+  "active_plan": "docs/plans/phase2_to_paper_plan.md",
+  "done_2026-07-13_impl7": [
+    "DONE Stage C read-write integrated Vmin: GO. Vtrip write-margin data (stageB_bwrm, 399 conditions x 5 Vop = 2000 samples, @-40C) cleaned (see QC below) + gated: hold-out mu R2=0.9990 (RMSE 2.67mV), gradient OPPOSITE to SNMR (dVmin_Vtrip/dcn=+0.00198>0, dVmin_Vtrip/dpu=-0.00161<0), SFG worst write corner (0.625V) confirmed. Vtrip ell_pu=6.81 smallest -> pu(PMOS) most sensitive for write (vs cn/PG for read). Combined Vmin=smooth_max(SNMR,Vtrip,alpha=2mV): range [0.477,0.850]V, read-limited 43.5%/write-limited 56.5%, SADDLE surface high at both FSG(read,0.85) and SFG(write,0.655). scripts/stageC_readwrite.py, results/stageC_readwrite/. See docs/decisions/stageC_readwrite_gate.md.",
+    "DONE Stage C read-write skew co-optimization (scripts/stageC_skew_cooptimization.py): skew is a PURE read-write tradeoff -- +skew helps read (dVmin_SNMR/dsk~-2.3..-3.4mV/mV) but hurts write (dVmin_Vtrip/dsk~+2.4..+6.2). Worst-case array Vmin (max over 4 real PDK corners) minimized at sk*~-2mV (near-symmetric), 599.9mV, only +3.1mV vs sk=0 -> nominal symmetric PG=PD near-optimal, keep skew tolerance tight (contrast SNMR-only where +skew looked purely beneficial). Combined-Vmin Sobol interaction-dominated (ST>>S1, SumS1~0.32 from read-write max coupling): cn ST=0.887 > pu 0.627 > sk 0.271. See stageC_readwrite_gate.md.",
+    "DONE Stage C bwrm(Vtrip) data QC + user fixes: caught (via qc_bwrm.py) 1 non-numeric std ('2..18'), ~9 gross avg decimal slips (e.g. 174026->174.03, 154078->154.08), ~9 gross std decimal slips (e.g. 26027->26.03, 2478->24.78), 3 avg off-trend (num6/11/400), 1 coordinate collision (18,-27,-1). User fixed all across iterations -> final bwrm clean (0 non-numeric, std [14.4,27.7], monotonic except benign dup (16,0,14)). num75/95 (avg 415/404mV) are VALID high-Vtrip slow-PMOS corners, not errors. NOTE: snmr/bwrm condition sets overlap only 214 (different Sobol n_cond) -- fine for per-metric GP + common-grid combine."
+  ],
+  "done_2026-07-13_impl6": [
+    "DONE Stage B real-data Gate (4D cn,sk,pu,Vop): GO. Data 260713_stageB_snmr.xlsx = 348 conditions x 5 Vop (0.4-0.8) = 1745 samples, hand-transcribed PrimeSim. scripts/stageB_real_data.py: hold-out mu R2=0.9785 (RMSE 6.47mV), sigma R2=0.53 (sigma ~const 12.8-15.5mV, RMSE 0.18mV fine), gradient dir physical (dVmin/dcn<0, dVmin/dpu>0), FSG worst-corner CONFIRMED (only corner not crossing Z=6.5 within 0.4-0.8, i.e. Vmin(FSG)>0.8V; auto-check SKIP because no finite value to max()). Lengthscale hierarchy ell_cn=6.28 < ell_pu=7.13 ~= ell_sk=7.21 -> cn(PG) most sensitive (ell_pu/cn=1.14, reproduces Stage A PG>>PU); skew sensitivity ~= PU (gentle). Results results/stageB_real/. See docs/decisions/stageB_real_data_gate.md.",
+    "DONE parser sk bug: hspice_io._vop_interpolation_outlier_qc built condition key as 3-tuple (cn,sk,pu) when sk present but unpacked as 2-tuple (c,p) -> crash. Fixed sk-agnostic unpack + sk in flag dict. Closes the OPEN 'add sk to parse_manual_xlsx' item (X-build itself was already 4D-correct).",
+    "DONE Stage B data QC + fixes: over 3 user iterations caught 3 coordinate/pu-sign condition errors (user fixed) + 9 avg cells (5 gross decimal slips e.g. 8079->80.79, 36377->36.77; +3-cell shifted condition 16-18) + 2 std decimal slips (1284->12.84, 135->13.5). 11 residual cells fixed in-place via openpyxl (backup 260713_stageB_snmr_pre_fix_backup.xlsx); final QC 0 flags. Benign duplicate condition (16,0,14) 10x kept (dVop<0.5mV MC noise).",
+    "DONE Stage B SNMR-only downstream analyses (scripts/stageB_snmr_analysis.py, since Vtrip/bwrm data not ready -- stageB_bwrm=1 row, stageD sheets empty): (A) PG-PD skew tolerance -- dVmin/dsk~-2.6mV/mV (positive skew=slower PG=lower Vmin/better read stability), ~110mV Vmin swing over sk[-20,20]; FSG worst corner skew-constrained (needs sk>=+15 for 0.55V budget) while benign corners tolerate full range -> positive skew is a design lever at FSG. This is the plan's 'required WLUD -> allowable skew tolerance' reframing. (B) GP-based Sobol on Vmin: cn S1=0.484/ST=0.507, pu 0.364/0.400, sk 0.138/0.145 -- near-additive, cn dominant, skew ~14% (smaller partly due to +-20 range vs +-60; per-mV ~= pu). (C) Vmin=0.6V boundary shifts ~20-30mV up-left per +20mV skew. Plots+summary in results/stageB_real/. See stageB_real_data_gate.md."
+  ],
+  "done_2026-07-07_impl": [
+    "DONE lobe-resolved Z_eff: utils.bvn_cdf/z_eff_from_lobes/effective_mu_sigma + test_zeff.py (8 tests, A1 bias +0.697 sigma regression-pinned)",
+    "DONE noise-aware GP: models likelihood arg + surrogate.fit(y_noise=) + FixedNoiseGaussianLikelihood + test_noise_aware.py (RMSE 0.0059->0.0020 on corrupted); fixed latent Surrogate.load weights_only bug",
+    "DONE parser QC: hspice_io.bootstrap_sem/condition_qc/lobe_mc_summary/write_qc_report + data.save_with_noise/load_with_noise + test_parser_qc.py",
+    "all 6 test suites pass by exit code"
+  ],
+  "done_2026-07-07_impl2": [
+    "DONE scripts/budget_pareto.py (plan 4.2): N x strategy x physics x seeds sweep, censored-aware Vmin RMSE + contour Hausdorff, seed error bars, --smoke/--full. Smoke verified.",
+    "DONE scripts/demo_gradient_inversion.py (plan 4.1): x=(cn,pu,WLUD) autograd inversion through GP posterior + physics layer, sigmoid box reparam, feasibility barriers (C8). GO: 8/8 min-assist manifold convergence, Vmin max err 2.41mV, gradient-vs-bisection WLUD 0.0000."
+  ],
+  "done_2026-07-08_impl3": [
+    "DONE budget_pareto seeds=10 full run (300/300 cells), survived 3 mid-run kills via checkpoint/resume (pareto_checkpoint.json). Headline N-vs-accuracy trend confirmed (RMSE 5.1->1.4mV, N~400 knee). Corner-hold-out Wilcoxon (corner_significance.json, computed post-hoc since original _paired_significance only covered the uniform metric): physics-on beats plain on CORNER Vmin RMSE, pooled diff=-1.29mV p<1e-6, concentrated at N<=100 (matches the review's low-budget hypothesis) and vanishing by N=800. stratified_sobol does NOT beat random/sobol_uniform on either uniform or corner metrics -- that claim is retracted. See docs/decisions/budget_pareto_review.md sec 3-4 (filled)."
+  ],
+  "done_2026-07-09_impl4": [
+    "DONE Stage 4 real-data Gate: GO (3/3 PASS). User hand-transcribed data/hspice_real.xlsx (201 conditions x 6 Vop = 1206 samples, in-house PrimeSim). Added hspice_io.parse_manual_xlsx + _parse_manual_df (shared with parse_manual_csv) + transcription-error QC (_median_digit_shift_qc, _vop_interpolation_outlier_qc) -- caught 1 avg outlier + 5 median digit-shift typos, user fixed them mid-session before the Gate run (QC flags=0 on the run used for the Gate). scripts/stage4_real_data.py: hold-out mu R2=0.9992, gradient direction physical, FSG confirmed worst corner (matches plan's prediction), ell_pu/ell_cn=1.08 (right direction, weak magnitude -- first-ever real-data PG>>PU signal, informational not a gate). Results: results/stage4_real/. See docs/decisions/stage4_real_data_gate.md."
+  ],
+  "done_2026-07-09_impl5": [
+    "DONE corner recalibration study (5 approaches): GP systematically UNDER-predicts mu at real process corners (extrapolation bias, up to -20mV at Vop=0.9), first real-data confirmation of the review's corner-anchor hypothesis. Vmin impact smaller (FSG +23mV) since Z-crossing Vop is less sensitive. Compared noise-weight/dup-50x/noise-contrast/one-hot-feature/per-corner-residual. WINNER: per-corner residual correction (sep) -- FSG error 0.0mV AND keeps global contour smooth (dup-50x also hits 0mV but WARPS the contour, unsafe for inverse estimation). Corner coords are the PDK's REAL 3-sigma shifts (FFG(-36,-44) FSG(-29,+39) SFG(+32,-37) SSG(+36,+45)mV), NOT the analytic +-60 assumption -- so the earlier 'corners not sampled' note was wrong, corrected in stage4_real_data_gate.md sec 5. See docs/decisions/corner_recalibration_20260709.md.",
+    "DONE reviewed the two revised plans (deck_scenarios.md, revised_sim_plan_20260709.md). Verdict: sound and well-developed. Verified with real data: (a) Vop 0.9 removal justified -- 0/201 conditions cross Vmin in [0.8,0.9] at Z=4/5/6, and [0.7,0.8] has <=1, so Vop 0.4-0.7 (4 levels) may suffice at Z<=5. (b) global-sigma = cn/pu amplitude scaling is physically sound (Pelgrom-linear). (c) smooth_max alpha=0.01V gives 6.93mV crossing bias (numerically verified) -- too large, recommend alpha<=0.002V; fixed in deck_scenarios.md. Risks flagged: MC-mismatch on overlap reuse needs n_mc + noise-aware GP; Z_target still undecided (upstream of everything); weighted-Sobol biases Saltelli sensitivity (use GP-based sensitivity instead). See docs/decisions/revised_plan_review_20260709.md."
+  ],
+  "next_actions": [
+    "DONE 2026-07-09: Z_target = 6.50 (256Mb @ 99% Poisson, derive_z_target). Z_FIXED 6.0->6.50 in src/utils.py, all tests pass. Vop 5 levels (0.4-0.8) confirmed necessary+sufficient at this Z (real-data crossing 100% within 0.4-0.8, [0.8,0.9]=0). Poisson==Binomial at array scale. 128Mb(6.40)/256Mb(6.50) switchable via derive_z_target(mb=). Absolute Vmin +~25mV vs old Z=6.0; contour/RMSE unchanged.",
+    "Adopt per-corner residual correction (sep) as the production corner-accuracy fix; re-evaluate vs L_boundary training anchors once Phase-4 skew/sigmaL adds many more corners",
+    "DONE 2026-07-09: launch decisions settled with user -- skew +-20mV kept; n_mc transcription now required; sensitivity via GP-based Sobol (not weighted-Sobol) to avoid Saltelli bias; transcription precision cn/pu/skew=integer mV, loc/mom=2 decimals (Vmin error from integer rounding <=0.7mV, negligible). See revised_plan_review_20260709.md sec 3.6/4.",
+    "DONE 2026-07-09: deck also NOT exportable -> conditions hand-transcribed too. But WE generate the Sobol, so scripts/gen_condition_sheet.py ships a sheet with conditions PRE-FILLED (cn/[sk/]pu/[loc/mom/]vop at the decided precision) + blank snmr_avg/std/n_mc; user fills only results. 3.7x less transcription (9D pilot 27.5k->7.5k numbers), round-trips through parse_manual_xlsx. Stages A/B/D.",
+    "DONE 2026-07-09: portable condition generator. deck also not exportable AND fab uses its own deck script -> ship src/inhouse_deck_gen.py WHOLE (FROZEN CORE = generate_conditions/_unit_samples/_quadrant_cnpu/deck_number/iter_decks, DO-NOT-MODIFY; SITE ADAPTER = deck template/paths/sim call). Same code in src/condition_gen.py for our local sheet gen. method='rng' (numpy PCG64, version-stable) so fab+local reproduce identical conditions from (stage,n_cond,seed,metric,method). Deck numbering TT-N restarts each Vop over condition index -> results matched by (vop, deck_no) alone, zero condition transcription. tests/test_condition_gen.py (6 tests: determinism, precision, FROZEN-CORE identical across both files, TT-N numbering, sheet==fab records, param mapping). Spec for in-house assist: docs/plans/inhouse_condition_gen_spec.md.",
+    "DONE 2026-07-13: parse_manual_xlsx sk support complete. X-build was already 4D-correct (has_sk branch, sk between cn/pu, vop_col=3); the remaining gap was _vop_interpolation_outlier_qc unpacking the sk-3-tuple key as 2-tuple (crash) -- fixed. render_deck/_render_vth_skew skew arg was already implemented. Stage B gate ran clean on the fixed parser.",
+    "OPEN: src.data.stratified_train_test_split groups by X[:,:2] = (cn,sk) in Stage B, not the full (cn,sk,pu) condition -- data-leakage-adjacent. Stage B gate used a local device-column-grouped split to avoid it; refactor helper to take vop_col/n_device and group by all device dims.",
+    "OPEN: Stage B gate FSG worst-corner auto-check returns SKIP when Vmin(FSG)>max Vop (no finite value to max()). Add 'FSG censored-high while others finite => worst-corner PASS' rule. Also carry the 'worst skew corner Vmin>0.8V' note into Vop-range sufficiency (Stage A 0.4-0.8 claim is distribution-dependent).",
+    "DONE 2026-07-13: reframed inverse demo as allowable PG-PD skew tolerance (stageB_snmr_analysis.py analysis A) -- dVmin/dsk~-2.6mV/mV, allowable-skew windows per corner, FSG needs positive skew. Full gradient-inversion (target Vmin -> feasible (cn,sk,pu) manifold) still TODO if a paper figure needs it.",
+    "papers/paper_en.md v0.4 -> v0.5: fold in Stage 4 real-data GO + corner recalibration (sep) + budget_pareto corner-significance + retract stratified_sobol claim",
+    "Cleanup: prune inferior corner-retrain result folders/scripts (dup/noise/feat/retrain), keep sep + contour + verification (results recorded in corner_recalibration_20260709.md)"
+  ],
+  "phase_history": [
+    {
+      "phase": "Stage 1",
+      "status": "completed",
+      "summary": "3D baseline GP - mu RMSE 0.00206, contour GO"
+    },
+    {
+      "phase": "Stage 2",
+      "status": "completed",
+      "summary": "4D + WLUD ratio - mu RMSE 0.00237, monotonicity 100%"
+    },
+    {
+      "phase": "Stage 3 init",
+      "status": "completed",
+      "summary": "PhysicsConstrainedSurrogate 4D - mu RMSE 0.039, Vmin RMSE 0.156V NO-GO (later shown to be bugs, see 2026-07-06)"
+    },
+    {
+      "phase": "Stage 3a",
+      "status": "completed",
+      "summary": "2026-07-06: NO-GO root causes fixed. (1) physics.py missing input StandardScaler -> 4D mu RMSE 0.049->0.0023; (2) L_pelgrom was a no_grad no-op, fixed; (3) three metric artifacts in validate_assist_sweep (design-range mismatch, censored floor, no-assist cells) -> true inverse accuracy 2.6-4.9 mV, feasibility agreement 99.2-99.9%. Stage 3 GO. Ablation re-run: baseline 1.26mV, +boundary 0.92mV (-27%), all 0.90mV. See docs/decisions/session_20260706_root_cause_fixes.md"
+    }
+  ],
+  "ngspice_track": {
+    "status": "paused_by_user_2026-07-06",
+    "note": "Verified findings (SNM extraction bug, broken model card, repaired card 14nm_HP_sram.pm, no-OSDI build) recorded at top of docs/decisions/ngspice_integration.md. Resume checklist there."
+  },
+  "bg_queue": [],
+  "bg_queue_history": [
+    {
+      "task_id": "bg_c838db51",
+      "action": "add",
+      "timestamp": "2026-07-02T06:04:08.661015+00:00"
+    },
+    {
+      "task_id": "bg_c838db51",
+      "action": "resolved_stale",
+      "timestamp": "2026-07-06T00:00:00+00:00",
+      "note": "superseded by 2026-07-06 root-cause session"
+    }
+  ],
+  "documentation": {
+    "trial_log_updated": "docs/decisions/session_20260706_root_cause_fixes.md#8",
+    "phase_summary_updated": "docs/decisions/session_20260706_root_cause_fixes.md",
+    "decisions_logged": [
+      "docs/decisions/toy_validation_results.md",
+      "docs/decisions/session_20260702_summary.md",
+      "docs/decisions/physics_ablation.md",
+      "docs/decisions/ngspice_integration.md",
+      "docs/decisions/session_20260706_root_cause_fixes.md",
+      "docs/plans/phase2_to_paper_plan.md",
+      "docs/decisions/adversarial_review_20260707.md"
+    ]
+  },
+  "open_questions": [
+    "HSPICE farm data generation timing (deck_generation_plan.md) - carry the censored/assist-active metric definitions into the parser",
+    "L_mono value on real (possibly non-monotonic) HSPICE data - re-evaluate; on analytic toy it only adds training noise",
+    "Switch Z_FIXED 6.0 -> derive_z_target() (6.64) when absolute Vmin matters (fixed +shift, shapes unchanged)"
+  ],
+  "stage3_final": {
+    "date": "2026-07-06",
+    "script": "python/scripts/demo_assist.py",
+    "output": "python/results/stage3_assist/",
+    "target_vmin_V": 0.60,
+    "verdict": "GO (3/3 PASS)",
+    "physics_vs_plain": "Vmin RMSE assist-active 2.55 vs 3.14 mV (-19%), p95 3.87 vs 6.15 mV (-37%), feas agreement 100.0 vs 99.9%"
+  },
+  "session_start_checklist": {
+    "read_harness": false,
+    "read_workflow_state": false,
+    "read_agents_md": false,
+    "read_decisions": false,
+    "check_bg_queue": false
+  }
+}

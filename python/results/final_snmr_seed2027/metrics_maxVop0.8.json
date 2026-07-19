@@ -1,0 +1,30 @@
+{
+  "max_transcribed_vop": 0.8,
+  "available_vops": [
+    0.4,
+    0.5,
+    0.6,
+    0.7,
+    0.8
+  ],
+  "n_conditions_total": 2000,
+  "n_train_rows": 8498,
+  "n_holdout_rows": 1500,
+  "noise_aware": true,
+  "mu_rmse_mV": 5.436775452397052,
+  "mu_r2": 0.9833876431020959,
+  "sigma_rmse_mV": 0.2989695443396853,
+  "sigma_r2": 0.9724054624041012,
+  "ell_cn": 7.376497745513916,
+  "ell_pu": 8.079700469970703,
+  "ell_pu_over_cn": 1.0953301619165337,
+  "vmin_rmse_mV_holdout": 14.107672602632412,
+  "n_holdout_scored": 245,
+  "n_holdout_conditions": 300,
+  "vop_sufficiency": {
+    "n_resolved": 1615,
+    "n_left_censored": 306,
+    "n_needs_higher_vop": 79,
+    "pct_needs_higher_vop": 3.95
+  }
+}

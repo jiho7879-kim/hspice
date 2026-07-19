@@ -1,0 +1,142 @@
+{
+  "baseline": {
+    "config": "baseline",
+    "label": "Baseline GP",
+    "train_time_s": 66.0,
+    "mu_rmse": 0.002079,
+    "mu_r2": 0.9992,
+    "sigma_rmse": 0.000514,
+    "sigma_r2": 0.6659,
+    "vmin_rmse_mV": 1.263,
+    "vmin_max_err_mV": 3.247,
+    "vmin_bias_mV": 0.216,
+    "hausdorff_mV": 0.504,
+    "area_overlap": 0.0,
+    "dVmin_dcn": -0.00557,
+    "dVmin_dpu": 0.00847,
+    "grad_cosine_sim": 1.0,
+    "grad_mag_ratio": 0.9823,
+    "lengthscales_mu": [
+      5.355807781219482,
+      4.8933610916137695,
+      5.859503746032715
+    ],
+    "lengthscales_sigma": [
+      6.5488481521606445,
+      5.3323750495910645,
+      5.126539707183838
+    ]
+  },
+  "mono": {
+    "config": "mono",
+    "label": "+L_mono",
+    "train_time_s": 75.7,
+    "mu_rmse": 0.002077,
+    "mu_r2": 0.9992,
+    "sigma_rmse": 0.000517,
+    "sigma_r2": 0.6625,
+    "vmin_rmse_mV": 1.586,
+    "vmin_max_err_mV": 4.815,
+    "vmin_bias_mV": 0.242,
+    "hausdorff_mV": 0.589,
+    "area_overlap": 1.0,
+    "dVmin_dcn": -0.00562,
+    "dVmin_dpu": 0.00847,
+    "grad_cosine_sim": 1.0,
+    "grad_mag_ratio": 0.9853,
+    "lengthscales_mu": [
+      5.377828598022461,
+      4.872909069061279,
+      5.9440813064575195
+    ],
+    "lengthscales_sigma": [
+      6.6211395263671875,
+      5.435665130615234,
+      5.1937079429626465
+    ]
+  },
+  "boundary": {
+    "config": "boundary",
+    "label": "+L_boundary",
+    "train_time_s": 133.7,
+    "mu_rmse": 0.002061,
+    "mu_r2": 0.9992,
+    "sigma_rmse": 0.000511,
+    "sigma_r2": 0.6704,
+    "vmin_rmse_mV": 0.918,
+    "vmin_max_err_mV": 3.097,
+    "vmin_bias_mV": 0.219,
+    "hausdorff_mV": 0.399,
+    "area_overlap": 0.0,
+    "dVmin_dcn": -0.006,
+    "dVmin_dpu": 0.00807,
+    "grad_cosine_sim": 0.9987,
+    "grad_mag_ratio": 0.9751,
+    "lengthscales_mu": [
+      5.340930938720703,
+      4.819578647613525,
+      6.039717197418213
+    ],
+    "lengthscales_sigma": [
+      6.771827220916748,
+      5.278936386108398,
+      5.275009632110596
+    ]
+  },
+  "mono_boundary": {
+    "config": "mono_boundary",
+    "label": "+Mono+Boundary",
+    "train_time_s": 116.4,
+    "mu_rmse": 0.00206,
+    "mu_r2": 0.9992,
+    "sigma_rmse": 0.000514,
+    "sigma_r2": 0.6657,
+    "vmin_rmse_mV": 1.315,
+    "vmin_max_err_mV": 3.423,
+    "vmin_bias_mV": 0.272,
+    "hausdorff_mV": 0.457,
+    "area_overlap": 0.0,
+    "dVmin_dcn": -0.00565,
+    "dVmin_dpu": 0.00846,
+    "grad_cosine_sim": 1.0,
+    "grad_mag_ratio": 0.9862,
+    "lengthscales_mu": [
+      5.389311790466309,
+      4.8914666175842285,
+      5.957139015197754
+    ],
+    "lengthscales_sigma": [
+      6.878272533416748,
+      5.378232955932617,
+      5.242218494415283
+    ]
+  },
+  "all": {
+    "config": "all",
+    "label": "+Mono+Boundary+Pelgrom",
+    "train_time_s": 207.7,
+    "mu_rmse": 0.00206,
+    "mu_r2": 0.9992,
+    "sigma_rmse": 0.000511,
+    "sigma_r2": 0.67,
+    "vmin_rmse_mV": 0.897,
+    "vmin_max_err_mV": 2.985,
+    "vmin_bias_mV": 0.21,
+    "hausdorff_mV": 0.346,
+    "area_overlap": 1.0,
+    "dVmin_dcn": -0.00578,
+    "dVmin_dpu": 0.00856,
+    "grad_cosine_sim": 1.0,
+    "grad_mag_ratio": 1.0012,
+    "lengthscales_mu": [
+      5.3775410652160645,
+      4.855682849884033,
+      5.954209804534912
+    ],
+    "lengthscales_sigma": [
+      6.749797821044922,
+      5.282958507537842,
+      5.281497955322266
+    ]
+  }
+}

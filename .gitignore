@@ -1,0 +1,54 @@
+# Python venv
+python/.venv/
+
+# HSPICE simulation output
+*.tr0
+*.tr1
+*.tr2
+*.sw0
+*.st0
+*.mt0
+*.mt1
+*.mt2
+*.lis
+*.log
+*.out
+*.ic0
+
+# Waveform formats (FSDB, PSF)
+*.fsdb
+*.psf
+*.pdb
+
+# Raw data / measurement exports
+*.csv
+*.dat
+*.txt
+# ...but keep hand-entry CSV templates (they are code, not data)
+!python/templates/manual_entry_*.csv
+# ...and keep the Python dependency list (was never committed until now --
+# *.txt silently swallowed it since the repo's first commit)
+!python/requirements.txt
+
+# Temporary / intermediate files
+*.tmp
+*.bak
+*.old
+*~
+python/results/budget_pareto/pareto_checkpoint.json
+
+# In-house transcribed real HSPICE data (may be proprietary process info --
+# keep local only unless explicitly cleared for release)
+python/data/hspice_real*.xlsx
+
+# OpenCode agent state
+.omo/
+
+# Codegraph index
+.codegraph/
+
+# Node / tooling (if any)
+node_modules/
+.venv/
+__pycache__/
+*.pyc
