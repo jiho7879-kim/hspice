@@ -48,9 +48,16 @@ drop을 반영하면 셀에 실제 인가되는 전압이 표 I의 Vmin 사양�
 | Time-zero (T0) | 0.625 V | 초기 특성 |
 | End-of-life (EOL) | 0.675 V | 열화 반영, 구속 기준 |
 
-두 기준을 가르는 50 mV가 설계가 사용할 수 있는 마진 예산 전부이다. 이 값은
-본 논문 전반에서 모델 오차·통계 잡음·체계적 편향을 비교하는 기준자로
-반복 사용된다. 따라서 핵심 질문은 Vmin의 수치 자체가 아니라, 주어진 공정
+두 기준을 가르는 50 mV는 BTI(bias-temperature instability)에 대한 가드밴드로,
+BTI가 SRAM의 static noise margin과 Vmin에 미치는 영향은 실험적으로
+확립되어 있으며[24], [25] 본 노드급의 신뢰성 고려 안정성 설계에 반영되어
+있다[23]. EOL 시험을 매 로트마다 반복할 수 없으므로 이 가드밴드는 실리콘에서
+경험적으로 고정되어 time-zero 사양에 적용되며, 본 연구의 모든 평가도 그에
+따라 time-zero 기준이다.
+
+이 50 mV가 설계가 사용할 수 있는 마진 예산 전부이다. 이 값은 본 논문
+전반에서 모델 오차·통계 잡음·체계적 편향을 비교하는 기준자로 반복
+사용된다. 따라서 핵심 질문은 Vmin의 수치 자체가 아니라, 주어진 공정
 조건이 0.675 V를 만족하는가, 그렇지 못하다면 어느 정도 미달하는가이다.
 
 ### B. 직접 검증의 비용
@@ -161,6 +168,15 @@ SNM은 두 lobe 여유의 최소값이며, 두 가우시안 변량의 최소값�
 최소값에 가우시안을 맞춰 Z_t=6.50까지 외삽하므로 실패 확률을 체계적으로
 과소평가한다. 실패는 두 lobe 중 하나만 무너져도 성립하므로, 실제 실패
 확률은 union 확률이며 이는 각 lobe 개별 확률로 하한이 결정된다.
+
+SNM 분포의 비정규성은 문헌에 이미 확립되어 있으며 본 데이터에 국한된
+현상이 아니다. Saeidi 등[20]은 단측 읽기 SNM이 단일 가우시안이 아니라
+정규분포의 가중합을 따름을 보였고, Zheng과 Mazumder[21]는 다이 내 SNM
+변동을 folded-normal 분포와 non-central chi-squared 분포의 조합으로
+모델링하여 6-sigma를 넘는 영역까지 일치함을 보고하였다. 본 절의 기여는
+이 관찰 자체가 아니라, 그것을 특정 제품 사양에 대한 **Vmin 단위로
+정량화**하고 양산 데이터에서 판정할 저비용 프로토콜을 함께 제시하는
+데 있다.
 
 lobe별 통계 (μ_L, σ_L, μ_R, σ_R, ρ_LR)가 주어지면 정확한 실패 확률은
 폐형식을 갖는다.
@@ -355,7 +371,7 @@ mirror-twin을 가졌고, 무작위 hold-out에서 test 조건의 약 74%가 tra
 
 목표 사양 전압 V*에 대해 집합 {**x** : Vmin(**x**) = V*}는 9차원 변동
 공간의 초곡면이며, 허용 공정 윈도우의 경계를 구성한다. 이는 **x**에 대해
-(Vmin(**x**) − V*)²를 Adam[8]으로 최소화하여 직접 위치를 찾는데, **x**는
+(Vmin(**x**) − V*)²를 Adam[9]으로 최소화하여 직접 위치를 찾는데, **x**는
 반복해를 물리적으로 허용되는 범위에 가두는 sigmoid 박스 재매개화 하의 leaf
 텐서로 취급된다. 수렴은 다중 초기화에서 검증되고, 각 수렴점은 자신의
 슬라이스에 대한 1차원 bisection과 대조된다.
@@ -550,8 +566,8 @@ GP는 적합 중 입력 차원별 lengthscale을 학습하므로 이 척도는 �
 평가는 통상 수만 회의 함수 평가를 요구하여, 직접 시뮬레이션으로 수행되는
 회로 수준 수율 연구에 적용을 배제한다. 대리모델이 이 장애를 제거한다. 평가에
 수분이 아닌 수 밀리초가 소요되므로, 요구되는 질의가 모델을 학습시킨 예산을
-넘어 무시할 수 있는 한계 비용을 부과한다. 1차 지수는 Saltelli 추정량[6]으로,
-전체 지수는 Jansen 추정량[7]으로 추정하며, 1,024 기저 표본이 11,264회의
+넘어 무시할 수 있는 한계 비용을 부과한다. 1차 지수는 Saltelli 추정량[7]으로,
+전체 지수는 Jansen 추정량[8]으로 추정하며, 1,024 기저 표본이 11,264회의
 대리모델 평가에 대응한다. 결과는 표 XI에 나타난다.
 
 **표 XI. Vmin의 SOBOL 민감도 지수**
@@ -635,10 +651,15 @@ local-sigma가 3위이며 pass-gate/pull-down 문턱 skew를 능가하는데, �
 보정은 재시뮬레이션을 요구하지 않는다.
 
 관련 가정은 각 lobe 여유 자체가 원거리 tail까지 가우시안이라는 것이다. 관계
-(1)은 절대 실패율 예측기가 아닌 업계 표준 마진 지표이며, 제안된 진단은 두
-가정을 동시에 검사한다.
+(1)은 절대 실패율 예측기가 아니라 본 노드급 bitcell sign-off에서 표준적으로
+사용되는 마진 지표이며[22], 제안된 진단은 두 가정을 동시에 검사한다.
 
 ### B. 범위
+
+본 연구의 모든 값은 time-zero 기준이다. 이는 의도된 사용 방식과 일치한다.
+EOL 시험을 매 로트마다 반복할 수 없으므로, 실리콘에서 경험적으로 확립된 표 I의
+50 mV 가드밴드를 time-zero Vmin 사양에 적용하고 그 가드된 값으로 준수 여부를
+평가한다. 따라서 열화 모델링은 본 연구의 범위 밖이다.
 
 결과는 단일 기술 노드, 단일 셀 토폴로지, 주로 읽기 지표에 관한 것이다. 공통
 성분이 범위 경계에 접근할 때 발생하는 배율 스필 밴드는 compact model 캘리브레이션의
@@ -732,4 +753,105 @@ Heteroscedastic 우도는 관측 잡음이 데이터 점마다 다를 수 있게
 
 ## 참고문헌
 
-전체 서지 사항은 제출 전 완성한다. (영문판 참고문헌과 동일)
+[1] E. Seevinck, F. J. List, and J. Lohstroh, "Static-noise margin analysis of
+    MOS SRAM cells," *IEEE J. Solid-State Circuits*, vol. SC-22, no. 5,
+    pp. 748–754, Oct. 1987.
+
+[2] M. J. M. Pelgrom, A. C. J. Duinmaijer, and A. P. G. Welbers, "Matching
+    properties of MOS transistors," *IEEE J. Solid-State Circuits*, vol. 24,
+    no. 5, pp. 1433–1439, Oct. 1989.
+
+[3] D. B. Owen, "Tables for computing bivariate normal probabilities," *Ann.
+    Math. Statist.*, vol. 27, no. 4, pp. 1075–1090, Dec. 1956.
+
+[4] C. E. Rasmussen and C. K. I. Williams, *Gaussian Processes for Machine
+    Learning*. Cambridge, MA, USA: MIT Press, 2006.
+
+[5] M. C. Kennedy and A. O'Hagan, "Predicting the output from a complex
+    computer code when fast approximations are available," *Biometrika*,
+    vol. 87, no. 1, pp. 1–13, Mar. 2000.
+
+[6] I. M. Sobol', "Global sensitivity indices for nonlinear mathematical models
+    and their Monte Carlo estimates," *Math. Comput. Simul.*, vol. 55,
+    no. 1–3, pp. 271–280, Feb. 2001.
+
+[7] A. Saltelli, P. Annoni, I. Azzini, F. Campolongo, M. Ratto, and
+    S. Tarantola, "Variance based sensitivity analysis of model output. Design
+    and estimator for the total sensitivity index," *Comput. Phys. Commun.*,
+    vol. 181, no. 2, pp. 259–270, Feb. 2010.
+
+[8] M. J. W. Jansen, "Analysis of variance designs for model output," *Comput.
+    Phys. Commun.*, vol. 117, no. 1–2, pp. 35–43, Mar. 1999.
+
+[9] D. P. Kingma and J. Ba, "Adam: A method for stochastic optimization," in
+    *Proc. 3rd Int. Conf. Learn. Represent. (ICLR)*, 2015.
+
+[10] A. Singhee and R. A. Rutenbar, "Why quasi-Monte Carlo is better than Monte
+     Carlo or Latin hypercube sampling for statistical circuit analysis,"
+     *IEEE Trans. Comput.-Aided Design Integr. Circuits Syst.*, vol. 29,
+     no. 11, pp. 1763–1776, Nov. 2010.
+
+[11] Z. Guo, W. Sun, Z. Wang, Y. Cai, and L. Shi, "An efficient SRAM yield
+     analysis method using multi-fidelity neural network," in *Proc. 2nd Int.
+     Symp. Electron. Design Autom. (ISEDA)*, 2024, p. 547.
+
+[12] S. Yin, X. Jin, L. Shi, K. Wang, and W. W. Xing, "Efficient Bayesian yield
+     analysis and optimization with active learning," in *Proc. 59th ACM/IEEE
+     Design Autom. Conf. (DAC)*, 2022, pp. 1195–1200.
+
+[13] S. Yin, G. Dai, and W. W. Xing, "High-dimensional yield estimation using
+     shrinkage deep features and maximization of integral entropy reduction,"
+     in *Proc. 28th Asia South Pacific Design Autom. Conf. (ASP-DAC)*, 2023.
+
+[14] Y. Liu, G. Dai, and W. W. Xing, "Seeking the yield barrier:
+     High-dimensional SRAM evaluation through optimal manifold," in *Proc.
+     60th ACM/IEEE Design Autom. Conf. (DAC)*, 2023.
+
+[15] S. Gupta and B. H. Calhoun, "Dynamic read Vmin and yield estimation for
+     nanoscale SRAMs," *IEEE Trans. Circuits Syst. I, Reg. Papers*, vol. 68,
+     no. 3, pp. 1171–1182, 2021.
+
+[16] S. Kinoshita, Y. Inoue, T. Watanabe, K. Ikeda, S. Nishio, A. Teruya,
+     N. Sakai, and T. Goda, "Space-filling Latin hypercube design for efficient
+     Bayesian optimization with application to semiconductor development,"
+     *IEEE Trans. Semicond. Manuf.*, vol. 38, no. 3, pp. 446–452, 2025,
+     doi: 10.1109/TSM.2025.3574791.
+
+[17] J. R. Gardner, G. Pleiss, D. Bindel, K. Q. Weinberger, and A. G. Wilson,
+     "GPyTorch: Blackbox matrix-matrix Gaussian process inference with GPU
+     acceleration," in *Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)*, 2018.
+
+[18] R. M. Neal, *Bayesian Learning for Neural Networks*. New York, NY, USA:
+     Springer, 1996.
+
+[19] M. L. Stein, *Interpolation of Spatial Data: Some Theory for Kriging*.
+     New York, NY, USA: Springer, 1999.
+
+[20] R. Saeidi, M. Sharifkhani, and K. Hajsadeghi, "Statistical analysis of
+     read static noise margin for near/sub-threshold SRAM cell," *IEEE Trans.
+     Circuits Syst. I, Reg. Papers*, vol. 61, no. 12, pp. 3386–3393, Dec. 2014,
+     doi: 10.1109/TCSI.2014.2327334.
+
+[21] N. Zheng and P. Mazumder, "Modeling and mitigation of static noise margin
+     variation in subthreshold SRAM cells," *IEEE Trans. Circuits Syst. I,
+     Reg. Papers*, vol. 64, no. 10, pp. 2726–2736, Oct. 2017,
+     doi: 10.1109/TCSI.2017.2700818.
+
+[22] T. Song, W. Rim, et al., "A 14 nm FinFET 128 Mb SRAM with V_MIN
+     enhancement techniques for low-power applications," *IEEE J. Solid-State
+     Circuits*, vol. 50, no. 1, pp. 158–169, Jan. 2015.
+
+[23] C. Bae, S. Pae, C.-S. Yu, K. Kim, Y. Kim, and J. Park, "SRAM stability
+     design comprehending 14nm FinFET reliability," in *Proc. IEEE Int. Rel.
+     Phys. Symp. (IRPS)*, 2015, pp. MY.13.1–MY.13.5,
+     doi: 10.1109/IRPS.2015.7112815.
+
+[24] A. T. Krishnan, V. Reddy, D. Aldrich, J. Raval, K. Christensen, J. Rosal,
+     C. O'Brien, R. Khamankar, A. Marshall, W.-K. Loh, R. McKee, and
+     S. Krishnan, "SRAM cell static noise margin and V_MIN sensitivity to
+     transistor degradation," in *Proc. IEEE Int. Electron Devices Meeting
+     (IEDM)*, 2006, pp. 1–4, doi: 10.1109/IEDM.2006.346778.
+
+[25] S.-M. Lim, H. Hong, S. Yu, Z. Ming, J. Park, and Y. Kim, "Effects of BTI
+     during AHTOL on SRAM V_MIN," in *Proc. IEEE Int. Rel. Phys. Symp. (IRPS)*,
+     2011, pp. 105–110, doi: 10.1109/IRPS.2011.5784460.

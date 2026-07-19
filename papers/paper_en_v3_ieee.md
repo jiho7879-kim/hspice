@@ -57,12 +57,19 @@ establishes the Vmin specification given in Table I.
 | Time-zero (T0) | 0.625 V | Initial characteristics |
 | End-of-life (EOL) | 0.675 V | Degradation included; binding criterion |
 
-The 50 mV separating the two criteria constitutes the entire margin budget
-available to the design. This quantity recurs throughout the paper as a
-reference scale against which model error, statistical noise, and systematic
-bias are compared. The operative question is therefore not the numerical value
-of Vmin in isolation, but whether a given process condition satisfies 0.675 V
-and, if not, by what margin it fails.
+The 50 mV separating the two criteria is a guardband for bias-temperature
+instability, whose effect on SRAM static noise margin and Vmin is established
+experimentally [24], [25] and is accounted for in reliability-aware stability
+design at this node class [23]. Because end-of-life testing cannot be repeated
+on every lot, the guardband is fixed empirically from silicon and applied to the
+time-zero specification; all evaluation in this work is accordingly time-zero.
+
+That 50 mV constitutes the entire margin budget available to the design. This
+quantity recurs throughout the paper as a reference scale against which model
+error, statistical noise, and systematic bias are compared. The operative
+question is therefore not the numerical value of Vmin in isolation, but whether
+a given process condition satisfies 0.675 V and, if not, by what margin it
+fails.
 
 ### B. Cost of Direct Verification
 
@@ -133,7 +140,7 @@ differentiable physics layer, to Vmin, with forward and inverse paths indicated.
 
 Read stability of a six-transistor cell is quantified by the static noise
 margin, defined as the minimum of the two lobes of the butterfly characteristic
-[15]. MC simulation yields an SNM distribution over randomized samples, from
+[1]. MC simulation yields an SNM distribution over randomized samples, from
 which the mean μ and standard deviation σ are conventionally recorded. The write
 metric is treated in Section VIII-C; the methodology is metric-agnostic.
 
@@ -193,6 +200,16 @@ failure probability systematically. Since failure requires only one lobe to
 collapse, the true failure probability is the union probability, which is
 bounded below by that of either lobe individually.
 
+The non-normality of the SNM distribution is established in the literature and
+is not an artifact of the present data. Saeidi *et al.* [20] show that the
+single-sided read SNM follows a weighted sum of normal distributions rather than
+a single Gaussian, and Zheng and Mazumder [21] model intra-die SNM variation as
+a combination of folded-normal and non-central chi-squared distributions,
+reporting agreement beyond the six-sigma point. The contribution of the present
+section is not the observation itself but its quantification in Vmin units
+against a specific product specification, together with a low-cost protocol for
+resolving it on production data.
+
 Given per-lobe statistics (μ_L, σ_L, μ_R, σ_R, ρ_LR), the exact failure
 probability admits a closed form,
 
@@ -200,7 +217,7 @@ probability admits a closed form,
     Z_eff = Φ⁻¹(1 − p_fail)                                              (5)
 
 in which the joint term is the bivariate normal cumulative distribution function,
-computable via Owen's T function [9] and differentiable in all arguments, so
+computable via Owen's T function [3] and differentiable in all arguments, so
 that (4)–(5) may be substituted into the pipeline without loss of gradient flow.
 
 The magnitude of the bias depends on the lobe correlation ρ_LR, ranging from
@@ -350,7 +367,7 @@ procedure together with the split rule.
 
 ### A. Gaussian Process Regression
 
-A Gaussian process [10] provides a nonparametric Bayesian regression that
+A Gaussian process [4] provides a nonparametric Bayesian regression that
 returns, in addition to a predictive mean, a calibrated predictive variance. The
 model maps the nine variation parameters and the supply voltage to the SNM
 statistics (μ, σ). Three properties motivate this choice: operation under
@@ -391,7 +408,7 @@ an exact GP acts as a hard constraint and prevents extrapolation drift at the
 domain extremes. A monotonicity penalty of the form ReLU(−∂μ/∂V_op)², evaluated
 at probe points through the posterior, suppresses the non-physical prediction
 that increasing supply degrades mean stability. A weak regularizer encourages a
-linear σ(V_op) trend consistent with established mismatch scaling [8].
+linear σ(V_op) trend consistent with established mismatch scaling [2].
 Contributions are isolated in Section VI-B.
 
 ### E. Noise-Aware Likelihood
@@ -404,7 +421,7 @@ standard error of σ is sensitive to kurtosis.
 This mechanism admits heterogeneous sampling budgets into a single model. When
 reduced fidelity consists solely of fewer samples drawn from the same simulator,
 a heteroscedastic single-fidelity GP is the correct model and the discrepancy
-term of a multi-fidelity formulation [11] is unnecessary. Because the posterior
+term of a multi-fidelity formulation [5] is unnecessary. Because the posterior
 borrows strength across neighboring conditions in the input space, no individual
 condition requires a large MC batch to be informative, which supports allocating
 a fixed budget toward breadth in condition coverage rather than depth per
@@ -415,7 +432,7 @@ condition, as quantified in Section VI-C.
 For a target specification voltage V*, the set {**x** : Vmin(**x**) = V*} is a
 hypersurface in the nine-dimensional variation space, constituting the boundary
 of the allowable process window. It is located directly by minimizing
-(Vmin(**x**) − V*)² with respect to **x** using Adam [14], with **x** treated as
+(Vmin(**x**) − V*)² with respect to **x** using Adam [9], with **x** treated as
 a leaf tensor under a sigmoid box reparameterization that confines iterates to
 physically admissible ranges. Convergence is verified from multiple
 initializations, and each converged point is cross-checked against a
@@ -631,8 +648,8 @@ function evaluations, which precludes its application to circuit-level yield
 studies conducted by direct simulation. The surrogate removes this obstacle:
 evaluation requires milliseconds rather than minutes, so the required queries
 impose negligible marginal cost beyond the budget that trained the model. First-
-order indices are estimated by the Saltelli estimator [12] and total-order
-indices by the Jansen estimator [13], using 1024 base samples corresponding to
+order indices are estimated by the Saltelli estimator [7] and total-order
+indices by the Jansen estimator [8], using 1024 base samples corresponding to
 11 264 surrogate evaluations. Results appear in Table XI.
 
 **TABLE XI. SOBOL SENSITIVITY INDICES OF Vmin**
@@ -726,11 +743,17 @@ resolves this at under 2% of the total simulation budget, and the correction
 requires no re-simulation.
 
 A related assumption is that each lobe margin is itself Gaussian into the far
-tail. The relation (1) is an industry-standard margin metric rather than an
-absolute failure-rate predictor, and the proposed diagnostic examines both
-assumptions simultaneously.
+tail. The relation (1) is a margin metric in standard use for bitcell sign-off
+at this class of node [22] rather than an absolute failure-rate predictor, and
+the proposed diagnostic examines both assumptions simultaneously.
 
 ### B. Scope
+
+All quantities in this work are time-zero. This matches the intended use: since
+end-of-life testing cannot be repeated on every lot, the 50 mV guardband of
+Table I — established empirically from silicon — is applied to the time-zero
+Vmin specification, and compliance is evaluated against the guarded value.
+Degradation modeling is therefore outside the scope of this work.
 
 Results concern a single technology node, a single cell topology, and
 principally the read metric. The multiplier spill band arising when a common
@@ -844,50 +867,106 @@ numbering convention are specified. The analytic testbed is released in full.
 
 ## REFERENCES
 
-Full bibliographic details to be completed prior to submission.
-
 [1] E. Seevinck, F. J. List, and J. Lohstroh, "Static-noise margin analysis of
-    MOS SRAM cells," *IEEE J. Solid-State Circuits*, 1987.
+    MOS SRAM cells," *IEEE J. Solid-State Circuits*, vol. SC-22, no. 5,
+    pp. 748–754, Oct. 1987.
 
 [2] M. J. M. Pelgrom, A. C. J. Duinmaijer, and A. P. G. Welbers, "Matching
-    properties of MOS transistors," *IEEE J. Solid-State Circuits*, 1989.
+    properties of MOS transistors," *IEEE J. Solid-State Circuits*, vol. 24,
+    no. 5, pp. 1433–1439, Oct. 1989.
 
 [3] D. B. Owen, "Tables for computing bivariate normal probabilities," *Ann.
-    Math. Statist.*, 1956.
+    Math. Statist.*, vol. 27, no. 4, pp. 1075–1090, Dec. 1956.
 
 [4] C. E. Rasmussen and C. K. I. Williams, *Gaussian Processes for Machine
-    Learning*. MIT Press, 2006.
+    Learning*. Cambridge, MA, USA: MIT Press, 2006.
 
-[5] M. C. Kennedy and A. O'Hagan, "Predicting the output from a complex computer
-    code when fast approximations are available," *Biometrika*, 2000.
+[5] M. C. Kennedy and A. O'Hagan, "Predicting the output from a complex
+    computer code when fast approximations are available," *Biometrika*,
+    vol. 87, no. 1, pp. 1–13, Mar. 2000.
 
-[6] A. Saltelli et al., "Variance based sensitivity analysis of model output,"
-    *Comput. Phys. Commun.*, 2010.
+[6] I. M. Sobol', "Global sensitivity indices for nonlinear mathematical models
+    and their Monte Carlo estimates," *Math. Comput. Simul.*, vol. 55,
+    no. 1–3, pp. 271–280, Feb. 2001.
 
-[7] M. J. W. Jansen, "Analysis of variance designs for model output," *Comput.
-    Phys. Commun.*, 1999.
+[7] A. Saltelli, P. Annoni, I. Azzini, F. Campolongo, M. Ratto, and
+    S. Tarantola, "Variance based sensitivity analysis of model output. Design
+    and estimator for the total sensitivity index," *Comput. Phys. Commun.*,
+    vol. 181, no. 2, pp. 259–270, Feb. 2010.
 
-[8] D. P. Kingma and J. Ba, "Adam: A method for stochastic optimization," in
-    *Proc. ICLR*, 2015.
+[8] M. J. W. Jansen, "Analysis of variance designs for model output," *Comput.
+    Phys. Commun.*, vol. 117, no. 1–2, pp. 35–43, Mar. 1999.
 
-[9] A. Singhee and R. A. Rutenbar, "Why quasi-Monte Carlo is better than Monte
-    Carlo or Latin hypercube sampling for statistical circuit analysis," *IEEE
-    Trans. Comput.-Aided Design*, 2010.
+[9] D. P. Kingma and J. Ba, "Adam: A method for stochastic optimization," in
+    *Proc. 3rd Int. Conf. Learn. Represent. (ICLR)*, 2015.
 
-[10] Guo et al., "Multi-fidelity neural network with importance sampling for
-     SRAM yield estimation," in *Proc. ISEDA*, 2024.
+[10] A. Singhee and R. A. Rutenbar, "Why quasi-Monte Carlo is better than Monte
+     Carlo or Latin hypercube sampling for statistical circuit analysis,"
+     *IEEE Trans. Comput.-Aided Design Integr. Circuits Syst.*, vol. 29,
+     no. 11, pp. 1763–1776, Nov. 2010.
 
-[11] Yin et al., "Bayesian active learning for yield estimation," in *Proc.
-     DAC*, 2022.
+[11] Z. Guo, W. Sun, Z. Wang, Y. Cai, and L. Shi, "An efficient SRAM yield
+     analysis method using multi-fidelity neural network," in *Proc. 2nd Int.
+     Symp. Electron. Design Autom. (ISEDA)*, 2024, p. 547.
 
-[12] Yin et al., "Efficient yield estimation via active learning," in *Proc.
-     ASP-DAC*, 2023.
+[12] S. Yin, X. Jin, L. Shi, K. Wang, and W. W. Xing, "Efficient Bayesian yield
+     analysis and optimization with active learning," in *Proc. 59th ACM/IEEE
+     Design Autom. Conf. (DAC)*, 2022, pp. 1195–1200.
 
-[13] Liu et al., "OPTIMIS: Tail-accurate importance sampling for memory yield,"
-     in *Proc. DAC*, 2023.
+[13] S. Yin, G. Dai, and W. W. Xing, "High-dimensional yield estimation using
+     shrinkage deep features and maximization of integral entropy reduction,"
+     in *Proc. 28th Asia South Pacific Design Autom. Conf. (ASP-DAC)*, 2023.
 
-[14] V. Gupta and B. H. Calhoun, "Analytical modeling of SRAM Vmin," *IEEE
-     Trans. Circuits Syst. I*, 2021.
+[14] Y. Liu, G. Dai, and W. W. Xing, "Seeking the yield barrier:
+     High-dimensional SRAM evaluation through optimal manifold," in *Proc.
+     60th ACM/IEEE Design Autom. Conf. (DAC)*, 2023.
 
-[15] Kinoshita, "Space-filling designs for semiconductor process
-     characterization," *IEEE Trans. Semicond. Manuf.*, 2025.
+[15] S. Gupta and B. H. Calhoun, "Dynamic read Vmin and yield estimation for
+     nanoscale SRAMs," *IEEE Trans. Circuits Syst. I, Reg. Papers*, vol. 68,
+     no. 3, pp. 1171–1182, 2021.
+
+[16] S. Kinoshita, Y. Inoue, T. Watanabe, K. Ikeda, S. Nishio, A. Teruya,
+     N. Sakai, and T. Goda, "Space-filling Latin hypercube design for efficient
+     Bayesian optimization with application to semiconductor development,"
+     *IEEE Trans. Semicond. Manuf.*, vol. 38, no. 3, pp. 446–452, 2025,
+     doi: 10.1109/TSM.2025.3574791.
+
+[17] J. R. Gardner, G. Pleiss, D. Bindel, K. Q. Weinberger, and A. G. Wilson,
+     "GPyTorch: Blackbox matrix-matrix Gaussian process inference with GPU
+     acceleration," in *Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)*, 2018.
+
+[18] R. M. Neal, *Bayesian Learning for Neural Networks*. New York, NY, USA:
+     Springer, 1996.
+
+[19] M. L. Stein, *Interpolation of Spatial Data: Some Theory for Kriging*.
+     New York, NY, USA: Springer, 1999.
+
+[20] R. Saeidi, M. Sharifkhani, and K. Hajsadeghi, "Statistical analysis of
+     read static noise margin for near/sub-threshold SRAM cell," *IEEE Trans.
+     Circuits Syst. I, Reg. Papers*, vol. 61, no. 12, pp. 3386–3393, Dec. 2014,
+     doi: 10.1109/TCSI.2014.2327334.
+
+[21] N. Zheng and P. Mazumder, "Modeling and mitigation of static noise margin
+     variation in subthreshold SRAM cells," *IEEE Trans. Circuits Syst. I,
+     Reg. Papers*, vol. 64, no. 10, pp. 2726–2736, Oct. 2017,
+     doi: 10.1109/TCSI.2017.2700818.
+
+[22] T. Song, W. Rim, et al., "A 14 nm FinFET 128 Mb SRAM with V_MIN
+     enhancement techniques for low-power applications," *IEEE J. Solid-State
+     Circuits*, vol. 50, no. 1, pp. 158–169, Jan. 2015.
+
+[23] C. Bae, S. Pae, C.-S. Yu, K. Kim, Y. Kim, and J. Park, "SRAM stability
+     design comprehending 14nm FinFET reliability," in *Proc. IEEE Int. Rel.
+     Phys. Symp. (IRPS)*, 2015, pp. MY.13.1–MY.13.5,
+     doi: 10.1109/IRPS.2015.7112815.
+
+[24] A. T. Krishnan, V. Reddy, D. Aldrich, J. Raval, K. Christensen, J. Rosal,
+     C. O'Brien, R. Khamankar, A. Marshall, W.-K. Loh, R. McKee, and
+     S. Krishnan, "SRAM cell static noise margin and V_MIN sensitivity to
+     transistor degradation," in *Proc. IEEE Int. Electron Devices Meeting
+     (IEDM)*, 2006, pp. 1–4, doi: 10.1109/IEDM.2006.346778.
+
+[25] S.-M. Lim, H. Hong, S. Yu, Z. Ming, J. Park, and Y. Kim, "Effects of BTI
+     during AHTOL on SRAM V_MIN," in *Proc. IEEE Int. Rel. Phys. Symp. (IRPS)*,
+     2011, pp. 105–110, doi: 10.1109/IRPS.2011.5784460.
+
