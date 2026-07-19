@@ -40,7 +40,7 @@ See **`AGENT.md`** (project root) for full orchestration guide (ambiguity gate, 
 root/
 ├── python/                  # GP surrogate + physics pipeline (PRIMARY codebase)
 │   ├── src/                 # Core modules (13 files)
-│   ├── scripts/             # Entrypoints (28 files — see entrypoints table)
+│   ├── scripts/             # Entrypoints (20 files — see entrypoints table)
 │   ├── tests/               # Unit tests (10 files)
 │   ├── data/                # .npz datasets + .xlsx (gitignore real data)
 │   ├── templates/           # HSPICE netlists + PDK model cards + manual-entry CSVs
@@ -96,13 +96,15 @@ y: (N, 2) = [mu_SNMR (V), sigma_SNMR (V)]
 ### Shift convention (CRITICAL)
 
 **Positive shift = slower device** for both NMOS and PMOS.
+- common_N > 0 → NMOS Vth higher → NMOS slower
+- PU > 0 → PMOS |Vth| larger → PMOS slower
 - FSG = (cn < 0, pu > 0) = fast N, slow P — SNMR worst corner
 - SFG = (cn > 0, pu < 0) = slow N, fast P — Vtrip worst corner
 
 ### Z_TARGET
 
 **Z_FIXED = 6.50** (256 Mb @ 99% Poisson yield). Changed from legacy 6.0.
-Use `derive_z_target(mb=..., y_target=...)` for different array specs.
+Use `derive_z_target(mb=..., y_target=...)` for different array specs. Absolute Vmin shifts ~+25 mV vs old Z=6.0; contour shapes unchanged.
 
 ### matplotlib backend
 
@@ -112,18 +114,20 @@ All figure-generating scripts: `matplotlib.use("Agg")` BEFORE `import matplotlib
 
 ## Python src/ modules
 
-See `python/src/AGENTS.md` for full module inventory (13 files, 4241 LOC).
-
-### Key modules
 | Module | Purpose |
 |--------|---------|
-| `utils.py` | Constants, StandardScaler, sampling, lobe-resolved Z |
-| `models.py` | ExactGPModel, AdditiveGPModel |
-| `surrogate.py` | Surrogate class (train/predict/save/load) |
-| `physics_layer.py` | Differentiable Vmin computation |
-| `physics.py` | PhysicsConstrainedSurrogate (L_mono, L_boundary, L_pelgrom) |
-| `hspice_io.py` | Deck gen, .mt0 parsing, manual entry QC |
-| `condition_gen.py` | **FROZEN CORE** portable condition generator |
+| `utils.py` | Constants (`VOPS`, `Z_FIXED`, `VOP_COL`, bounds), `StandardScaler`, stratified sampling, `bvn_cdf`/`z_eff_from_lobes` (lobe-resolved Z) |
+| `models.py` | `ExactGPModel` (mu: Matern 5/2 + ARD), `AdditiveGPModel` (sigma: additive kernel). Auto-adapts to d ≥ 3. |
+| `surrogate.py` | `Surrogate` class — train/predict/save/load with auto-standardization |
+| `data.py` | `build_dataset`, `save_intermediate`, `load_intermediate`, `stratified_train_test_split`, noise-aware save/load |
+| `physics_layer.py` | `compute_vmin_from_z`, `compute_vmin_on_grid`, `gradient_check`, `estimate_required_assist` |
+| `physics.py` | `PhysicsConstrainedSurrogate` — L_mono, L_boundary, L_pelgrom constraints |
+| `contour.py` | `extract_contour` — PVTA contour extraction + Hausdorff distance |
+| `hspice_io.py` | Deck generation (Mustache), .mt0 parsing, histogram QC, manual XLSX/CSV parsing |
+| `primesim_io.py` | PrimeSim .mt0 parsing — handles auto-wrapped rows and Vtrip left/right split |
+| `condition_gen.py` | **Portable** condition generator (zero project imports). Frozen core contract for in-house use. |
+| `harness.py` | Workflow state management via `docs/workflow_state.json` |
+| `inhouse_deck_gen.py` | In-house deck generation adapter |
 
 ### GP posterior gradient (L_mono trick)
 
@@ -138,36 +142,67 @@ output = gp(probe_points)       # posterior, not prior
 
 ## Python scripts (run from `python/`)
 
-See `python/scripts/AGENTS.md` for full entrypoint catalog (28 scripts).
+### Core pipeline
+| Command | What it does |
+|---------|-------------|
+| `python scripts/demo.py` | Full GP demo: analytic data → train → contour plot |
+| `python scripts/train.py --data ./data/dataset.npz` | Train GP surrogate |
+| `python scripts/ablation.py` | Physics-constrained GP ablation study (5 configs) |
+| `python scripts/diagnostics.py` | Multi-panel error diagnostics |
+| `python scripts/budget_pareto.py --smoke` | Budget vs accuracy Pareto (~1 min) |
+| `python scripts/budget_pareto.py --full` | Paper-quality Pareto run |
 
-### Key commands
-```bash
-python scripts/demo.py                        # Full GP demo
-python scripts/train.py --data ./data/dataset.npz  # Train GP
-python scripts/ablation.py                    # Physics-constrained ablation
-python scripts/gen_hspice.py --n_cond 200     # Generate HSPICE decks
-python scripts/stage4_real_data.py            # Real HSPICE data GP
-python scripts/budget_pareto.py --smoke       # Budget vs accuracy
-```
+### Deck generation & HSPICE integration
+| Command | What it does |
+|---------|-------------|
+| `python scripts/gen_hspice.py --n_cond 200` | Generate HSPICE decks (Stage 1, 3D) |
+| `python scripts/gen_hspice.py --validation` | Generate 6 validation decks (TT only) |
+| `python scripts/gen_condition_sheet.py` | Generate pre-filled condition sheet for in-house transcription |
+| `python scripts/gen_ngspice_data.py` | Generate ngspice simulation data |
+
+### Real data & validation
+| Command | What it does |
+|---------|-------------|
+| `python scripts/stage4_real_data.py` | Real HSPICE data GP training + validation |
+| `python scripts/corner_retrain_pvta_contour.py` | Per-corner residual recalibration |
+| `python scripts/corner_retrain_test_sep.py` | Separated corner retrain test |
+| `python scripts/corner_verification.py` | Corner accuracy verification |
+| `python scripts/validate_assist_sweep.py` | Assist-active inverse validation |
+| `python scripts/demo_gradient_inversion.py` | x=(cn,pu,WLUD) autograd inversion demo |
+
+### Specialized
+| Command | What it does |
+|---------|-------------|
+| `python scripts/demo_4d.py` | 4D GP demo (+WLUD) |
+| `python scripts/stage1_ngspice.py` | GP on ngspice butterfly data |
+| `python scripts/test_ngspice.py` | ngspice integration test |
+| `python scripts/debug_assist.py` | Debug assist-active pipeline |
+| `python scripts/demo_assist.py` | Stage 3 assist demo |
 
 ### Tests (run from `python/`)
 ```bash
 python -m pytest tests/ -v          # all tests
 python -m pytest tests/test_models.py -v  # single file
 ```
-10 test files. See `python/tests/AGENTS.md` for testing patterns.
+10 test files: test_pipeline, test_models, test_physics, test_condition_gen, test_manual_entry, test_noise_aware, test_parser_qc, test_primesim_io, test_zeff, test_ngspice.
 
 ---
 
 ## HSPICE domain
-
-See `hspice/AGENTS.md` for full HSPICE domain guide.
 
 ### Running simulations
 ```bash
 hspice64 -i deck.sp -o output_prefix     # Synopsys HSPICE
 ngspice.exe deck.sp                       # ngspice (bin/ngspice.exe on Windows)
 ```
+
+### .mt0 parsing
+- **Standard HSPICE**: `hspice_io.parse_mt0_file()` — histogram QC, bootstrap SEM
+- **PrimeSim (in-house, auto-wrapped rows)**: `primesim_io.py` — reads all numeric tokens flat, reshapes by column count. Handles Vtrip left/right split across `*a0.mt0` / `*a1.mt0`.
+
+### Template system
+`sram_cell_pvta.sp` uses `{{ MUSTACHE_VARS }}` rendered by `hspice_io.render_deck()` or `gen_hspice.py`.
+Key variables: `COMMON_N_SHIFT`, `PU_SHIFT`, `VOP`, `TEMP`, `MC_RUNS`.
 
 ### condition_gen.py (PORTABLE — FROZEN CORE)
 
@@ -177,6 +212,9 @@ This file has **zero project imports** (only numpy). It is the single source of 
 **SITE ADAPTER** (modifiable): deck template/paths/sim call.
 
 Contract: `method="rng"` (numpy PCG64, version-stable) ensures identical conditions from `(stage, n_cond, seed, metric, method)` on both sides. Tests: `test_condition_gen.py`.
+
+### Mini-array parameters
+`array_params_template.inc`: copy → `array_params.inc` → fill `<<< USER:` values → `.INCLUDE` in main deck.
 
 ---
 
@@ -197,7 +235,7 @@ Core: numpy, scipy, matplotlib, torch≥2.1, gpytorch≥1.11, pandas, seaborn, o
 - **Do NOT assume 3D input** — physics code accepts variable-dim X via `n_extra` parameter
 - **Do NOT use `gp.forward()` for posterior gradients** — returns the prior, not the posterior
 - **Do NOT run scripts from wrong directory** — CWD must be `python/`
-- **Do NOT skip the `sys.path.insert(0, ...)` boilerplate`
+- **Do NOT skip the `sys.path.insert(0, ...)` boilerplate**
 - **Do NOT modify condition_gen.py FROZEN CORE** — breaks in-house reproducibility contract
-- **Do NOT use `matplotlib.use("Agg")` for interactive sessions` — swap to `TkAgg` or remove
+- **Do NOT use `matplotlib.use("Agg")` for interactive sessions** — swap to `TkAgg` or remove
 - **Do NOT commit** `python/data/hspice_real*.xlsx`, `*.tr0`, `*.mt0`, `*.lis`, `*.log` — all gitignored
