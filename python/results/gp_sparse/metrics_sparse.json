@@ -1,0 +1,16 @@
+{
+  "approach": "sparse_gp_svgp",
+  "n_inducing": 100,
+  "n_iter": 200,
+  "train_rows": 8500,
+  "test_rows": 1500,
+  "mu_rmse_mV": 10.627392792734534,
+  "mu_r2": 0.9365251146077501,
+  "sigma_rmse_mV": 0.668991061311645,
+  "sigma_r2": 0.8618312425844885,
+  "vmin_rmse_mV": 33.95072317285031,
+  "n_holdout_scored": 245,
+  "train_time_sec": 556.5710644721985,
+  "mu_train_sec": 230.0022211074829,
+  "sigma_train_sec": 326.5688433647156
+}
