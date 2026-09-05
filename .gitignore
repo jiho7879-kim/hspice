@@ -41,6 +41,9 @@ python/results/budget_pareto/pareto_checkpoint.json
 # OpenCode agent state
 .omo/
 
+# Local agent/skill tooling (30 MB of installed skills, not project source)
+.agents/
+
 # Codegraph index
 .codegraph/
 

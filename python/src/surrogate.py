@@ -243,19 +243,23 @@ class Surrogate:
         return surr
 
     def get_lengthscales(self, model: str = "mu") -> np.ndarray:
-        """Return ARD lengthscales (on the *standardized* input scale)."""
+        """Return ARD lengthscales (on the *standardized* input scale).
+
+        For "sigma" the kernel is additive, so the result is the concatenation
+        of the sub-kernel blocks IN KERNEL ORDER -- which for AdditiveGPModel is
+        OPERATING first (Vop...), then DEVICE. That is the reverse of the input
+        column order; callers that want per-column values must reorder.
+        """
         if model == "mu":
             assert self.mu_gp is not None
             return self.mu_gp.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
-        else:
-            assert self.sigma_gp is not None
-            gp = self.sigma_gp
-            parts = []
-            for k in range(len(gp.covar_module.kernels)):
-                km = gp.covar_module.kernels[k]
-                ls = km.covar_module.base_kernel.lengthscale.detach().cpu().numpy().flatten()
-                parts.append(ls)
-            return np.concatenate(parts)
+        assert self.sigma_gp is not None
+        parts = []
+        for km in self.sigma_gp.covar_module.kernels:
+            # each sub-kernel is ScaleKernel(MaternKernel(ard_num_dims=...))
+            ls = km.base_kernel.lengthscale.detach().cpu().numpy().flatten()
+            parts.append(ls)
+        return np.concatenate(parts)
 
 
 # ---------------------------------------------------------------------------

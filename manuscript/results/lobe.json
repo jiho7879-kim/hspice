@@ -1,0 +1,955 @@
+{
+  "z_target": 6.3984,
+  "v_t0": 0.625,
+  "seed": 12345,
+  "n_mc": 100000,
+  "n_conditions": 9,
+  "se_skew": 0.008157713793252402,
+  "se_skew_gaussian_null": 0.007745966692414834,
+  "conditions": [
+    {
+      "deck": 1119,
+      "vop": 0.6,
+      "z_naive": 6.4528,
+      "skew": -0.2921,
+      "exkurt": 0.1532,
+      "rho_skew": -0.37039502501106314,
+      "se_rho": 0.014384957011991833,
+      "rho_qq": -0.34286596444558476,
+      "chi2_at_rho_qq": 3.2669754322575875,
+      "gauss_chi2": 688.3323991546156,
+      "obs_min": -5.108,
+      "min_ratio": 1.169231858287849,
+      "zbias_skew": 1.0535195075029264,
+      "zbias_qq": 1.0221987262053656
+    },
+    {
+      "deck": 121,
+      "vop": 0.6,
+      "z_naive": 5.987,
+      "skew": -0.2578,
+      "exkurt": 0.1142,
+      "rho_skew": -0.30643247149751607,
+      "se_rho": 0.01609923949412205,
+      "rho_qq": -0.2961455386638239,
+      "chi2_at_rho_qq": 1.5146119780324967,
+      "gauss_chi2": 582.3620784575628,
+      "obs_min": -4.879,
+      "min_ratio": 1.1168132804593607,
+      "zbias_skew": 0.9813177079312467,
+      "zbias_qq": 0.9698897427523265
+    },
+    {
+      "deck": 147,
+      "vop": 0.6,
+      "z_naive": 5.8903,
+      "skew": -0.3123,
+      "exkurt": 0.169,
+      "rho_skew": -0.40492966891336024,
+      "se_rho": 0.013524632635732243,
+      "rho_qq": -0.38950127276950164,
+      "chi2_at_rho_qq": 6.248705595472442,
+      "gauss_chi2": 797.8071436958375,
+      "obs_min": -5.192,
+      "min_ratio": 1.188459633561181,
+      "zbias_skew": 1.0933153542437175,
+      "zbias_qq": 1.0754652248817864
+    },
+    {
+      "deck": 1593,
+      "vop": 0.7,
+      "z_naive": 6.8023,
+      "skew": -0.3055,
+      "exkurt": 0.1456,
+      "rho_skew": -0.3935404651065916,
+      "se_rho": 0.013803527788695499,
+      "rho_qq": -0.38526169565795515,
+      "chi2_at_rho_qq": 1.4252188029317683,
+      "gauss_chi2": 801.4766375239761,
+      "obs_min": -4.762,
+      "min_ratio": 1.0900317363286485,
+      "zbias_skew": 1.0801270381354113,
+      "zbias_qq": 1.0705811397292795
+    },
+    {
+      "deck": 1832,
+      "vop": 0.7,
+      "z_naive": 6.793,
+      "skew": -0.2578,
+      "exkurt": 0.13,
+      "rho_skew": -0.30643247149751607,
+      "se_rho": 0.01609923949412205,
+      "rho_qq": -0.3001774822225993,
+      "chi2_at_rho_qq": 2.5012268426914313,
+      "gauss_chi2": 587.2217830150188,
+      "obs_min": -5.357,
+      "min_ratio": 1.2262284778480828,
+      "zbias_skew": 0.9813177079312467,
+      "zbias_qq": 0.974363070297815
+    },
+    {
+      "deck": 192,
+      "vop": 0.7,
+      "z_naive": 6.545,
+      "skew": -0.2978,
+      "exkurt": 0.1557,
+      "rho_skew": -0.3803573957707188,
+      "se_rho": 0.014132257888588752,
+      "rho_qq": -0.3461643137119899,
+      "chi2_at_rho_qq": 2.953000432773978,
+      "gauss_chi2": 715.2879247391303,
+      "obs_min": -5.293,
+      "min_ratio": 1.2115787443064967,
+      "zbias_skew": 1.064941184498136,
+      "zbias_qq": 1.0259329311380112
+    },
+    {
+      "deck": 435,
+      "vop": 0.7,
+      "z_naive": 6.7213,
+      "skew": -0.3023,
+      "exkurt": 0.1499,
+      "rho_skew": -0.3880994194037556,
+      "se_rho": 0.013938429725894538,
+      "rho_qq": -0.34384001760825456,
+      "chi2_at_rho_qq": 2.5697503580260816,
+      "gauss_chi2": 699.9772754431074,
+      "obs_min": -5.047,
+      "min_ratio": 1.1552688310060246,
+      "zbias_skew": 1.0738490854289386,
+      "zbias_qq": 1.0233009729056306
+    },
+    {
+      "deck": 458,
+      "vop": 0.7,
+      "z_naive": 7.0051,
+      "skew": -0.313,
+      "exkurt": 0.1819,
+      "rho_skew": -0.40608898786115033,
+      "se_rho": 0.013496505456834536,
+      "rho_qq": -0.39875262304696063,
+      "chi2_at_rho_qq": 2.6410615941328457,
+      "gauss_chi2": 820.645042228008,
+      "obs_min": -5.687,
+      "min_ratio": 1.3017661664218867,
+      "zbias_skew": 1.09466112129481,
+      "zbias_qq": 1.0861554216045413
+    },
+    {
+      "deck": 981,
+      "vop": 0.6,
+      "z_naive": 6.1024,
+      "skew": -0.2761,
+      "exkurt": 0.1372,
+      "rho_skew": -0.3414519179862908,
+      "se_rho": 0.015140579357796441,
+      "rho_qq": -0.2975476262186965,
+      "chi2_at_rho_qq": 1.0325449505745168,
+      "gauss_chi2": 590.4234251039435,
+      "obs_min": -4.906,
+      "min_ratio": 1.1229936367972175,
+      "zbias_skew": 1.0205993515642033,
+      "zbias_qq": 0.9714443543730198
+    }
+  ],
+  "rho_pooled": -0.371028574859156,
+  "rho_pooled_se": 0.0048073184944582605,
+  "rho_between_condition_sd": 0.03919917703912606,
+  "uniformity_chi2": 53.64307548735657,
+  "uniformity_dof": 8,
+  "uniformity_p": 8.095924607344306e-09,
+  "rho_qq_mean": -0.34447294826059627,
+  "rho_qq_sd": 0.040532412047512074,
+  "gaussian_rejected": 9,
+  "min_ratio_mean": 1.1758191516685275,
+  "z_min_gauss": -4.368680141404837,
+  "zbias_pooled": 1.054244435959542,
+  "zbias_range": [
+    0.9813177079312467,
+    1.09466112129481
+  ],
+  "z_eff_pooled": 7.452644435959542,
+  "slope_read_median_per_V": 15.083931547650522,
+  "slope_read_iqr": [
+    12.621001244284,
+    18.24476115633977
+  ],
+  "slope_write_median_per_V": 36.42105263157896,
+  "slope_write_iqr": [
+    31.89242424242424,
+    42.289624183006524
+  ],
+  "vmin_optimism_population_mV": 69.8918867822462,
+  "corners": [
+    {
+      "corner": "FFG",
+      "slope_per_V": 11.723343057056168,
+      "vmin_meas": 0.47311742948945534,
+      "vmin_corrected": 0.5278649044819966,
+      "d_vmin_mV": 54.74747499254129,
+      "vmin_shift_from_slope_mV": 89.92694582327371,
+      "z_at_T0": 9.044761428774745,
+      "zbias_headroom": 2.6463614287747452,
+      "t0_pass_naive": true,
+      "t0_pass_corrected": true,
+      "t0_margin_corrected_mV": 97.13509551800337
+    },
+    {
+      "corner": "FSG",
+      "slope_per_V": 14.224200999593592,
+      "vmin_meas": 0.5902852515604067,
+      "vmin_corrected": 0.6619372625814854,
+      "d_vmin_mV": 71.65201102107876,
+      "vmin_shift_from_slope_mV": 74.11624990322223,
+      "z_at_T0": 6.927241388625726,
+      "zbias_headroom": 0.5288413886257262,
+      "t0_pass_naive": true,
+      "t0_pass_corrected": false,
+      "t0_margin_corrected_mV": -36.93726258148544
+    },
+    {
+      "corner": "SFG",
+      "slope_per_V": 18.477533193902666,
+      "vmin_meas": 0.35000000000000003,
+      "vmin_corrected": 0.4230065371006583,
+      "d_vmin_mV": 73.00653710065824,
+      "vmin_shift_from_slope_mV": 57.055475149000316,
+      "z_at_T0": 11.993443148230702,
+      "zbias_headroom": 5.595043148230702,
+      "t0_pass_naive": true,
+      "t0_pass_corrected": true,
+      "t0_margin_corrected_mV": 201.99346289934172
+    },
+    {
+      "corner": "SSG",
+      "slope_per_V": 18.3445759174521,
+      "vmin_meas": 0.4671747735263336,
+      "vmin_corrected": 0.5126261015179869,
+      "d_vmin_mV": 45.45132799165336,
+      "vmin_shift_from_slope_mV": 57.469000139522834,
+      "z_at_T0": 9.809670479508819,
+      "zbias_headroom": 3.4112704795088193,
+      "t0_pass_naive": true,
+      "t0_pass_corrected": true,
+      "t0_margin_corrected_mV": 112.37389848201306
+    }
+  ],
+  "limiting_corner": "FSG",
+  "zbias_headroom_sigma": 0.5288413886257262,
+  "rho_lower_bound_for_T0": 0.14500000000000113,
+  "headroom_exceeded": true,
+  "write_rho_measurable": false,
+  "qc_audit": [
+    {
+      "batch": "SNMR",
+      "deck": 489,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": "93..1",
+      "new": 93.1,
+      "why": "'93..1' double-dot decimal typo; fits 82.36->93.1 trend"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1895,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": "182.9612.14",
+      "new": 182.96,
+      "why": "'182.9612.14' = avg+std merged into avg cell; std cell blank"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1895,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": NaN,
+      "new": 12.14,
+      "why": "'182.9612.14' = avg+std merged into avg cell; std cell blank"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 11,
+      "vop": 0.7,
+      "col": "snmr_avg",
+      "old": 9.73,
+      "new": 97.3,
+      "why": "9.73 x10; interp(0.6,0.8)=95.4"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 350,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 10.664,
+      "new": 106.64,
+      "why": "10.664 x10; 0.7V=94.6 trend ~105"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 636,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 11.73,
+      "new": 117.3,
+      "why": "11.73 x10; interp(0.5,0.7)=108.6"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 786,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 10.919,
+      "new": 109.19,
+      "why": "10.919 x10; interp(0.5,0.7)=105.4"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 803,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 13.69,
+      "new": 136.9,
+      "why": "13.69 x10; interp(0.5,0.7)=134.0"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1360,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 10.321,
+      "new": 103.21,
+      "why": "10.321 x10; interp(0.5,0.7)=99.9"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 555,
+      "vop": 0.7,
+      "col": "snmr_avg",
+      "old": 114.17,
+      "new": 143.33,
+      "why": "114.17 < 0.6V value; quad fit of other 4 -> 143.33"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 852,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 114.6,
+      "new": 144.1,
+      "why": "114.60 < 0.5V value; quad fit of other 4 -> 144.10"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 965,
+      "vop": 0.5,
+      "col": "snmr_avg",
+      "old": 73.84,
+      "new": 107.74,
+      "why": "73.84 < 0.4V value; quad fit -> 107.74, sigma 11.33 -> 12.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 965,
+      "vop": 0.5,
+      "col": "snmr_std",
+      "old": 11.33,
+      "new": 12.78,
+      "why": "73.84 < 0.4V value; quad fit -> 107.74, sigma 11.33 -> 12.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1074,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 142.45,
+      "new": 182.89,
+      "why": "142.45 < 0.7V value; quad fit -> 182.89, sigma 15.83 -> 13.72"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1074,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": 15.83,
+      "new": 13.72,
+      "why": "142.45 < 0.7V value; quad fit -> 182.89, sigma 15.83 -> 13.72"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1077,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 185.38,
+      "new": 226.54,
+      "why": "185.38 < 0.7V value; quad fit -> 226.54, sigma 15.55 -> 10.34"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1077,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": 15.55,
+      "new": 10.34,
+      "why": "185.38 < 0.7V value; quad fit -> 226.54, sigma 15.55 -> 10.34"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1241,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 22.8,
+      "new": 122.5,
+      "why": "22.80 (leading digit lost); quad fit of other 4 -> 122.50"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1545,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 73.75,
+      "new": 26.78,
+      "why": "73.75 > 0.5V value; quad fit -> 26.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1547,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 89.74,
+      "new": 54.23,
+      "why": "89.74 > 0.5V value; quad fit -> 54.23, sigma 16.79 -> 12.61"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1547,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 16.79,
+      "new": 12.61,
+      "why": "89.74 > 0.5V value; quad fit -> 54.23, sigma 16.79 -> 12.61"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1552,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 109.81,
+      "new": 54.2,
+      "why": "109.81 > 0.5V value; quad fit -> 54.20, sigma 14.81 -> 11.65"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1552,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 14.81,
+      "new": 11.65,
+      "why": "109.81 > 0.5V value; quad fit -> 54.20, sigma 14.81 -> 11.65"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1555,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 87.55,
+      "new": 39.31,
+      "why": "87.55 > 0.5V value; quad fit -> 39.31, sigma 14.77 -> 12.57"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1555,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 14.77,
+      "new": 12.57,
+      "why": "87.55 > 0.5V value; quad fit -> 39.31, sigma 14.77 -> 12.57"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1557,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 55.09,
+      "new": 21.72,
+      "why": "55.09 > 0.5V value; quad fit -> 21.72, sigma 11.83 -> 13.90"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1557,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 11.83,
+      "new": 13.9,
+      "why": "55.09 > 0.5V value; quad fit -> 21.72, sigma 11.83 -> 13.90"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1561,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 93.33,
+      "new": 43.25,
+      "why": "93.33 > 0.5V value; quad fit -> 43.25, sigma 15.06 -> 12.25"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1561,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 15.06,
+      "new": 12.25,
+      "why": "93.33 > 0.5V value; quad fit -> 43.25, sigma 15.06 -> 12.25"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1563,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 69.65,
+      "new": 21.92,
+      "why": "69.65 > 0.5V value; quad fit -> 21.92, sigma 12.25 -> 12.86"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1563,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 12.25,
+      "new": 12.86,
+      "why": "69.65 > 0.5V value; quad fit -> 21.92, sigma 12.25 -> 12.86"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1707,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": "25..88",
+      "new": 25.88,
+      "why": "'25..88' double-dot decimal typo"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 247,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": "25..72",
+      "new": 25.72,
+      "why": "'25..72' double-dot decimal typo"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 886,
+      "vop": 0.4,
+      "col": "vtrip_avg",
+      "old": 1636.65,
+      "new": 163.66,
+      "why": "1636.65/10; fits <0.5V(171) trend"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 209,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 14020.0,
+      "new": 140.2,
+      "why": "14020/100; interp(0.4,0.6)=140.6"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 63,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 1710.0,
+      "new": 171.0,
+      "why": "1710/10; interp(0.5,0.7)=179"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 431,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 2424.0,
+      "new": 242.4,
+      "why": "2424/10; interp(0.5,0.7)=248"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 97,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 16.0,
+      "new": 160.0,
+      "why": "16.0 x10; quad fit of other 3 = 165.2"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 276,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 12.072,
+      "new": 120.72,
+      "why": "12.072 x10; quad fit = 123.3"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 549,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 21.0,
+      "new": 210.0,
+      "why": "21.0 x10; quad fit = 222.0"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 726,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 219.0,
+      "new": 125.86,
+      "why": "219.0 > 0.7V value; quad fit of other 3 -> 125.86"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1292,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 208.0,
+      "new": 277.69,
+      "why": "208.0 < 0.6V value; quad fit -> 277.69"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1425,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 18.0,
+      "new": 180.0,
+      "why": "18.0 x10; quad fit = 184.2, sigma 24.0 -> 20.67 (3.3 mV off trend)"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1425,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 24,
+      "new": 20.67,
+      "why": "18.0 x10; quad fit = 184.2, sigma 24.0 -> 20.67 (3.3 mV off trend)"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1675,
+      "vop": 0.4,
+      "col": "vtrip_avg",
+      "old": 177.61,
+      "new": 109.0,
+      "why": "177.61 > 0.5V value; quad fit -> 109.0"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1735,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 182.0,
+      "new": 250.78,
+      "why": "182.0 < 0.6V value; quad fit -> 250.78"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1838,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 218.0,
+      "new": 303.93,
+      "why": "218.0 < 0.6V value; quad fit -> 303.93, sigma 22.0 -> 28.38"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1838,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 22,
+      "new": 28.38,
+      "why": "218.0 < 0.6V value; quad fit -> 303.93, sigma 22.0 -> 28.38"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1848,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 316.0,
+      "new": 168.0,
+      "why": "316.0 > 0.7V value; quad fit -> 168.0"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1855,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 216.0,
+      "new": 319.6,
+      "why": "216.0 < 0.5V value; quad fit -> 319.6"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1932,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 23.9,
+      "new": 239.0,
+      "why": "23.9 x10; quad fit = 236.1"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 300,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": "51.23.43",
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 863,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 1866.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 572,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 1171.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1756,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2023.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1565,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2179.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 755,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 3176.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1137,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2220.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1995,
+      "vop": 0.4,
+      "col": "vtrip_avg",
+      "old": 99387.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1027,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2422.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1681,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 3258.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 522,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 31283.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 905,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 2951.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1622,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 28360.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1691,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 233.48,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 546,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 2.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 831,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 1.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 878,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 285.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1254,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 50.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 9,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 1.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 379,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 1.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 690,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 223.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 730,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 253.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1796,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 2.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 845,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 223.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1504,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 121.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1510,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 218.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1722,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 212.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1860,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 133.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    }
+  ]
+}

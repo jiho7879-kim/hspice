@@ -1,0 +1,335 @@
+{
+  "mode": "read",
+  "temp_C": 125,
+  "part": "combined",
+  "seed": 42,
+  "n_iter": 150,
+  "z_target": 6.3984,
+  "z_eff": 7.4525999999999994,
+  "zbias": 1.0542,
+  "v_t0": 0.625,
+  "vops": [
+    0.4,
+    0.5,
+    0.6,
+    0.7,
+    0.8
+  ],
+  "n_train_conditions": 1700,
+  "baseline": {
+    "mu_rmse_mV": 2.501910236727391,
+    "mu_r2": 0.9964743523156505,
+    "sigma_rmse_mV": 0.25597207123107324,
+    "vmin_rmse_mV": 8.351081343878075,
+    "vmin_abs_p90_mV": 10.685644725686739,
+    "n_scored": 243,
+    "n_censored": 49
+  },
+  "qc_audit": [
+    {
+      "batch": "SNMR",
+      "deck": 489,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": "93..1",
+      "new": 93.1,
+      "why": "'93..1' double-dot decimal typo; fits 82.36->93.1 trend"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1895,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": "182.9612.14",
+      "new": 182.96,
+      "why": "'182.9612.14' = avg+std merged into avg cell; std cell blank"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1895,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": NaN,
+      "new": 12.14,
+      "why": "'182.9612.14' = avg+std merged into avg cell; std cell blank"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 11,
+      "vop": 0.7,
+      "col": "snmr_avg",
+      "old": 9.73,
+      "new": 97.3,
+      "why": "9.73 x10; interp(0.6,0.8)=95.4"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 350,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 10.664,
+      "new": 106.64,
+      "why": "10.664 x10; 0.7V=94.6 trend ~105"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 636,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 11.73,
+      "new": 117.3,
+      "why": "11.73 x10; interp(0.5,0.7)=108.6"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 786,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 10.919,
+      "new": 109.19,
+      "why": "10.919 x10; interp(0.5,0.7)=105.4"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 803,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 13.69,
+      "new": 136.9,
+      "why": "13.69 x10; interp(0.5,0.7)=134.0"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1360,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 10.321,
+      "new": 103.21,
+      "why": "10.321 x10; interp(0.5,0.7)=99.9"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 555,
+      "vop": 0.7,
+      "col": "snmr_avg",
+      "old": 114.17,
+      "new": 143.33,
+      "why": "114.17 < 0.6V value; quad fit of other 4 -> 143.33"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 852,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 114.6,
+      "new": 144.1,
+      "why": "114.60 < 0.5V value; quad fit of other 4 -> 144.10"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 965,
+      "vop": 0.5,
+      "col": "snmr_avg",
+      "old": 73.84,
+      "new": 107.74,
+      "why": "73.84 < 0.4V value; quad fit -> 107.74, sigma 11.33 -> 12.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 965,
+      "vop": 0.5,
+      "col": "snmr_std",
+      "old": 11.33,
+      "new": 12.78,
+      "why": "73.84 < 0.4V value; quad fit -> 107.74, sigma 11.33 -> 12.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1074,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 142.45,
+      "new": 182.89,
+      "why": "142.45 < 0.7V value; quad fit -> 182.89, sigma 15.83 -> 13.72"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1074,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": 15.83,
+      "new": 13.72,
+      "why": "142.45 < 0.7V value; quad fit -> 182.89, sigma 15.83 -> 13.72"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1077,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 185.38,
+      "new": 226.54,
+      "why": "185.38 < 0.7V value; quad fit -> 226.54, sigma 15.55 -> 10.34"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1077,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": 15.55,
+      "new": 10.34,
+      "why": "185.38 < 0.7V value; quad fit -> 226.54, sigma 15.55 -> 10.34"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1241,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 22.8,
+      "new": 122.5,
+      "why": "22.80 (leading digit lost); quad fit of other 4 -> 122.50"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1545,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 73.75,
+      "new": 26.78,
+      "why": "73.75 > 0.5V value; quad fit -> 26.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1547,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 89.74,
+      "new": 54.23,
+      "why": "89.74 > 0.5V value; quad fit -> 54.23, sigma 16.79 -> 12.61"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1547,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 16.79,
+      "new": 12.61,
+      "why": "89.74 > 0.5V value; quad fit -> 54.23, sigma 16.79 -> 12.61"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1552,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 109.81,
+      "new": 54.2,
+      "why": "109.81 > 0.5V value; quad fit -> 54.20, sigma 14.81 -> 11.65"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1552,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 14.81,
+      "new": 11.65,
+      "why": "109.81 > 0.5V value; quad fit -> 54.20, sigma 14.81 -> 11.65"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1555,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 87.55,
+      "new": 39.31,
+      "why": "87.55 > 0.5V value; quad fit -> 39.31, sigma 14.77 -> 12.57"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1555,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 14.77,
+      "new": 12.57,
+      "why": "87.55 > 0.5V value; quad fit -> 39.31, sigma 14.77 -> 12.57"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1557,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 55.09,
+      "new": 21.72,
+      "why": "55.09 > 0.5V value; quad fit -> 21.72, sigma 11.83 -> 13.90"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1557,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 11.83,
+      "new": 13.9,
+      "why": "55.09 > 0.5V value; quad fit -> 21.72, sigma 11.83 -> 13.90"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1561,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 93.33,
+      "new": 43.25,
+      "why": "93.33 > 0.5V value; quad fit -> 43.25, sigma 15.06 -> 12.25"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1561,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 15.06,
+      "new": 12.25,
+      "why": "93.33 > 0.5V value; quad fit -> 43.25, sigma 15.06 -> 12.25"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1563,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 69.65,
+      "new": 21.92,
+      "why": "69.65 > 0.5V value; quad fit -> 21.92, sigma 12.25 -> 12.86"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1563,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 12.25,
+      "new": 12.86,
+      "why": "69.65 > 0.5V value; quad fit -> 21.92, sigma 12.25 -> 12.86"
+    }
+  ],
+  "combo_conditions": 400,
+  "combo_mc": 500,
+  "dropped_level": 0.8,
+  "n_train_rows": 1600,
+  "fit_seconds": 113.65706062316895,
+  "simulation_budget_ratio": 0.018823529411764708,
+  "speedup": 53.12499999999999,
+  "combined_on_full": {
+    "mu_rmse_mV": 3.4249825984993203,
+    "mu_r2": 0.9933928798906858,
+    "sigma_rmse_mV": 0.335248368958972,
+    "vmin_rmse_mV": 10.954770709491058,
+    "vmin_abs_p90_mV": 15.835203105492466,
+    "n_scored": 245,
+    "n_censored": 49
+  },
+  "combined_on_reduced": {
+    "mu_rmse_mV": 1.747167912347802,
+    "mu_r2": 0.9980300919226278,
+    "sigma_rmse_mV": 0.3011660431339993,
+    "vmin_rmse_mV": 10.397820895599322,
+    "vmin_abs_p90_mV": 13.832417244833216,
+    "n_scored": 235,
+    "n_censored": 49
+  },
+  "seed_offset": 0
+}

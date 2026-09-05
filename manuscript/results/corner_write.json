@@ -1,0 +1,603 @@
+{
+  "mode": "write",
+  "temp_C": -40,
+  "z_target": 6.3984,
+  "v_t0": 0.625,
+  "seed": 42,
+  "refit": false,
+  "nominal": {
+    "cn": 21.0,
+    "sk": 0.0,
+    "pu": -11.0,
+    "lpu": 1.0,
+    "l_com": 1.0,
+    "l_sk": 0.0,
+    "mpu": 1.0,
+    "m_com": 1.01,
+    "m_sk": 0.0
+  },
+  "corners": [
+    {
+      "corner": "FFG",
+      "cn": -36.42,
+      "pu": -44.32,
+      "inside_training_box": true,
+      "vops": [
+        0.4,
+        0.5,
+        0.6,
+        0.7
+      ],
+      "z_meas": [
+        4.515613099771343,
+        6.555555555555268,
+        9.825199203186763,
+        13.63927427961507
+      ],
+      "z_pred": [
+        5.091036319732666,
+        6.483992099761963,
+        9.442975997924805,
+        13.770588874816895
+      ],
+      "z_rmse": 0.35340179393626503,
+      "vmin_meas": 0.4922960789844536,
+      "vmin_pred": 0.4938553512096405,
+      "censored_meas": false,
+      "censored_pred": false,
+      "err_mV": 1.559272225186925,
+      "z_at_T0_meas": 10.77871797229384,
+      "z_at_T0_pred": 10.524879217147829
+    },
+    {
+      "corner": "FSG",
+      "cn": -29.16,
+      "pu": 38.64,
+      "inside_training_box": true,
+      "vops": [
+        0.4,
+        0.5,
+        0.6,
+        0.7
+      ],
+      "z_meas": [
+        9.566666666666135,
+        8.358922829581658,
+        10.877852348992802,
+        14.661330665331935
+      ],
+      "z_pred": [
+        7.736388206481934,
+        9.444974899291992,
+        12.255576133728027,
+        16.380523681640625
+      ],
+      "z_rmse": 1.531598494570793,
+      "vmin_meas": 0.35000000000000003,
+      "vmin_pred": 0.35000000000000003,
+      "censored_meas": true,
+      "censored_pred": true,
+      "err_mV": 0.0,
+      "z_at_T0_meas": 11.823721928077585,
+      "z_at_T0_pred": 13.286813020706179
+    },
+    {
+      "corner": "SFG",
+      "cn": 31.63,
+      "pu": -36.76,
+      "inside_training_box": true,
+      "vops": [
+        0.4,
+        0.5,
+        0.6,
+        0.7
+      ],
+      "z_meas": [
+        2.088583428789535,
+        3.7110317105849173,
+        6.618017111222616,
+        10.198067632849696
+      ],
+      "z_pred": [
+        2.22336745262146,
+        3.4651308059692383,
+        6.11630392074585,
+        10.133410453796387
+      ],
+      "z_rmse": 0.2891931293584973,
+      "vmin_meas": 0.5924451938707582,
+      "vmin_pred": 0.6070223659276962,
+      "censored_meas": false,
+      "censored_pred": false,
+      "err_mV": 14.577172056937982,
+      "z_at_T0_meas": 7.513029741629387,
+      "z_at_T0_pred": 7.120580554008485
+    },
+    {
+      "corner": "SSG",
+      "cn": 36.3,
+      "pu": 44.8,
+      "inside_training_box": true,
+      "vops": [
+        0.4,
+        0.5,
+        0.6,
+        0.7
+      ],
+      "z_meas": [
+        5.788503253795781,
+        5.580786026200652,
+        8.0205011389518,
+        11.46892369883722
+      ],
+      "z_pred": [
+        4.7333903312683105,
+        6.19828462600708,
+        8.533143997192383,
+        12.195241928100586
+      ],
+      "z_rmse": 0.7557957181528461,
+      "vmin_meas": 0.5335126822605541,
+      "vmin_pred": 0.5085707604885101,
+      "censored_meas": false,
+      "censored_pred": false,
+      "err_mV": -24.94192177204402,
+      "z_at_T0_meas": 8.882606778923156,
+      "z_at_T0_pred": 9.448668479919435
+    }
+  ],
+  "n_scored": 3,
+  "censored_corners": [
+    "FSG"
+  ],
+  "vmin_rmse_mV": 16.7035399115734,
+  "vmin_max_abs_err_mV": 24.94192177204402,
+  "order_measured": [
+    "SFG",
+    "SSG",
+    "FFG",
+    "FSG"
+  ],
+  "order_predicted": [
+    "SFG",
+    "SSG",
+    "FFG",
+    "FSG"
+  ],
+  "order_match": true,
+  "t0_sign_agreement": "4/4",
+  "qc_audit": [
+    {
+      "batch": "Vtrip",
+      "deck": 1707,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": "25..88",
+      "new": 25.88,
+      "why": "'25..88' double-dot decimal typo"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 247,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": "25..72",
+      "new": 25.72,
+      "why": "'25..72' double-dot decimal typo"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 886,
+      "vop": 0.4,
+      "col": "vtrip_avg",
+      "old": 1636.65,
+      "new": 163.66,
+      "why": "1636.65/10; fits <0.5V(171) trend"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 209,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 14020.0,
+      "new": 140.2,
+      "why": "14020/100; interp(0.4,0.6)=140.6"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 63,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 1710.0,
+      "new": 171.0,
+      "why": "1710/10; interp(0.5,0.7)=179"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 431,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 2424.0,
+      "new": 242.4,
+      "why": "2424/10; interp(0.5,0.7)=248"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 97,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 16.0,
+      "new": 160.0,
+      "why": "16.0 x10; quad fit of other 3 = 165.2"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 276,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 12.072,
+      "new": 120.72,
+      "why": "12.072 x10; quad fit = 123.3"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 549,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 21.0,
+      "new": 210.0,
+      "why": "21.0 x10; quad fit = 222.0"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 726,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 219.0,
+      "new": 125.86,
+      "why": "219.0 > 0.7V value; quad fit of other 3 -> 125.86"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1292,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 208.0,
+      "new": 277.69,
+      "why": "208.0 < 0.6V value; quad fit -> 277.69"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1425,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 18.0,
+      "new": 180.0,
+      "why": "18.0 x10; quad fit = 184.2, sigma 24.0 -> 20.67 (3.3 mV off trend)"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1425,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 24,
+      "new": 20.67,
+      "why": "18.0 x10; quad fit = 184.2, sigma 24.0 -> 20.67 (3.3 mV off trend)"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1675,
+      "vop": 0.4,
+      "col": "vtrip_avg",
+      "old": 177.61,
+      "new": 109.0,
+      "why": "177.61 > 0.5V value; quad fit -> 109.0"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1735,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 182.0,
+      "new": 250.78,
+      "why": "182.0 < 0.6V value; quad fit -> 250.78"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1838,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 218.0,
+      "new": 303.93,
+      "why": "218.0 < 0.6V value; quad fit -> 303.93, sigma 22.0 -> 28.38"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1838,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 22,
+      "new": 28.38,
+      "why": "218.0 < 0.6V value; quad fit -> 303.93, sigma 22.0 -> 28.38"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1848,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 316.0,
+      "new": 168.0,
+      "why": "316.0 > 0.7V value; quad fit -> 168.0"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1855,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 216.0,
+      "new": 319.6,
+      "why": "216.0 < 0.5V value; quad fit -> 319.6"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1932,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 23.9,
+      "new": 239.0,
+      "why": "23.9 x10; quad fit = 236.1"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 572,
+      "vop": 0.6,
+      "col": "vtrip_avg",
+      "old": 1171.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 755,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 3176.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 300,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": "51.23.43",
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1137,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2220.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1565,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2179.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1995,
+      "vop": 0.4,
+      "col": "vtrip_avg",
+      "old": 99387.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1756,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2023.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1681,
+      "vop": 0.5,
+      "col": "vtrip_avg",
+      "old": 3258.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1027,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2422.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 863,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 1866.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 522,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 31283.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 905,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 2951.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1622,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 28360.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1691,
+      "vop": 0.4,
+      "col": "vtrip_std",
+      "old": 233.48,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 546,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 2.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 831,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 1.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 878,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 285.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1254,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": 50.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 9,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 1.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 379,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 1.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 690,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 223.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 730,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 253.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1796,
+      "vop": 0.6,
+      "col": "vtrip_std",
+      "old": 2.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 845,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 223.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1504,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 121.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1510,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 218.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1722,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 212.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1860,
+      "vop": 0.7,
+      "col": "vtrip_std",
+      "old": 133.0,
+      "new": null,
+      "why": "outside physical band (5.0, 40.0) mV"
+    }
+  ]
+}
