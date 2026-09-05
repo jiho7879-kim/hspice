@@ -13,6 +13,7 @@ table numerals (I, II, ... XVIII), reference markers and the roman numerals insi
 `Sec. V-B` / `제5절 B항` are stripped first, since those are language-specific by design.
 """
 import argparse
+import os
 import re
 import sys
 from collections import Counter
@@ -24,8 +25,9 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-v", action="store_true", help="list every difference, not the first 5")
 args = ap.parse_args()
 
-KR = (MANUSCRIPT / "paper_kr.md").read_text()
-EN = (MANUSCRIPT / "paper_en.md").read_text()
+# QC_KR/QC_EN target an alternative structure (e.g. paper_*_B.md) without copying this file.
+KR = (MANUSCRIPT / os.environ.get("QC_KR", "paper_kr.md")).read_text()
+EN = (MANUSCRIPT / os.environ.get("QC_EN", "paper_en.md")).read_text()
 
 # Text that is language-specific by construction and must not enter the comparison.
 DROP = [
@@ -99,7 +101,8 @@ else:
 # everything after it, and a renumbering pass that misses "Tables XIII" (plural) or
 # "표 XVII의" (particle attached) leaves one language pointing at the wrong table. The
 # two versions are the same paper, so their in-text references must line up one to one.
-ROM = r"(?:XIX|XVIII|XVII|XVI|XV|XIV|XIII|XII|XI|IX|VIII|VII|VI|IV|V|X|III|II|I)"
+ROM = (r"(?:XXIII|XXII|XXI|XX|XIX|XVIII|XVII|XVI|XV|XIV|XIII|XII|XI|IX|VIII|VII|VI|IV|V"
+       r"|X|III|II|I)")
 
 
 def ref_sequence(text, caption_pat, word):

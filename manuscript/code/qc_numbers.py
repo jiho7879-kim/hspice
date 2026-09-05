@@ -7,14 +7,16 @@ Fails loudly. A number that is in the paper but not here is not checked; a numbe
 here but missing from a paper is reported.
 """
 import json
+import os
 import re
 import sys
 
 import _paths  # noqa: F401
 from _paths import MANUSCRIPT, RESULTS
 
-KR = (MANUSCRIPT / "paper_kr.md").read_text()
-EN = (MANUSCRIPT / "paper_en.md").read_text()
+# QC_KR/QC_EN target an alternative structure (e.g. paper_*_B.md) without copying this file.
+KR = (MANUSCRIPT / os.environ.get("QC_KR", "paper_kr.md")).read_text()
+EN = (MANUSCRIPT / os.environ.get("QC_EN", "paper_en.md")).read_text()
 
 
 def load(n):

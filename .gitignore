@@ -43,6 +43,9 @@ python/results/budget_pareto/pareto_checkpoint.json
 
 # Local agent/skill tooling (30 MB of installed skills, not project source)
 .agents/
+# .claude/skills/ is only symlinks into .agents/, so it is broken for anyone else
+.claude/skills/
+skills-lock.json
 
 # Codegraph index
 .codegraph/
