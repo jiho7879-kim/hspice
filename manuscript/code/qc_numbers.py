@@ -87,10 +87,12 @@ CHECKS = [
 _st, _stw = sen["sobol"]["ST"]["z(0.625V)"], senw["sobol"]["ST"]["z(0.625V)"]
 _ss, _ssw = sen["sobol"]["ST"]["sigma(0.625V)"], senw["sobol"]["ST"]["sigma(0.625V)"]
 CHECKS += [
-    ("non-corner share of z, read",
-     100 * (sum(_st.values()) - _st["cn"] - _st["pu"]) / sum(_st.values()), "41"),
-    ("non-corner share of z, write",
-     100 * (sum(_stw.values()) - _stw["cn"] - _stw["pu"]) / sum(_stw.values()), "40"),
+    # S_T does not partition variance, so the non-corner share is quoted as the bound
+    # 1 - (S_T[cn] + S_T[pu]) -- see Sec. VII-B result 1.
+    ("non-corner share of z, read (lower bound)",
+     100 * (1 - _st["cn"] - _st["pu"]), "39"),
+    ("non-corner share of z, write (lower bound)",
+     100 * (1 - _stw["cn"] - _stw["pu"]), "41"),
     ("length-axis share of sigma, read",
      100 * (_ss["l_com"] + _ss["lpu"] + _ss["l_sk"]) / sum(_ss.values()), "98.8"),
     ("length-axis share of sigma, write",
