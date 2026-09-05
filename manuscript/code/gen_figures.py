@@ -406,7 +406,7 @@ if want(8):
     c_ax.set_yticks(y); c_ax.set_yticklabels([LAB[c] for c in order])
     c_ax.set_xlim(0, 0.16)
     c_ax.set_xticks([0, 0.05, 0.10, 0.15])
-    c_ax.set_xlabel("ARD relevance $\\ell^{-1}/\\sum\\ell^{-1}$")
+    c_ax.set_xlabel("ARD relevance $\\lambda^{-1}/\\sum\\lambda^{-1}$")
     c_ax.set_title("(c) the free proxy is flat")
     save(fig, 8, "sensitivity")
 

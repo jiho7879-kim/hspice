@@ -32,7 +32,7 @@ DROP = [
     r"\[\d+\]",                       # citation markers
     r"(?:TABLE|표) [IVX]+\.",         # table numerals
     r"(?:Fig\.|그림) \d+",            # figure numbers
-    r"Sec\. [IVX]+(?:-[A-Z])?",       # English section refs
+    r"Sections? [IVX]+(?:-[A-Z])?",   # English section refs (IEEE spells "Section" out)
     r"제\d+절(?: [A-Z]항)?",          # Korean section refs
     r"Appendix [A-C]", r"부록 [A-C]",
     r"[DNOFT]-\d+",                   # ledger / decision IDs

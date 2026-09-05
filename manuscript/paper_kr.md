@@ -12,43 +12,22 @@
 
 ## 초록
 
-SRAM의 최소 동작 전압(Vmin)은 공정 변동 윈도우 **전 구간**에 대해 sign-off되어야
-하지만, 요구되는 tail 분위수를 Monte Carlo(MC)로 직접 검증하는 것은 비용이 감당되지
-않고, 코너 기반 sign-off는 코너 정의에 들어가지 않는 변동 축을 아예 관측하지 못한다.
-본 연구는 하나의 고정된 시뮬레이션 예산으로 순방향과 역방향 Vmin 질의를 모두 처리하는
-surrogate 파이프라인을 제시한다. Gaussian process(GP)가 9개 공정 변동 축과 공급 전압에서
-margin 통계 (μ, σ)를 회귀하고, 학습 파라미터가 없는 physics layer가 이를 수율 기준
-Vmin으로 변환한다. 조건별 MC 표준오차를 받는 noise-aware likelihood가 서로 다른 표본
-예산을 하나의 모델에 수용한다. 역방향 질의는 축별 1차원 이분 탐색으로 정확히 풀린다.
-
-첨단 FinFET 노드의 생산 캘리브레이션 데이터로 검증했다. 읽기(SNM @125 °C)와
-쓰기(V_trip @−40 °C) 각 2,000 조건에서, 조건 단위로 분리한 hold-out 300 조건의 Vmin
-RMSE는 읽기 **8.35 mV**, 쓰기 **14.45 mV**다. 학습에 쓰이지 않은 PDK 코너 4종 가운데
-채점 가능한 3개에서 오차는 읽기 9.3 mV / 쓰기 16.7 mV였고, 두 모드 각각의 구속 코너(읽기 FSG, 쓰기 SFG)를 모두
-맞혔다. 독립적으로 설계된 파일럿 배치의 읽기 348 조건에 재학습 없이 적용했을 때 읽기 Vmin
-RMSE는 전체에서 21.4 mV, 배치 자체의 정합성 감사(surrogate와 무관)를 통과한 283 조건에서
-4.26 mV였다. 이 배치는 아홉 축 중 여섯을 고정하므로 9차원 대표 수치는 여전히 8.35 mV다. 역방향으로는 실측 Vmin으로부터 9개 좌표 중 하나를 되찾아 NMOS
-Vth를 2.60 mV, PMOS Vth를 3.20 mV RMSE로 복원했으며, 12개 시작점 전부가 잔차
-5 × 10⁻⁴ mV 이내로 수렴했다.
-
-시뮬레이션 예산은 세 축에서 줄일 수 있다. 사양 판정만이 산출물이라면 전압 레벨은
-구조적으로 두 개면 충분하고(max |Δz| = 1.8 × 10⁻¹⁵), 학습 조건 수는 1,700 → 400,
-조건당 MC 표본은 5,000 → 500까지 각각 손실 없이 줄어든다. 다만 셋을 **동시에** 줄이면
-손실이 곱해지지 않는다는 사실을 직접 측정했다 — 53배 절감에서 Vmin RMSE는 8.35 →
-10.95 mV로 나빠지는데, 세 단일 인자 실험을 합치면 열화가 아예 예측되지 않는다
-(Δ의 합 −1.7 mV, 각각은 fit 간 잡음대 안). 절감은 무손실이 아니라 대가가 명시된
-Pareto 점이다.
-
-같은 surrogate 위에서 설계 범위에 균등 prior를 두고 분산을 분해하면, 어떤 코너 정의에도
-들어 있지 않은 축들이 읽기 마진 분산의 **39 %** 이상, 쓰기의 **41 %** 이상을 가져간다. σ의 분산은 거의 전부 local σ 길이 축에서 나온다. lobe 보정 후에는 ±20 mV V_th skew 전 구간을 견디는 문턱전압
-평면의 비율이 83 %에서 67 %로 줄어든다.
-
-끝으로, min-statistics z-score에 내재된 체계적 낙관의 크기를 결정하는 물리량이 butterfly
-두 lobe의 상관 ρ_LR임을 보이고, 양산 MC 출력의 형상 통계량만으로 이를 측정했다.
-서로 독립인 두 추정 경로가 ρ_LR ≈ −0.34 … −0.37에 수렴하며, pooled 추정값
-**ρ_LR = −0.371**(임의효과 SE 0.013)은 z 기준 **+1.054 σ**의 낙관에 해당한다. 이를 보정하면 읽기
-구속 코너 FSG의 Vmin이 0.590 V에서 **0.662 V**로 올라가 사양(0.625 V)을 37 mV 넘어선다.
-즉 지배적 불확실성은 모델이 아니라 **지표**에 있다.
+SRAM의 최소 동작 전압(Vmin)을 공정 변동 윈도우 전 구간에 대해 sign-off하는 것은 Monte
+Carlo 직접 검증으로는 비용이 감당되지 않고, 코너 기반 sign-off는 코너 정의에 들어가지
+않는 변동 축을 아예 관측하지 못한다. 본 연구는 하나의 고정된 시뮬레이션 예산으로
+순방향과 역방향 Vmin 질의를 모두 처리하는 surrogate 파이프라인을 제시한다. Gaussian
+process가 9개 공정 축과 공급 전압에서 margin 통계를 회귀하고, 학습 파라미터가 없는
+physics layer가 이를 수율 기준 Vmin으로 변환하며, noise-aware likelihood가 서로 다른
+표본 예산을 한 모델에 수용하고, 역방향 질의는 축별 1차원 이분 탐색으로 정확히 풀린다.
+첨단 FinFET 노드의 생산 캘리브레이션 데이터에서 조건 단위 hold-out Vmin RMSE는 읽기 8.35
+mV, 쓰기 14.45 mV이고, 학습에 쓰이지 않은 PDK 코너에서는 9.3 mV와 16.7 mV이며 두 모드의
+구속 코너를 모두 맞혔다. 역질의는 Vmin으로부터 공정 좌표 하나를 2.6–3.2 mV 이내로
+되찾는다. 시뮬레이션 예산을 53배 줄이는 대가는 Vmin RMSE 2.6 mV인데, 단일 인자 실험 셋은
+손실을 전혀 예측하지 않는다 — 절감은 공짜가 아니라 대가가 명시된 Pareto 점이다. 분산
+분해는 읽기 마진 분산의 39 % 이상이 어떤 코너에도 없는 축 위에 있음을 보인다. 끝으로
+min-statistics z-score의 체계적 낙관을 결정하는 물리량이 lobe 상관임을 규명하고 이를
+양산 Monte Carlo 출력만으로 측정했으며(−0.371, z 기준 1.054 σ), 이를 보정하면 읽기 구속
+코너가 사양을 37 mV 넘어선다. 지배적 불확실성은 모델이 아니라 지표에 있다.
 
 **색인어** — Gaussian process, SRAM, static noise margin, surrogate 모델, 공정 변동,
 민감도 분석, 수율 해석, 역문제, 최소 동작 전압.
@@ -63,7 +42,7 @@ SRAM은 현대 SoC에서 가장 큰 면적을 차지하고 칩 수율을 지배�
 nominal 공급 전압은 0.75 V이며, on-chip·off-chip IR drop을 반영한 sign-off Vmin 사양은
 **0.625 V**다(표 I). 모든 시뮬레이션과 판정은 time-zero 기준이다. BTI 등 열화에 대한
 가드밴드는 실리콘에서 경험적으로 확립되어 이 time-zero 사양에 이미 반영되어
-있으므로[22]–[24], 열화 후 전압을 별도의 판정 기준으로 다시 얹지 않는다.
+있으므로[1]–[3], 열화 후 전압을 별도의 판정 기준으로 다시 얹지 않는다.
 
 **표 I. Vmin 사양**
 
@@ -101,18 +80,28 @@ skew를 어디까지 허용할 수 있는가. 유한한 점 집합은 준수 경
 
 ### D. 관련 연구
 
-Surrogate로 SRAM 수율을 다루는 연구는 이미 여럿 있다. Guo 등[10]은 multi-fidelity 신경망을,
-Yin 등[11], [12]은 능동 학습과 축소 특징을, Liu 등[13]은 최적 다양체 탐색을 써서 **주어진
-설계점의 극저 실패율을 추정하는 비용**을 낮춘다. 표본 설계 쪽으로는 quasi-MC[9]와
-공간 채움 라틴 하이퍼큐브[15]가 확립되어 있다. Vmin 자체를 대상으로 삼은 연구로는
-Gupta와 Calhoun[14]이 동적 읽기 Vmin과 수율을 함께 추정하는 틀을 제시했다.
+Surrogate로 SRAM 수율을 다루는 연구는 이미 여럿 있다. Guo 등[4]은 multi-fidelity 신경망을,
+Yin 등[5], [6]은 능동 학습과 축소 특징을, Liu 등[7]은 최적 다양체 탐색을 써서 **주어진
+설계점의 극저 실패율을 추정하는 비용**을 낮춘다. 표본 설계 쪽으로는 quasi-MC[8]와
+공간 채움 라틴 하이퍼큐브[9]가 확립되어 있다. Vmin 자체를 대상으로 삼은 연구로는
+Gupta와 Calhoun[10]이 동적 읽기 Vmin과 수율을 함께 추정하는 틀을 제시했다.
+
+희귀 사건 쪽에도 고유한 계보가 있다. Statistical blockade[11]는 분류기로 표본을 걸러낸 뒤
+살아남은 것에 generalised Pareto tail을 맞추고, mixture importance sampling[12]은 표집
+분포를 실패 영역 쪽으로 옮긴 뒤 가중을 되돌린다. 둘 다 같은 어려움 — 6σ 분위수는 평범한
+Monte Carlo로 닿지 않는다 — 을 공격하며, 둘 다 한 설계점에서 그렇게 한다.
 
 본 연구가 다른 점은 **질문의 방향**이다. 위 연구들은 한 점의 실패 확률을 정확히 추정하는
 문제를 풀고, 여기서는 공정 윈도우 **전 구간**에 대해 Vmin **등고선**을 얻은 뒤 그것을
 뒤집어 조건을 역추정한다. 그래서 필요한 것이 다르다 — 극단 tail의 중요도 표집이 아니라
-9차원 전 구간에 걸친 매끄러운 회귀, 그리고 그 위에서 정확히 풀리는 역질의다. 또한 위
-연구들은 지표(z-score) 자체가 편향되어 있을 가능성을 다루지 않는데, 제5절 F항이 보이듯
-본 데이터에서는 그 편향이 모델 오차보다 한 자릿수 크다.
+9차원 전 구간에 걸친 매끄러운 회귀, 그리고 그 위에서 정확히 풀리는 역질의다. 둘은 경쟁이
+아니라 상보적이다. 이 surrogate가 한계라고 지목한 조건에서 신뢰할 라벨을 만들어 주는 것이
+blockade나 importance sampling 캠페인이다.
+
+지표 자체에 대해서는, SNM의 비정규성은 이미 확립되어 있다[13], [14]. 아직 되지 않은 것은
+그 편향의 크기를 결정하는 물리량을 규명하고, 양산 MC 출력만으로 그것을 측정해, 특정 제품
+사양의 Vmin 단위로 환산하는 일이다 — 제5절 F항이 보이듯 본 데이터에서 그 편향은 모델
+오차보다 한 자릿수 크다.
 
 ### E. 기여
 
@@ -127,6 +116,9 @@ Gupta와 Calhoun[14]이 동적 읽기 Vmin과 수율을 함께 추정하는 틀�
 5. min-statistics z-score의 체계적 낙관을 결정하는 물리량이 lobe 상관 ρ_LR임을 규명하고,
    양산 MC 출력만으로 이를 측정해 특정 제품 사양의 Vmin 단위로 환산(제2절 D항, 제5절 F항).
 
+그림 1이 이 다섯 기여가 조립하는 파이프라인을 보여준다 — 모드당 GP 한 번, 학습
+파라미터가 없는 physics layer, 그리고 같은 적합에서 나오는 양방향 질의다.
+
 **그림 1.** 파이프라인 개요.
 
 ---
@@ -136,7 +128,7 @@ Gupta와 Calhoun[14]이 동적 읽기 Vmin과 수율을 함께 추정하는 틀�
 ### A. 안정성 지표
 
 6T 셀의 읽기 안정성은 static noise margin(SNM)으로 정량화하며, 이는 butterfly 특성
-두 lobe의 **최소값**으로 정의된다[1]. 쓰기 안정성은 write trip point(V_trip)로 잰다.
+두 lobe의 **최소값**으로 정의된다[15]. 쓰기 안정성은 write trip point(V_trip)로 잰다.
 MC는 두 지표 각각의 분포를 산출하고, 관례적으로 평균 μ와 표준편차 σ를 기록한다.
 본 방법론은 지표에 무관하며, 두 지표에 동일하게 적용된다.
 
@@ -152,10 +144,10 @@ Vmin(**x**)를 얻는다.
 Z_t는 어레이 수율 요구에서 해석적으로 유도된다. 128 Mb 어레이의 99 % Poisson 수율에 대해
 
     p_fail = −ln(0.99) / (128 × 10⁶) ≈ 7.85 × 10⁻¹¹                        (2)
-    Z_t = Φ⁻¹(1 − p_fail) = **6.398**                                      (3)
+    Z_t = Φ⁻¹(1 − p_fail) = 6.398                                          (3)
 
 이며 Φ는 표준정규 누적분포함수다. 실패 단위는 **셀**이며 트랜지스터 수를 곱하는 것은
-잘못이다. 어레이 크기 128 Mb는 참고문헌 [21]의 14 nm 128 Mb SRAM과 정합한다.
+잘못이다. 어레이 크기 128 Mb는 참고문헌 [16]의 14 nm 128 Mb SRAM과 정합한다.
 
 두 개의 기준량을 분리해야 한다. Z_t는 수율 기준으로서 Vmin의 *정의*에 들어가고,
 표 I의 사양 전압은 그 Vmin이 *합격인지*를 결정한다. 둘은 독립적으로 정해진다.
@@ -184,18 +176,20 @@ SNM은 두 lobe margin의 최소값이고, 두 Gaussian 변량의 최소값은 G
 맞춰 Z_t = 6.398까지 외삽하므로 실패 확률을 체계적으로 과소평가한다. 실패는 두 lobe 중
 하나만 무너져도 성립하므로 실제 실패 확률은 union 확률이다.
 
-SNM 분포의 비정규성 자체는 이미 문헌에 있다. Saeidi 등[19]은 단측 읽기 SNM이 단일
-Gaussian이 아니라 정규분포의 가중합을 따름을 보였고, Zheng과 Mazumder[20]는 다이 내 SNM
+SNM 분포의 비정규성 자체는 이미 문헌에 있다. Saeidi 등[13]은 단측 읽기 SNM이 단일
+Gaussian이 아니라 정규분포의 가중합을 따름을 보였고, Zheng과 Mazumder[14]는 다이 내 SNM
 변동을 folded-normal과 non-central chi-squared의 조합으로 모델링해 6σ 너머까지 일치함을
 보고했다. 본 절의 기여는 이 관찰이 아니라, **편향의 크기를 결정하는 물리량을 규명하고
 그것을 양산 MC 출력만으로 측정해 특정 제품 사양의 Vmin 단위로 환산**하는 데 있다.
 
 Lobe별 통계 (μ_L, σ_L, μ_R, σ_R, ρ_LR)가 주어지면 실패 확률은 폐형식을 갖는다.
 
-    p_fail = P(L<0) + P(R<0) − P(L<0, R<0)                                (4)
-    Z_eff  = Φ⁻¹(1 − p_fail)                                              (5)
+    p_fail  = P(L<0) + P(R<0) − P(L<0, R<0)                               (4)
+    Z_union = Φ⁻¹(1 − p_fail)                                             (5)
 
-결합항은 bivariate normal CDF이며 Owen's T 함수[3]로 계산된다.
+결합항은 bivariate normal CDF이며 Owen's T 함수[17]로 계산된다. Z_union은 올바른 union
+계산이 한 조건에 부여하는 z이고, 식 (1)의 naive z는 그보다 작은 값을 준다. 이 절이 다루는
+편향이 그 차이다.
 
 #### 1) ρ_LR의 물리적 의미
 
@@ -221,9 +215,12 @@ local·global 성분비를 직접 반영하는 물리량**이다.
 편향은 (μ, σ) → Vmin 변환의 **임계값에만** 영향을 준다. Vmin이 z(V_op) = Z_t 교차점으로
 정의되므로 필요한 것은 z축 전체가 아니라 z = Z_t 한 점에서의 편향값뿐이다. 보정은
 
-    Z_eff = Z_t + z_bias                                                  (6)
+    z_bias = Z_union(ρ_LR, Z_t) − Z_t                                     (6)
+    Z_eff  = Z_t + z_bias                                                  (7)
 
-의 후처리이며 재시뮬레이션을 요구하지 않는다. 그 결과 제5~7절의 **서열** 결론 —
+의 후처리다. z_bias는 목표 분위수에서 평가한다 — 그 점에서 union 계산이 naive 임계값을
+얼마나 넘어서는지가 z_bias다. 교차가 도달해야 하는 임계값은 보정된 Z_eff이며, 이 보정은
+재시뮬레이션을 요구하지 않는다. 그 결과 제5~7절의 **서열** 결론 —
 민감도 순위와 코너 서열 — 은 영향을 받지 않는다. 반면 임계값을 기준으로 정의된 양은
 모두 움직인다. 통과 비율, 허용폭, 적합 경계의 위치에는 Z_t가 그대로 들어가므로 그런
 곳에서는 두 임계값을 항상 함께 보고한다(표 XIII·XVIII, 제7절 D항). 절대 Vmin과
@@ -236,8 +233,11 @@ local·global 성분비를 직접 반영하는 물리량**이다.
 S = L+R, D = L−R이 독립이므로,
 
     a² = 2(1 − ρ),  c = √(2/π)
-    μ₂ = 1 − a²/(2π),  μ₃ = −a³(2c³ − c)/8
-    g₁(ρ) = μ₃ / μ₂^{3/2}                                                 (7)
+    m₂ = 1 − a²/(2π),  m₃ = −a³(2c³ − c)/8
+    g₁(ρ) = m₃ / m₂^{3/2}                                                 (8)
+
+m₂·m₃은 표준화한 최소값의 2·3차 중심적률이다. μ가 아니라 m으로 적는 것은 이 논문에서
+μ가 margin 평균을 가리키기 때문이다.
 
 이고 g₁은 ρ에 대해 단조다. Skewness는 전체 표본을 쓰므로 하위 분위수 몇 점에 의존하는
 tail 적합보다 통계적으로 효율적이다. 측정 결과는 제5절 F항에 있다.
@@ -287,7 +287,8 @@ Pass-gate와 pull-down은 NMOS 플레이버를 공유하므로 게이트 스택,
 
 채택한 공통/skew 분해는 corr(l_PG, l_PD) ≈ 0.88을 유도하며, 이는 동일 플레이버 추적의
 타당 범위 0.85~0.95 안에 있고 ρ ≈ 0.80의 Vth 구조와도 일관된다. 공통 성분과 skew 성분은
-독립적으로 샘플링되며, 이 성질을 제7절의 분산 기반 분석이 요구한다.
+독립적으로 샘플링되며, 이 성질을 제7절의 분산 기반 분석이 요구한다. 그림 2가 설계의
+두 축을 보여준다 — (a)의 quadrant 가중과 (b)의 tracking 밴드다.
 
 **그림 2.** (a) (cn, pu) 평면의 quadrant 가중, (b) 독립적인 (l_com, l_sk) 샘플링이
 유도하는 대각 (l_PG, l_PD) 추적 띠.
@@ -343,13 +344,15 @@ MC 표준오차의 3배를 넘는 위반은 전사 오류다.
 
 ### A. Gaussian process 회귀
 
-GP[4]는 예측 평균과 함께 보정된 예측 분산을 돌려주는 비모수 Bayesian 회귀를 제공한다.
+GP[18]는 예측 평균과 함께 보정된 예측 분산을 돌려주는 비모수 Bayesian 회귀를 제공한다.
 모델은 9개 변동 축과 공급 전압을 margin 통계 (μ, σ)로 사상한다. 세 가지 성질이 이 선택을
 정당화한다: 제한된 데이터에서의 동작, 정량화된 예측 불확실성, 그리고 조건별 잡음을
 직접 받는 likelihood(E항). 형식론 배경은 부록 A에 있다.
 
-μ 프로세스는 ARD를 적용한 Matérn-5/2 kernel로 각 입력 차원에 독립 lengthscale을 할당한다.
-σ 프로세스는 공급 전압 그룹과 소자 변동 그룹을 분리하는 가산 kernel을 쓴다.
+μ 프로세스는 ARD를 적용한 Matérn-5/2 kernel로 각 입력 차원에 독립 lengthscale λ를
+할당한다. σ 프로세스는 공급 전압 그룹과 소자 변동 그룹을 분리하는 가산 kernel을 쓴다.
+kernel lengthscale은 표 II의 local σ 길이 축 l_com·lpu·l_sk와 구별하기 위해 이 논문
+전체에서 λ로 적는다.
 
 ### B. 입력 표준화
 
@@ -370,7 +373,7 @@ marginal likelihood 최적화가 **진단 없이** 현저히 열등한 최적점
 세 제약이 사전 소자 지식을 주입한다. **코너 앵커링**은 4개 global 코너의 가상 관측으로
 학습 세트를 증강해 도메인 극단에서의 외삽 이탈을 막는다. **단조성 패널티**
 ReLU(−∂μ/∂V_op)²는 posterior를 통해 probe 점에서 평가되어 "공급을 올렸는데 평균 안정성이
-나빠진다"는 비물리적 예측을 억제한다. 약한 정규화가 확립된 mismatch 스케일링[2]과 일관된
+나빠진다"는 비물리적 예측을 억제한다. 약한 정규화가 확립된 mismatch 스케일링[19]과 일관된
 선형 σ(V_op) 경향을 유도한다.
 
 ### E. Noise-aware likelihood
@@ -381,7 +384,7 @@ ReLU(−∂μ/∂V_op)²는 posterior를 통해 probe 점에서 평가되어 "�
 
 이 기구가 이질적 표본 예산을 하나의 모델에 수용한다. 저 fidelity가 **같은 시뮬레이터에서
 표본 수만 줄인 것**일 때는 heteroscedastic 단일-fidelity GP가 올바른 모델이며,
-multi-fidelity 정식화[5]의 불일치 항이 불필요하다. Posterior가 인접 조건에서 강도를
+multi-fidelity 정식화[20]의 불일치 항이 불필요하다. Posterior가 인접 조건에서 강도를
 차용하므로 개별 조건이 정보를 가지기 위해 큰 MC 배치를 요구하지 않으며, 이것이 고정
 예산을 조건당 깊이가 아니라 **조건 커버리지의 폭**에 배분하는 근거가 된다(제6절 C항).
 
@@ -467,6 +470,7 @@ RMSE만으로는 오차 구조를 알 수 없으므로 분포를 함께 본다. 
 surrogate가 교차점을 0.4 V 아래로 예측해 하한값으로 clamp된 경우다. 오차의 크기는 clamp
 폭이 만든 것이지 예측 품질의 반영이 아니며, 해당 조건은 사양 전압 대비 200 mV 이상 여유를
 갖는 관심 밖 영역이다. 이 셋을 빼면 Vmin RMSE는 **6.02 mV**, 최대 오차는 **19.3 mV**다.
+표 V가 오차를 Vmin 구간별로 나눠 보여준다.
 
 **표 V. 읽기 Vmin 오차의 구간별 분포 (hold-out, non-censored 243 조건)**
 
@@ -482,7 +486,8 @@ surrogate가 교차점을 0.4 V 아래로 예측해 하한값으로 clamp된 경
 
 판정이 실제로 일어나는 0.45–0.75 V 구간에서 RMSE는 5–8 mV이며, 이는 F항에서 측정되는
 지표 편향(z 기준 +1.054 σ, Vmin 환산 70 mV)보다 **한 자릿수 작다.** 즉 sign-off 결정을
-지배하는 항은 surrogate의 회귀 오차가 아니라 지표 자체의 편향이다.
+지배하는 항은 surrogate의 회귀 오차가 아니라 지표 자체의 편향이다. 그림 3이 두 모드의
+예측 대 참조 Vmin을 그린다.
 
 **그림 3.** Hold-out 조건의 실측 대 예측 Vmin.
 
@@ -508,15 +513,18 @@ surrogate가 교차점을 0.4 V 아래로 예측해 하한값으로 clamp된 경
 
 ### C. 물리 정합성
 
+숫자를 잘 맞추면서도 소자에 대해 틀릴 수 있다. 표 VI은 물리가 요구하는 성질과 적합된
+모델이 그것을 어떻게 다루는지를 나열한다.
+
 **표 VI. 물리 정합성 검사 (읽기 모델)**
 
 | 성질 | 기대 | 실측 | 결과 |
 |---|---|---|---|
-| Pass-gate 지배 | ℓ_cn < ℓ_pu | ℓ_pu/ℓ_cn = **1.093** | 만족 |
+| Pass-gate 지배 | λ_cn < λ_pu | λ_pu/λ_cn = **1.093** | 만족 |
 | Vth 방향 | ∂Vmin/∂cn < 0 | 음 | 만족 |
 | Pull-up 방향 | ∂Vmin/∂pu > 0 | 양 | 만족 |
 | 최악 읽기 코너 | FSG | FSG | 만족 |
-| 공급 민감도 | 최단 lengthscale | ℓ_Vop = **4.64**, 최단 | 만족 |
+| 공급 민감도 | 최단 lengthscale | λ_Vop = **4.64**, 최단 | 만족 |
 
 Pass-gate 지배 계층 — cn 축의 lengthscale이 pu 축보다 짧다 — 은 이전 세대의 파일럿
 설계 배치들에서도 같은 방향으로 재현되었다(각 배치의 수치는 본 원고의 근거 원장에
@@ -578,7 +586,7 @@ pass-gate가 느린 조합이라 읽기 안정성에는 유리하고, 반대로 
 조건별 통합 Vmin은 max(읽기, 쓰기)이며, 네 코너에서는 두 실측을 직접 비교할 수 있어
 표 VII이 그 값을 준다. 2,000 조건 배치에서는 두 배치의 좌표가 겹치지 않아 같은 비교를
 실측으로 할 수 없고, 각 surrogate의 예측을 상대 좌표에 얹어야 한다 — 그 경우 "예측 위의
-예측"임을 명시한다(제8절 C항).
+예측"임을 명시한다(제8절 C항). 그림 4가 두 모드의 코너별 값을 비교한다.
 
 **그림 4.** 코너별 실측 대 예측 Vmin, 읽기·쓰기.
 
@@ -597,6 +605,7 @@ z 곡선에서 얻은 Vmin**을 쓴다. 절차는 이렇다. hold-out 조건 하
 
 미지수는 설계가 실제로 돌리는 두 손잡이 cn과 pu로 잡는다. 목표가 설계 상자
 [−60, +60] mV 안의 어느 값으로도 달성되지 않는 조건은 clip하지 않고 미복원으로 남긴다.
+표 VIII이 축별 복원 오차를 준다.
 
 **표 VIII. 좌표 복원 오차 (hold-out 245 조건, 목표 = 실측 Vmin)**
 
@@ -637,7 +646,8 @@ Vth를 어디에 두어야 하는가"에 설계가 실행 가능한 해상도로
 읽는 방법은 이렇다. **이 셀의 읽기 공정 윈도우는 pu 쪽으로만 닫힌다.** PU가 느려지는
 방향으로 4 mV 이상 밀리면 그때부터 cn에 하한이 생기고, 그 하한은 pu가 밀릴수록 빠르게
 올라간다. 반대로 PU가 충분히 빠른 영역에서는 cn이 설계 자유 변수가 된다. **코너
-sign-off는 네 점만 보므로 이 구조를 볼 수 없다.**
+sign-off는 네 점만 보므로 이 구조를 볼 수 없다.** 그림 5가 그 평면과 사양 경계, 그 위의
+다중시작 해를 보여준다.
 
 **그림 5.** (cn, pu) 평면의 Vmin 등고선, 사양 경계, 다중 시작 수렴점.
 
@@ -653,11 +663,13 @@ sign-off는 네 점만 보므로 이 구조를 볼 수 없다.**
 
 #### 2) Gaussian 가설의 기각
 
+서로 독립인 통계 셋이 정규성을 기각하며, 표 IX가 그것을 모은다.
+
 **표 IX. Gaussian 가설에 대한 세 가지 독립 증거 (9조건)**
 
 | 증거 | 결과 | Gaussian이면 |
 |---|---|---|
-| 분위수 사다리 χ² | 9/9 조건에서 582–821 (dof 5) | ≈ 5 |
+| 분위수 사다리 χ² | 9/9 조건에서 582–821 (자유도 5) | ≈ 5 |
 | skewness 부호 | 9/9 음수, 평균 **−0.292** | 0 |
 | 관측 최소값 / E[최소값] | 평균 **1.18**, 9/9 조건 > 1.09 | 1.00 |
 
@@ -666,7 +678,7 @@ sign-off는 네 점만 보므로 이 구조를 볼 수 없다.**
 
 #### 3) ρ_LR 추정 — 두 경로가 수렴한다
 
-**(a) Skewness 역산 (주 추정량).** 식 (7)을 역산한다. MC 참조표가 필요 없고, 팹 표의
+**(a) Skewness 역산 (주 추정량).** 식 (8)을 역산한다. MC 참조표가 필요 없고, 팹 표의
 `skew_ref` 열을 0.5 % 이내로 재현한다(ρ = −0.25 → −0.2306 vs −0.2317; ρ = −0.50 →
 −0.3750 vs −0.3741). 이것은 같은 모형에 대한 팹 구현과 우리 구현을 대조한 것이지
 모형 자체의 검증이 아니다. g₁의 표준오차는 Gaussian 귀무값 √(6/n) = 0.00775가 아니라
@@ -695,7 +707,7 @@ SE(ρ̂) = 0.013–0.016.
 
 #### 4) 조건 간 균일성 — 검정은 기각되지만 단일 스칼라로 충분하다
 
-균일성 검정은 **기각된다**: χ² = 53.6, dof 8, p = 8.1 × 10⁻⁹. 즉 ρ_LR은 조건에 따라
+균일성 검정은 **기각된다**: χ² = 53.6, 자유도 8, p = 8.1 × 10⁻⁹. 즉 ρ_LR은 조건에 따라
 통계적으로 유의하게 변한다.
 
 그러나 그 변동의 **실효 크기는 무시할 만하다.** 조건별 ρ̂를 각각 z_bias로 환산하면 전
@@ -707,11 +719,12 @@ SE(ρ̂) = 0.013–0.016.
 #### 5) Vmin 환산
 
 σ를 mV로 바꾸는 환산자는 사양 밴드에서의 dz/dV_op다. QC 후 실측 기준으로 읽기 모집단
-median은 **15.1 /V**(IQR 12.6–18.2), 쓰기는 36.4 /V(IQR 31.9–42.3)이며, 읽기 구속 코너
-FSG의 국소 기울기는 14.2 /V다.
+median은 **15.1 V⁻¹**(사분위범위 12.6–18.2), 쓰기는 36.4 V⁻¹(사분위범위 31.9–42.3)이며, 읽기 구속 코너
+FSG의 국소 기울기는 14.2 V⁻¹다.
 
 z_bias +1.054 σ의 Vmin 환산은 모집단 median 기준 **70 mV**, FSG 국소 기울기 기준
 **74 mV**다(z 곡선을 직접 되짚으면 71.7 mV — 곡률 때문에 선형 환산보다 약간 작다).
+표 X이 그 이동을 네 코너에 적용한 결과다.
 
 **표 X. 코너별 보정 전후 읽기 Vmin (125 °C)**
 
@@ -753,6 +766,8 @@ z_bias +1.054 σ의 Vmin 환산은 모집단 median 기준 **70 mV**, FSG 국소
    QC 후 코너 실측에서 그 값은 6.927이다. 또한 그 논증은 **코너 시뮬레이션 — 보정 대상인
    naive z를 그대로 쓰는 출처 — 을 "실리콘 증거"로 취급한 순환**이었다. 독립 검증에는
    실제 실리콘 Vmin 측정이 필요하며 본 연구에는 없다(제8절 A항).
+
+그림 6이 두 추정을 나란히 놓고, 보정이 코너에 주는 이동을 함께 보여준다.
 
 **그림 6.** (a) 두 추정 경로의 ρ_LR, (b) 보정이 코너 Vmin에 주는 이동.
 
@@ -805,6 +820,9 @@ Stage-B는 최종 raw가 아니라 **과정 파일**이다. 백업본과 비교�
 않았다 — 원 덱이 필요하다(O-06).
 
 #### 3) 결과
+
+표 XI이 읽기 배치, 표 XII가 쓰기 배치이며, 각각 배치 자체의 정합성 감사가 지목한 조건을
+넣은 값과 뺀 값을 함께 싣는다.
 
 **표 XI. 외부 배치 검증 — 읽기 (5레벨 전부 학습 범위 내)**
 
@@ -885,7 +903,7 @@ hold-out**에서 채점하므로 곡선들이 서로 비교 가능하며, 어느
 #### 2) 그러나 Vmin 등고선은 상단 레벨을 쓰고, 보정이 그 사용을 늘린다
 
 Vmin은 z(V) = Z_t 교차점이므로 각 조건은 자기 교차점을 감싸는 **브래킷**을 필요로 한다.
-보정 전(Z_t = 6.398)과 후(Z_eff = 7.453)를 함께 본다.
+보정 전(Z_t = 6.398)과 후(Z_eff = 7.453)를 함께 보며, 표 XIII이 그 분포를 준다.
 
 **표 XIII. 교차 브래킷 분포.** 쓰기 Z_eff 열은 읽기에서 측정한 z_bias를 적용한 것이며,
 쓰기 ρ_LR은 측정되지 않았다(제5절 F항 7).
@@ -942,7 +960,7 @@ Vmin은 z(V) = Z_t 교차점이므로 각 조건은 자기 교차점을 감싸�
 **전압축 외삽은 양 끝에서 반대 부호로 휜다.** 세 측정이 한 그림을 이룬다: 쓰기 0.7 → 0.8 V
 **−6.45 mV**(마진 과소평가), 쓰기 0.5 → 0.4 V **+5.66 mV**(과대평가), 읽기 0.7 → 0.8 V
 −0.18 mV(편향 없음). GP가 학습 범위 밖에서 평균으로 회귀하며 **μ(V_op) 기울기를 압축**하는
-전형적 거동이다. 읽기에서 편향이 사실상 0인 것은 읽기의 dz/dV_op가 15 /V로 쓰기의 36 /V보다
+전형적 거동이다. 읽기에서 편향이 사실상 0인 것은 읽기의 dz/dV_op가 15 V⁻¹로 쓰기의 36 V⁻¹보다
 완만해 압축의 절대량이 작기 때문이다. **격자 끝을 줄이는 결정은 그 모드의 기울기에
 종속된다.**
 
@@ -950,6 +968,7 @@ Vmin은 z(V) = Z_t 교차점이므로 각 조건은 자기 교차점을 감싸�
 
 학습 조건을 중첩 부분집합으로 줄여가며 같은 hold-out에서 채점한다. 시뮬레이션 비용은
 조건 수에 **선형**이고 exact GP 학습 비용은 대략 3제곱이다 — fit 시간이 그것을 보여준다.
+표 XIV가 그 결과다.
 
 **표 XIV. 학습 조건 수의 영향 (읽기)**
 
@@ -981,7 +1000,7 @@ Vmin은 z(V) = Z_t 교차점이므로 각 조건은 자기 교차점을 감싸�
 표본이었다면 라벨에 실렸을 추가 표집 잡음을 더해** 그 상황을 재현한다. μ̂의 분산이 σ²/n
 이므로 Var(μ̂_n′) − Var(μ̂_5000) = σ²(1/n′ − 1/5000)만큼의 독립 잡음을 μ 라벨에 더하고,
 σ̂에는 σ²(1/2n′ − 1/10000)을 더한다. noise-aware GP에 넘기는 y_noise도 n′ 기준으로 다시
-준다. hold-out 라벨은 건드리지 않는다.
+준다. hold-out 라벨은 건드리지 않는다. 표 XV가 그 결과다.
 
 **표 XV. 조건당 MC 표본의 영향 (읽기)**
 
@@ -1013,7 +1032,7 @@ tail 형상 왜곡, 수렴 실패가 빠져 있다. (iii) hold-out 라벨이 자
 손실이 곱해질지, 더해질지, 폭발할지는 그 실험들이 답하지 않는다. 악화 기제가 하나 분명히
 있다: **조건이 400개면 각 라벨이 평균할 이웃이 줄어들어 n′ = 500의 잡음이 1,700 조건일
 때보다 크게 문다.** C항의 평평함은 이웃이 1,700개 있을 때의 결과다. 그래서 결합 실험을
-직접 돌렸다.
+직접 돌렸다. 표 XVI이 그 결과다.
 
 **표 XVI. 결합 절감 (400 조건 × 축소 레벨 × n_mc 500, 동일 hold-out)**
 
@@ -1053,6 +1072,8 @@ B항에서 잰 fit 간 잡음대(±1 mV) 안에 들어간다. 그런데 셋을 �
 > 이 데이터가 **반증**한다. 53배는 여전히 가능하지만 공짜가 아니라 **Vmin RMSE 8.35 →
 > 10.95 mV의 대가**를 갖는다. 무손실이라 쓰지 않고 대가를 명시한 Pareto 점으로 보고한다.
 
+그림 7이 단일 인자 곡선 셋과 결합 점을 한자리에 모은다.
+
 **그림 7.** 예산 절감의 Pareto — (a) 조건 수, (b) MC 깊이, (c) 단일 인자 대 결합.
 
 ### E. 절감에서 반드시 제외해야 하는 것
@@ -1083,13 +1104,13 @@ NMOS/PMOS 문턱전압 skew는 마진을 잃기까지 얼마나 흔들려도 되
 
 ARD는 입력 축마다 lengthscale을 하나씩 데이터에서 학습한다. 그래서 학습된 값을 민감도
 순위로 읽고 싶어진다. 입력은 학습 상자 위에서 표준화되어 있으므로 축 사이 비교가
-가능하고, 정규화한 역수 ℓ⁻¹/Σℓ⁻¹를 relevance로 정의할 수 있다.
+가능하고, 정규화한 역수 λ⁻¹/Σλ⁻¹를 relevance로 정의할 수 있다.
 
-읽기 μ 커널에서 9개 소자 축의 lengthscale은 7.41(c_n, 최단)에서 8.41(l_sk)까지
+읽기 μ 커널에서 9개 소자 축의 lengthscale은 7.41(cn, 최단)에서 8.41(l_sk)까지
 분포한다. relevance로는 0.108–0.123이고, 아홉 축이 모두 같다면 나올 값이 0.111이다.
-분명한 신호는 전압축 하나뿐이다 — ℓ_Vop = **4.64**로 어느 소자 축보다 짧으며, 이는
+분명한 신호는 전압축 하나뿐이다 — λ_Vop = **4.64**로 어느 소자 축보다 짧으며, 이는
 제5절 C항에서 이미 보고한 물리 정합성 점검이다. 쓰기 모델도 같다(소자 축 6.71–8.82,
-ℓ_Vop = 4.00).
+λ_Vop = 4.00).
 
 σ 커널은 더 평평하다. **9개 소자 축의 lengthscale이 전부 7.83–7.92 안에** 들어가 폭이
 약 1 %다. 문자 그대로 읽으면 σ에 대해서는 어떤 공정 축도 다른 축보다 중요하지 않다는
@@ -1097,14 +1118,13 @@ ARD는 입력 축마다 lengthscale을 하나씩 데이터에서 학습한다. �
 
 ### B. 분산 분해
 
-**무엇을 분해했고 왜 Vmin이 아닌가.** Sobol 지수[6]는 주어진 입력 분포 — 여기서는 학습
+**무엇을 분해했고 왜 Vmin이 아닌가.** Sobol 지수[21]는 주어진 입력 분포 — 여기서는 학습
 상자 위 균등분포 — 에서 스칼라 출력의 분산을 축별로 나눈다. 출력은 Vmin이 아니라 사양
 전압에서의 z다. Vmin은 전압 그리드 안에서 z가 임계값에 닿지 않는 조건에서 정의되지 않고,
-그런 표본을 버리면 Saltelli 추정량이 의존하는 짝짓기가 깨진다. z(V_T0)는 어디서나
-유한하고, 사양 마진에 대해 단조이며, T0 판정이 실제로 읽는 양이다. μ(V_T0)와 σ(V_T0)도
+그런 표본을 버리면 Saltelli 추정량이 의존하는 짝짓기가 깨진다. 표 I의 T0 사양 전압을 V_T0 = 0.625 V로 쓰면, z(V_T0)는 어디서나 유한하고, 사양 마진에 대해 단조이며, T0 판정이 실제로 읽는 양이다. μ(V_T0)와 σ(V_T0)도
 함께 분해한다. σ는 제5절 B항이 지목한 쓰기 병목이고 제5절 G항이 남긴 예측의 대상이기 때문이다.
 
-**추정.** S1은 Saltelli 2010 추정량[7], S_T는 Jansen 추정량[8]을 쓰고 기저 표본
+**추정.** S1은 Saltelli 2010 추정량[22], S_T는 Jansen 추정량[23]을 쓰고 기저 표본
 N = 4,096(모드당 surrogate 평가 45,056회)이다. 둘 다 표본평균이므로 작은 지수를 0과
 가르는 것은 그 표집 오차다. Saltelli 행을 500회 재표집해 95 % 부트스트랩 구간을 함께
 보고한다. 재표집에는 GP 평가가 추가로 들지 않는다.
@@ -1119,14 +1139,14 @@ N = 4,096(모드당 surrogate 평가 45,056회)이다. 둘 다 표본평균이�
 
 | 축 | ARD rel. (읽기) | z의 S_T, 읽기 | z의 S_T, 쓰기 | σ의 S_T, 읽기 | σ의 S_T, 쓰기 |
 |---|---|---|---|---|---|
-| c_n (NMOS V_th) | 0.123 | **0.419** [0.397, 0.441] | **0.421** | 0.001 | 0.006 |
+| cn (NMOS Vth) | 0.123 | **0.419** [0.397, 0.441] | **0.421** | 0.001 | 0.006 |
 | l_com (공통 local σ) | 0.109 | **0.276** [0.259, 0.293] | 0.170 | **0.847** | **0.722** |
-| p_u (PMOS V_th) | 0.112 | 0.188 [0.178, 0.199] | 0.168 | 0.007 | 0.017 |
-| s_k (V_th skew) | 0.111 | 0.067 [0.064, 0.071] | 0.097 | 0.001 | 0.011 |
-| l_pu (pull-up local σ) | 0.109 | 0.043 [0.040, 0.046] | 0.060 | 0.137 | 0.193 |
+| pu (PMOS Vth) | 0.112 | 0.188 [0.178, 0.199] | 0.168 | 0.007 | 0.017 |
+| sk (Vth skew) | 0.111 | 0.067 [0.064, 0.071] | 0.097 | 0.001 | 0.011 |
+| lpu (pull-up local σ) | 0.109 | 0.043 [0.040, 0.046] | 0.060 | 0.137 | 0.193 |
 | m_com (공통 배율) | 0.110 | 0.015 [0.014, 0.017] | 0.032 | 0.001 | 0.013 |
 | m_sk (배율 skew) | 0.109 | 0.014 [0.014, 0.015] | 0.005 | 0.002 | 0.000 |
-| m_pu (pull-up 배율) | 0.109 | 0.008 [0.008, 0.009] | 0.026 | 0.000 | 0.016 |
+| mpu (pull-up 배율) | 0.109 | 0.008 [0.008, 0.009] | 0.026 | 0.000 | 0.016 |
 | l_sk (local σ skew) | 0.108 | 0.001 [0.001, 0.001] | 0.008 | 0.004 | 0.031 |
 | **Σ** | 1.000 | **1.031** | 0.987 | 1.000 | 1.007 |
 
@@ -1137,7 +1157,7 @@ N = 4,096(모드당 surrogate 평가 45,056회)이다. 둘 다 표본평균이�
 상호작용을 통해 서로 겹치므로 분산을 분할하지 않는다. 따라서 이 합은 두 코너 축이 차지하는
 몫의 **상한**이고, 나머지 일곱 축은 마진 분산의 **최소 읽기 39 %, 쓰기 41 %**를 가져간다.
 여기서 겹침은 작다 — 읽기 ΣS_T가 1을 0.031만 넘는다 — 그래서 이 상한은 거의 빡빡하다.
-코너 밖 축 중 가장 큰 l_com은 읽기 마진 분산을 p_u보다 더 많이 설명한다. 제1절 C항에서
+코너 밖 축 중 가장 큰 l_com은 읽기 마진 분산을 pu보다 더 많이 설명한다. 제1절 C항에서
 말한 한계의 정량적 형태가 이것이다. 반올림 수준의 차이가 아니라 문제의 5분의 2다.
 
 **2) σ는 길이 축의 이야기이고, 길이 축만의 이야기다.** local σ 길이 축 셋이 σ 분산의
@@ -1156,7 +1176,7 @@ N = 4,096(모드당 surrogate 평가 45,056회)이다. 둘 다 표본평균이�
 **3) 1차 지수는 해석하기에 너무 시끄럽고, 그래서 해석하지 않는다.** 둘 중 S_T가 더 잘
 결정된다. total-order 구간의 폭은 두 모드 모두 z 열에서 0.05, σ 열에서 0.07을 넘지 않는다.
 S1은 그렇지 않다. 읽기 z에서
-S1(c_n) = 0.302인데 구간이 [0.199, 0.416]이고, 9개 S1의 합은 0.790인 반면 9개 S_T의 합은
+S1(cn) = 0.302인데 구간이 [0.199, 0.416]이고, 9개 S1의 합은 0.790인 반면 9개 S_T의 합은
 1.031이다. 응답이 완전히 가법적이라면 두 합이 모두 1이어야 한다. S_T 합의 초과분 0.031은
 상호작용이 작다는 뜻이고, S1 합의 부족분 0.21은 ±0.1 구간을 가진 추정치 아홉 개의 잡음
 안에 들어간다. 두 진술이 동시에 날카로울 수는 없으므로 순위는 S_T로 매기고 상호작용
@@ -1188,22 +1208,23 @@ ARD relevance로 보면 l_com은 다른 세 축과 구별되지 않는데(표 XV
 관계가 정확히 이것이다 — 은 긴 lengthscale과 큰 분산 기여를 동시에 얻는다. 두 순위는 축들의
 곡률이 비슷할 때만 일치하고, 여기서는 비슷하지 않다.
 
-제7절 A항에서 살아남는 것은 순위보다 훨씬 좁다. ℓ_Vop = 4.64는 실제로 모델에서 가장 짧은
+제7절 A항에서 살아남는 것은 순위보다 훨씬 좁다. λ_Vop = 4.64는 실제로 모델에서 가장 짧은
 lengthscale이고, 전압축은 실제로 가장 많이 휜 축이다. 제5절 C항의 pass-gate 점검도 방향은
-버틴다 — ARD는 ℓ_cn을 ℓ_pu보다 짧게 두고, Sobol도 S_T(c_n)을 S_T(p_u)보다 크게 둔다.
+버틴다 — ARD는 λ_cn을 λ_pu보다 짧게 두고, Sobol도 S_T(cn)을 S_T(pu)보다 크게 둔다.
 학습된 커널에서 읽어도 되는 것은 방향이고, 순위와 크기는 아니다. 부록 A가 가리키는 주의가
 이것이며, lengthscale을 민감도 결과로 싣는 모든 GP surrogate에 해당한다.
 
 ### D. Skew 허용폭
 
-제7절 B항은 문턱전압 skew s_k가 평균적으로 얼마나 기여하는지를 쟀다. 설계자는 더 날카롭게
-묻는다. 나머지 공정이 고정된 상태에서 s_k가 얼마나 흔들리면 T0 마진이 사라지는가.
+제7절 B항은 문턱전압 skew sk가 평균적으로 얼마나 기여하는지를 쟀다. 설계자는 더 날카롭게
+묻는다. 나머지 공정이 고정된 상태에서 sk가 얼마나 흔들리면 T0 마진이 사라지는가.
 
-(cn, pu) 평면의 625개 칸마다 나머지 여섯 축을 nominal에 두고 s_k를 학습 범위 전체
+(cn, pu) 평면의 625개 칸마다 나머지 여섯 축을 nominal에 두고 sk를 학습 범위 전체
 (±20 mV)에 걸쳐 훑으면서, z(V_T0)가 임계값 이상으로 남는 구간이 그 범위의 몇 %인지를
-기록한다. 제5절 F항의 lobe 보정이 마진이 넘어야 할 문턱을 올리므로 두 임계값을 모두 보고한다.
+기록한다. 제5절 F항의 lobe 보정이 마진이 넘어야 할 문턱을 올리므로 두 임계값을 모두
+보고한다. 표 XVIII이 그 요약이고 그림 9가 지도다.
 
-**표 XVIII. (cn, pu) 평면의 skew 허용폭 (625칸, s_k ±20 mV 스윕).**
+**표 XVIII. (cn, pu) 평면의 skew 허용폭 (625칸, sk ±20 mV 스윕).**
 **쓰기 Z_eff 열은 읽기에서 측정한 z_bias를 그대로 적용한 것으로, 가정이다 — 쓰기 ρ_LR은
 측정되지 않았다(제5절 F항 7).**
 
@@ -1212,7 +1233,7 @@ lengthscale이고, 전압축은 실제로 가장 많이 휜 축이다. 제5절 C
 | 통과 skew가 하나라도 있는 칸 | 97.3 % | 90.9 % | 100 % | 97.0 % |
 | **모든** skew에서 통과하는 칸 | **82.7 %** | **67.0 %** | **77.6 %** | **62.9 %** |
 | 통과 폭 중앙값 | 40.0 mV | 40.0 mV | 40.0 mV | 40.0 mV |
-| 통과 폭 IQR | 40.0–40.0 | 38.5–40.0 | 40.0–40.0 | 30.6–40.0 |
+| 통과 폭 사분위범위 | 40.0–40.0 | 38.5–40.0 | 40.0–40.0 | 30.6–40.0 |
 
 **허용폭은 거의 이분법적이다.** 통과 폭 중앙값은 모든 열에서 40 mV 전부다. 마진이 조금이라도
 있는 칸은 대개 skew 범위 전체를 견딘다. 보정이 없애는 것은 축의 일부가 아니라 칸 자체다 —
@@ -1224,14 +1245,14 @@ lengthscale이고, 전압축은 실제로 가장 많이 휜 축이다. 제5절 C
 **닫히는 위치는 이 논문이 계속 가리켜 온 곳이다.** 그림 9에서 허용폭은 fast-NMOS /
 slow-PMOS 영역에서 무너진다. 제5절 D항이 읽기 구속 코너로 지목하고 제5절 F항이 사양 밖으로 밀어낸
 FSG 사분면이다. 쓰기는 칸을 더 많이 남기지만(Z_eff에서 97.0 %가 마진을 조금이라도 유지)
-칸 안에서 더 많이 잃는다. IQR이 30.6–40.0 mV로 내려가며, 이는 표 XVII에서 s_k의 분산
+칸 안에서 더 많이 잃는다. 사분위범위가 30.6–40.0 mV로 내려가며, 이는 표 XVII에서 sk의 분산
 기여가 더 큰 것(0.097 대 0.067)과 맞는다.
 
 **그림 9.** (cn, pu) 평면의 통과 skew 폭, 읽기 모드, (a) Z_t = 6.398, (b) Z_eff = 7.453.
 등고선은 전 범위 허용 경계다.
 
 이 숫자에는 한계가 둘 있다. 문턱전압이 아닌 나머지 여섯 축을 nominal에 둔 한 축짜리
-허용폭이고, 표 XVII에 따르면 l_com이 읽기 마진을 s_k보다 더 많이 움직이므로 여러 축을
+허용폭이고, 표 XVII에 따르면 l_com이 읽기 마진을 sk보다 더 많이 움직이므로 여러 축을
 동시에 본 허용 영역은 이보다 좁다. 또 이 지도는 surrogate 예측이다. 경계에서 모델 오차
 한 폭(Vmin 기준 8.35 mV, 제5절 B항) 안에 있는 칸은 판정된 칸이 아니라 경계 칸으로 읽어야 한다.
 
@@ -1258,7 +1279,7 @@ FSG 사분면이다. 쓰기는 칸을 더 많이 남기지만(Z_eff에서 97.0 %
 
 편향의 상태는 이렇다. **측정되었다** — 두 독립 추정 경로가 ρ_LR ≈ −0.34 … −0.37에
 수렴하고, Gaussian 기각은 세 가지 독립 증거로 확인된다. **보정은 후처리로 적용된다** —
-식 (6)이며 재시뮬레이션이 필요 없다. 그러나 **실리콘으로 검증되지 않았다.** 이전 판이
+식 (6)–(7)이며 재시뮬레이션이 필요 없다. 그러나 **실리콘으로 검증되지 않았다.** 이전 판이
 코너 시뮬레이션에서 상한을 역산해 "측정값이 상한 내부"라고 주장한 것은 순환 논증이었으므로
 폐기했다. 코너 시뮬레이션은 보정 대상인 naive z를 그대로 쓰는 출처여서 보정량의 독립
 증거가 될 수 없다. 독립 검증에는 실제 실리콘 Vmin 측정이 필요하며 본 연구에는 없다.
@@ -1400,10 +1421,10 @@ z 기준 +1.054 σ, Vmin 기준 70 mV의 낙관에 해당한다 — surrogate �
 주 전문 영역이 통계적 학습 밖에 있는 독자를 위해 형식론을 요약한다.
 
 GP는 함수값의 임의의 유한 집합이 결합 Gaussian 분포를 따르도록 하는, **함수에 대한
-분포**를 정의한다[4]. 평균 함수와 공분산 kernel로 규정되며, 후자는 가까운 입력이 상관된
+분포**를 정의한다[18]. 평균 함수와 공분산 kernel로 규정되며, 후자는 가까운 입력이 상관된
 출력을 낳는다는 가정을 부호화한다. 관측 데이터에 조건화하면 임의의 질의점에서 예측 평균과
 예측 분산을 함께 돌려주는 posterior가 얻어지고, 분산은 관측에서 먼 영역에서 증가한다.
-이 점이 GP를 통상 회귀와 구별한다[17], [18].
+이 점이 GP를 통상 회귀와 구별한다[24], [25].
 
 Kernel lengthscale은 상관이 감쇠하는 거리를 지배한다. 한 축을 따라 짧은 lengthscale은
 출력이 그 입력에 대해 급격히 변함을, 긴 lengthscale은 둔감함을 가리킨다. ARD는 각 입력
@@ -1435,7 +1456,7 @@ Vmin RMSE 14.74 → 8.35 mV.
 ## 부록 C: 재현성
 
 조건 생성은 결정적 PCG64 스트림이므로 (stage, 조건 수, seed, metric, method) 튜플만으로
-조건 집합 전체가 비트 단위로 재현된다. 학습은 GPyTorch[16] 기반이며 seed 42, 150 iteration,
+조건 집합 전체가 비트 단위로 재현된다. 학습은 GPyTorch[26] 기반이며 seed 42, 150 iteration,
 noise-aware fixed-noise likelihood를 쓴다. 각 결과는 하나의 스크립트와 하나의 출력 파일에
 대응하고, 본문의 모든 수치는 그 대응표(근거 원장)를 통해 스크립트 → 데이터 → 출력으로
 추적된다.
@@ -1447,100 +1468,115 @@ PDK와 실측 데이터는 사내 자산이므로 공개하지 않는다. 공개
 
 ## 참고문헌
 
-[1] E. Seevinck, F. J. List, and J. Lohstroh, "Static-noise margin analysis of
-    MOS SRAM cells," *IEEE J. Solid-State Circuits*, vol. SC-22, no. 5,
-    pp. 748–754, Oct. 1987.
+[1] C. Bae, S. Pae, C.-S. Yu, K. Kim, Y. Kim, and J. Park, "SRAM stability
+     design comprehending 14nm FinFET reliability," in *Proc. IEEE Int. Rel.
+     Phys. Symp. (IRPS)*, 2015, pp. MY.13.1–MY.13.5,
+     doi: 10.1109/IRPS.2015.7112815.
 
-[2] M. J. M. Pelgrom, A. C. J. Duinmaijer, and A. P. G. Welbers, "Matching
-    properties of MOS transistors," *IEEE J. Solid-State Circuits*, vol. 24,
-    no. 5, pp. 1433–1439, Oct. 1989.
+[2] A. T. Krishnan *et al.*, "SRAM cell static noise margin and V_MIN
+     sensitivity to transistor degradation," in *Proc. IEEE Int. Electron
+     Devices Meeting (IEDM)*, 2006, pp. 1–4, doi: 10.1109/IEDM.2006.346778.
 
-[3] D. B. Owen, "Tables for computing bivariate normal probabilities," *Ann.
-    Math. Statist.*, vol. 27, no. 4, pp. 1075–1090, Dec. 1956.
+[3] S.-M. Lim, H. Hong, S. Yu, Z. Ming, J. Park, and Y. Kim, "Effects of BTI
+     during AHTOL on SRAM V_MIN," in *Proc. IEEE Int. Rel. Phys. Symp. (IRPS)*,
+     2011, pp. 2D.4.1–2D.4.6, doi: 10.1109/IRPS.2011.5784460.
 
-[4] C. E. Rasmussen and C. K. I. Williams, *Gaussian Processes for Machine
-    Learning*. Cambridge, MA, USA: MIT Press, 2006.
+[4] Z. Guo, W. Sun, Z. Wang, Y. Cai, and L. Shi, "An efficient SRAM yield
+     analysis method using multi-fidelity neural network," in *Proc. 2nd Int.
+     Symp. Electron. Design Autom. (ISEDA)*, 2024, pp. 547–551,
+     doi: 10.1109/ISEDA62518.2024.10617638.
 
-[5] M. C. Kennedy and A. O'Hagan, "Predicting the output from a complex
-    computer code when fast approximations are available," *Biometrika*,
-    vol. 87, no. 1, pp. 1–13, Mar. 2000.
+[5] S. Yin, X. Jin, L. Shi, K. Wang, and W. W. Xing, "Efficient Bayesian yield
+     analysis and optimization with active learning," in *Proc. 59th ACM/IEEE
+     Design Autom. Conf. (DAC)*, 2022, pp. 1195–1200,
+     doi: 10.1145/3489517.3530607.
 
-[6] I. M. Sobol', "Global sensitivity indices for nonlinear mathematical models
-    and their Monte Carlo estimates," *Math. Comput. Simul.*, vol. 55,
-    no. 1–3, pp. 271–280, Feb. 2001.
+[6] S. Yin, G. Dai, and W. W. Xing, "High-dimensional yield estimation using
+     shrinkage deep features and maximization of integral entropy reduction,"
+     in *Proc. 28th Asia South Pacific Design Autom. Conf. (ASP-DAC)*, 2023,
+     pp. 283–289, doi: 10.1145/3566097.3567907.
 
-[7] A. Saltelli, P. Annoni, I. Azzini, F. Campolongo, M. Ratto, and
-    S. Tarantola, "Variance based sensitivity analysis of model output. Design
-    and estimator for the total sensitivity index," *Comput. Phys. Commun.*,
-    vol. 181, no. 2, pp. 259–270, Feb. 2010.
+[7] Y. Liu, G. Dai, and W. W. Xing, "Seeking the yield barrier:
+     High-dimensional SRAM evaluation through optimal manifold," in *Proc.
+     60th ACM/IEEE Design Autom. Conf. (DAC)*, 2023, pp. 1–6,
+     doi: 10.1109/DAC56929.2023.10247952.
 
-[8] M. J. W. Jansen, "Analysis of variance designs for model output," *Comput.
-    Phys. Commun.*, vol. 117, no. 1–2, pp. 35–43, Mar. 1999.
-
-[9] A. Singhee and R. A. Rutenbar, "Why quasi-Monte Carlo is better than Monte
+[8] A. Singhee and R. A. Rutenbar, "Why quasi-Monte Carlo is better than Monte
     Carlo or Latin hypercube sampling for statistical circuit analysis,"
     *IEEE Trans. Comput.-Aided Design Integr. Circuits Syst.*, vol. 29,
     no. 11, pp. 1763–1776, Nov. 2010.
 
-[10] Z. Guo, W. Sun, Z. Wang, Y. Cai, and L. Shi, "An efficient SRAM yield
-     analysis method using multi-fidelity neural network," in *Proc. 2nd Int.
-     Symp. Electron. Design Autom. (ISEDA)*, 2024, p. 547.
-
-[11] S. Yin, X. Jin, L. Shi, K. Wang, and W. W. Xing, "Efficient Bayesian yield
-     analysis and optimization with active learning," in *Proc. 59th ACM/IEEE
-     Design Autom. Conf. (DAC)*, 2022, pp. 1195–1200.
-
-[12] S. Yin, G. Dai, and W. W. Xing, "High-dimensional yield estimation using
-     shrinkage deep features and maximization of integral entropy reduction,"
-     in *Proc. 28th Asia South Pacific Design Autom. Conf. (ASP-DAC)*, 2023.
-
-[13] Y. Liu, G. Dai, and W. W. Xing, "Seeking the yield barrier:
-     High-dimensional SRAM evaluation through optimal manifold," in *Proc.
-     60th ACM/IEEE Design Autom. Conf. (DAC)*, 2023.
-
-[14] S. Gupta and B. H. Calhoun, "Dynamic read Vmin and yield estimation for
-     nanoscale SRAMs," *IEEE Trans. Circuits Syst. I, Reg. Papers*, vol. 68,
-     no. 3, pp. 1171–1182, Mar. 2021, doi: 10.1109/TCSI.2020.3044836.
-
-[15] S. Kinoshita, Y. Inoue, T. Watanabe, K. Ikeda, S. Nishio, A. Teruya,
+[9] S. Kinoshita, Y. Inoue, T. Watanabe, K. Ikeda, S. Nishio, A. Teruya,
      N. Sakai, and T. Goda, "Space-filling Latin hypercube design for efficient
      Bayesian optimization with application to semiconductor development,"
      *IEEE Trans. Semicond. Manuf.*, vol. 38, no. 3, pp. 446–452, 2025,
      doi: 10.1109/TSM.2025.3574791.
 
-[16] J. R. Gardner, G. Pleiss, D. Bindel, K. Q. Weinberger, and A. G. Wilson,
-     "GPyTorch: Blackbox matrix-matrix Gaussian process inference with GPU
-     acceleration," in *Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)*, 2018.
+[10] S. Gupta and B. H. Calhoun, "Dynamic read Vmin and yield estimation for
+     nanoscale SRAMs," *IEEE Trans. Circuits Syst. I, Reg. Papers*, vol. 68,
+     no. 3, pp. 1171–1182, Mar. 2021, doi: 10.1109/TCSI.2020.3044836.
 
-[17] R. M. Neal, *Bayesian Learning for Neural Networks*. New York, NY, USA:
-     Springer, 1996.
+[11] A. Singhee and R. A. Rutenbar, "Statistical blockade: Very fast statistical
+     simulation and modeling of rare circuit events and its application to memory
+     design," *IEEE Trans. Comput.-Aided Design Integr. Circuits Syst.*, vol. 28,
+     no. 8, pp. 1176–1189, Aug. 2009, doi: 10.1109/TCAD.2009.2020721.
 
-[18] M. L. Stein, *Interpolation of Spatial Data: Some Theory for Kriging*.
-     New York, NY, USA: Springer, 1999.
+[12] R. Kanj, R. Joshi, and S. Nassif, "Mixture importance sampling and its application
+     to the analysis of SRAM designs in the presence of rare failure events," in
+     *Proc. 43rd Design Automation Conf. (DAC)*, 2006, pp. 69–72,
+     doi: 10.1145/1146909.1146930.
 
-[19] R. Saeidi, M. Sharifkhani, and K. Hajsadeghi, "Statistical analysis of
+[13] R. Saeidi, M. Sharifkhani, and K. Hajsadeghi, "Statistical analysis of
      read static noise margin for near/sub-threshold SRAM cell," *IEEE Trans.
      Circuits Syst. I, Reg. Papers*, vol. 61, no. 12, pp. 3386–3393, Dec. 2014,
      doi: 10.1109/TCSI.2014.2327334.
 
-[20] N. Zheng and P. Mazumder, "Modeling and mitigation of static noise margin
+[14] N. Zheng and P. Mazumder, "Modeling and mitigation of static noise margin
      variation in subthreshold SRAM cells," *IEEE Trans. Circuits Syst. I, Reg.
      Papers*, vol. 64, no. 10, pp. 2726–2736, Oct. 2017,
      doi: 10.1109/TCSI.2017.2700818.
 
-[21] T. Song et al., "A 14 nm FinFET 128 Mb SRAM with V_MIN enhancement
+[15] E. Seevinck, F. J. List, and J. Lohstroh, "Static-noise margin analysis of
+    MOS SRAM cells," *IEEE J. Solid-State Circuits*, vol. SC-22, no. 5,
+    pp. 748–754, Oct. 1987.
+
+[16] T. Song et al., "A 14 nm FinFET 128 Mb SRAM with V_MIN enhancement
      techniques for low-power applications," *IEEE J. Solid-State Circuits*,
      vol. 50, no. 1, pp. 158–169, Jan. 2015, doi: 10.1109/JSSC.2014.2362842.
 
-[22] C. Bae, S. Pae, C.-S. Yu, K. Kim, Y. Kim, and J. Park, "SRAM stability
-     design comprehending 14nm FinFET reliability," in *Proc. IEEE Int. Rel.
-     Phys. Symp. (IRPS)*, 2015, pp. MY.13.1–MY.13.5,
-     doi: 10.1109/IRPS.2015.7112815.
+[17] D. B. Owen, "Tables for computing bivariate normal probabilities," *Ann.
+    Math. Statist.*, vol. 27, no. 4, pp. 1075–1090, Dec. 1956.
 
-[23] A. T. Krishnan *et al.*, "SRAM cell static noise margin and V_MIN
-     sensitivity to transistor degradation," in *Proc. IEEE Int. Electron
-     Devices Meeting (IEDM)*, 2006, pp. 1–4, doi: 10.1109/IEDM.2006.346778.
+[18] C. E. Rasmussen and C. K. I. Williams, *Gaussian Processes for Machine
+    Learning*. Cambridge, MA, USA: MIT Press, 2006.
 
-[24] S.-M. Lim, H. Hong, S. Yu, Z. Ming, J. Park, and Y. Kim, "Effects of BTI
-     during AHTOL on SRAM V_MIN," in *Proc. IEEE Int. Rel. Phys. Symp. (IRPS)*,
-     2011, pp. 105–110, doi: 10.1109/IRPS.2011.5784460.
+[19] M. J. M. Pelgrom, A. C. J. Duinmaijer, and A. P. G. Welbers, "Matching
+    properties of MOS transistors," *IEEE J. Solid-State Circuits*, vol. 24,
+    no. 5, pp. 1433–1439, Oct. 1989.
+
+[20] M. C. Kennedy and A. O'Hagan, "Predicting the output from a complex
+    computer code when fast approximations are available," *Biometrika*,
+    vol. 87, no. 1, pp. 1–13, Mar. 2000.
+
+[21] I. M. Sobol', "Global sensitivity indices for nonlinear mathematical models
+    and their Monte Carlo estimates," *Math. Comput. Simul.*, vol. 55,
+    no. 1–3, pp. 271–280, Feb. 2001.
+
+[22] A. Saltelli, P. Annoni, I. Azzini, F. Campolongo, M. Ratto, and
+    S. Tarantola, "Variance based sensitivity analysis of model output. Design
+    and estimator for the total sensitivity index," *Comput. Phys. Commun.*,
+    vol. 181, no. 2, pp. 259–270, Feb. 2010.
+
+[23] M. J. W. Jansen, "Analysis of variance designs for model output," *Comput.
+    Phys. Commun.*, vol. 117, no. 1–2, pp. 35–43, Mar. 1999.
+
+[24] R. M. Neal, *Bayesian Learning for Neural Networks*. New York, NY, USA:
+     Springer, 1996.
+
+[25] M. L. Stein, *Interpolation of Spatial Data: Some Theory for Kriging*.
+     New York, NY, USA: Springer, 1999.
+
+[26] J. R. Gardner, G. Pleiss, D. Bindel, K. Q. Weinberger, and A. G. Wilson,
+     "GPyTorch: Blackbox matrix-matrix Gaussian process inference with GPU
+     acceleration," in *Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)*, vol. 31,
+     2018, pp. 7576–7586.

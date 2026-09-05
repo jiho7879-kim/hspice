@@ -12,56 +12,24 @@
 
 ## Abstract
 
-The minimum operating voltage (Vmin) of an SRAM must be signed off across the **whole**
-process-variation window, yet verifying the required tail quantile by direct Monte Carlo
-(MC) is unaffordable, and corner-based sign-off cannot observe variation axes that the
-corner definition does not contain. We present a surrogate pipeline that answers both
-forward and inverse Vmin queries from one fixed simulation budget. A Gaussian process
-(GP) regresses the margin statistics (μ, σ) over nine process axes and the supply
-voltage; a physics layer with no trainable parameters converts them into the
-yield-referenced Vmin. A noise-aware likelihood fed with per-condition MC standard
-errors absorbs heterogeneous sample budgets into a single model. Inverse queries are
-solved exactly by axis-wise bisection.
-
-We validate on production calibration data from an advanced FinFET node. For read
-(SNM at 125 °C) and write (V_trip at −40 °C), each with 2,000 conditions, the Vmin RMSE
-on a condition-level hold-out of 300 conditions is **8.35 mV** (read) and **14.45 mV**
-(write). On the three scorable of four PDK corners absent from training, the errors are
-9.3 mV and 16.7 mV,
-and the limiting corner of each mode (FSG for read, SFG for write) is identified
-correctly. Applied without retraining to an independently designed pilot
-batch of 348 read conditions, the read Vmin RMSE is 21.4 mV over all conditions and
-4.26 mV over the 283 that pass the batch's own surrogate-independent consistency audit;
-that batch fixes six of the nine axes, so the representative nine-dimensional figure
-remains 8.35 mV. In the inverse direction, recovering one of
-the nine coordinates from a measured Vmin gives an RMSE of 2.60 mV for the NMOS Vth
-shift and 3.20 mV for the PMOS Vth shift, and all twelve random starts converge with a
-residual below 5 × 10⁻⁴ mV.
-
-The simulation budget can be cut along three axes. If the sign-off decision is the only
-deliverable, two voltage levels suffice by construction (max |Δz| = 1.8 × 10⁻¹⁵); the
-number of training conditions can drop from 1,700 to 400 and the MC depth from 5,000 to
-500 samples per condition, each without measurable loss. But we measured directly that
-the losses do **not** multiply when all three are cut together: at a 53× budget
-reduction the Vmin RMSE moves from 8.35 to 10.95 mV, while the three single-factor
-experiments together predict no degradation at all (their deltas sum to −1.7 mV, each
-inside the fit-to-fit noise band). A reduction is not free; it is a Pareto point with a stated price.
-
-A variance decomposition of the same surrogate, under a uniform prior over the design
-ranges, puts at least **39 %** of the read margin variance and **41 %** of the write on
-axes that no corner definition contains, and identifies the local-σ
-local-σ length axes as the source of almost all of the variance of σ.
-After the lobe correction, the fraction of the threshold plane that tolerates the full
-±20 mV V_th skew falls from 83 % to 67 %.
-
-Finally, we identify the physical quantity that sets the systematic optimism of the
-min-statistics z-score — the correlation ρ_LR between the two butterfly lobes — and
-measure it from production MC output alone. Two independent estimators converge on
-ρ_LR ≈ −0.34 … −0.37; the pooled estimate **ρ_LR = −0.371** (random-effects SE 0.013)
-corresponds to an
-optimism of **+1.054 σ** in z. Correcting for it moves the read-limiting corner FSG from
-0.590 V to **0.662 V**, 37 mV past the 0.625 V spec. The dominant uncertainty lies not
-in the model but in the **metric**.
+Signing off the minimum operating voltage (Vmin) of an SRAM across the whole
+process-variation window is unaffordable by direct Monte Carlo, and corner-based sign-off
+cannot observe variation axes that no corner definition contains. We present a surrogate
+pipeline that answers forward and inverse Vmin queries from one fixed simulation budget: a
+Gaussian process regresses the margin statistics over nine process axes and the supply
+voltage, a physics layer with no trainable parameters converts them into the
+yield-referenced Vmin, and inverse queries are solved exactly by axis-wise bisection. On
+production calibration data from an advanced FinFET node, the condition-level hold-out
+Vmin RMSE is 8.35 mV for read and 14.45 mV for write; on PDK corners absent from training
+it is 9.3 and 16.7 mV, with the limiting corner of each mode identified correctly. Inverse
+queries recover a process coordinate from a Vmin value to within 2.6–3.2 mV. Cutting the
+simulation budget 53x costs 2.6 mV of Vmin RMSE although the three single-factor
+experiments predict no loss at all: a reduction is a Pareto point with a price. A variance
+decomposition places at least 39% of the read margin variance on axes no corner contains.
+Finally we identify the lobe correlation as the quantity that sets the systematic optimism
+of the min-statistics z-score, measure it from production Monte Carlo output alone
+(-0.371, or 1.054 sigma), and show that correcting for it puts the read-limiting corner 37
+mV past spec: the dominant uncertainty lies in the metric, not the model.
 
 **Index Terms** — Gaussian process, inverse problem, minimum operating voltage, process
 variation, sensitivity analysis, SRAM, static noise margin, surrogate model, yield
@@ -77,7 +45,7 @@ SRAM occupies the largest area in a modern SoC and dominates chip yield. The pro
 studied here has a nominal supply of 0.75 V; after on-chip and off-chip IR drop, the
 sign-off Vmin spec is **0.625 V** (Table I). All simulations and decisions here are
 time-zero. Guardbands for degradation such as BTI were established empirically in
-silicon and are already folded into this time-zero spec [22]–[24], so we do not apply a
+silicon and are already folded into this time-zero spec [1]–[3], so we do not apply a
 post-degradation voltage as a second criterion.
 
 **TABLE I. Vmin specification**
@@ -89,8 +57,8 @@ post-degradation voltage as a second criterion.
 
 The margin this leaves is thin. With only the corners applied and every other axis at
 nominal, the read-limiting corner (FSG) and the write-limiting corner (SFG) reach
-0.5903 V and 0.5924 V, within 35 mV of spec (Sec. V-D). At that margin, **any systematic
-optimism converts directly into a sign-off misjudgement.** This margin structure is what
+0.5903 V and 0.5924 V, within 35 mV of spec (Section V-D). At that margin, **any systematic
+optimism converts directly into a sign-off misjudgment.** This margin structure is what
 sets the relative importance of model error, statistical noise, and metric bias
 throughout the paper.
 
@@ -121,39 +89,54 @@ set of points fixes neither the location nor the shape of the compliance boundar
 
 ### D. Related work
 
-Surrogates for SRAM yield are an established line of work. Guo *et al.* [10] use a
-multi-fidelity neural network; Yin *et al.* [11], [12] use active learning and shrinkage
-features; Liu *et al.* [13] search an optimal manifold — all to reduce **the cost of
+Surrogates for SRAM yield are an established line of work. Guo *et al.* [4] use a
+multi-fidelity neural network; Yin *et al.* [5], [6] use active learning and shrinkage
+features; Liu *et al.* [7] search an optimal manifold — all to reduce **the cost of
 estimating the extremely low failure rate at a given design point**. On the sampling
-side, quasi-MC [9] and space-filling Latin hypercube designs [15] are established.
-Gupta and Calhoun [14] address Vmin itself, estimating dynamic read Vmin jointly with
+side, quasi-MC [8] and space-filling Latin hypercube designs [9] are established.
+Gupta and Calhoun [10] address Vmin itself, estimating dynamic read Vmin jointly with
 yield.
+
+The rare-event side of the problem has its own literature. Statistical blockade [11]
+filters samples through a classifier and fits a generalised Pareto tail to what survives;
+mixture importance sampling [12] shifts the sampling distribution towards the failure
+region and reweights. Both attack the same difficulty — a 6σ quantile is unreachable by
+plain Monte Carlo — and both do it at one design point.
 
 What differs here is the **direction of the question**. Those works estimate the failure
 probability of one point accurately; we obtain the Vmin **contour** over the whole
 process window and then invert it to recover conditions. The requirement is therefore
 different — not importance sampling in the extreme tail, but smooth regression across
-nine dimensions plus an inverse query that is solved exactly on top of it. Those works
-also do not treat the possibility that the metric (the z-score) is itself biased, which
-in our data exceeds the model error by an order of magnitude (Sec. V-F).
+nine dimensions plus an inverse query that is solved exactly on top of it. The two are
+complementary rather than competing: a blockade or importance-sampling campaign is what
+would produce trustworthy labels at the conditions this surrogate flags as marginal.
+
+On the metric itself, the non-normality of SNM is established [13], [14]. What has not
+been done is to identify the physical quantity that sets the size of the resulting bias,
+measure it from production MC output alone, and convert it into the Vmin units of a
+product spec — which in our data exceeds the model error by an order of magnitude
+(Section V-F).
 
 ### E. Contributions
 
 1. A surrogate pipeline that serves forward and inverse Vmin queries from one fixed
    budget. The inverse is solved as an **axis-wise one-dimensional exact solution**,
    accurate to machine precision with no optimizer, learning rate, or tolerance
-   (Secs. IV-F, V-E).
+   (Sections IV-F, V-E).
 2. Validation at three levels of distance from the training distribution — in-batch
    hold-out, PDK corners absent from training, and an independently designed pilot batch
-   — for both read and write modes (Secs. V-B, V-D, V-G).
+   — for both read and write modes (Sections V-B, V-D, V-G).
 3. Evidence for budget reduction along voltage levels, condition count, and MC depth,
    plus the direct measurement that **the losses do not multiply when the three are cut
-   together** (Sec. VI).
+   together** (Section VI).
 4. A quantitative sensitivity ranking, including axes no corner can observe, and the
-   resulting skew tolerance (Sec. VII).
+   resulting skew tolerance (Section VII).
 5. Identification of ρ_LR as the physical quantity that sets the systematic optimism of
    the min-statistics z-score, its measurement from production MC output alone, and its
-   conversion into the Vmin units of a specific product spec (Secs. II-D, V-F).
+   conversion into the Vmin units of a specific product spec (Sections II-D, V-F).
+
+Fig. 1 shows the pipeline these five contributions assemble: one GP fit per mode, a
+physics layer with no trainable parameters, and both query directions off the same fit.
 
 **Fig. 1.** Pipeline overview.
 
@@ -164,7 +147,7 @@ in our data exceeds the model error by an order of magnitude (Sec. V-F).
 ### A. Stability metrics
 
 The read stability of a 6T cell is quantified by the static noise margin (SNM), defined
-as the **minimum** of the two lobes of the butterfly characteristic [1]. Write stability
+as the **minimum** of the two lobes of the butterfly characteristic [15]. Write stability
 is measured by the write trip point (V_trip). MC produces a distribution for each
 metric, of which the mean μ and standard deviation σ are conventionally recorded. The
 method is metric-agnostic and is applied identically to both.
@@ -178,20 +161,20 @@ For a condition **x**, the margin ratio
 is evaluated on a voltage grid, and Vmin(**x**) is the voltage where z crosses the target
 z-score Z_t, obtained by linear interpolation.
 
-Z_t follows analytically from the array yield requirement. For a 128 Mb array at 99 %
+Z_t follows analytically from the array yield requirement. For a 128 Mb array at 99%
 Poisson yield,
 
     p_fail = −ln(0.99) / (128 × 10⁶) ≈ 7.85 × 10⁻¹¹                        (2)
-    Z_t = Φ⁻¹(1 − p_fail) = **6.398**                                      (3)
+    Z_t = Φ⁻¹(1 − p_fail) = 6.398                                          (3)
 
 where Φ is the standard normal CDF. The failing unit is the **cell**; multiplying by the
 transistor count is wrong. The 128 Mb array size is consistent with the 14 nm 128 Mb
-SRAM of [21].
+SRAM of [16].
 
 Two reference quantities must be kept apart. Z_t is a yield criterion that enters the
 *definition* of Vmin; the spec voltage of Table I decides whether the resulting Vmin
 *passes*. They are set independently. That Z_t is an analytic derivation rather than a
-silicon calibration is decisive for Sec. II-D.
+silicon calibration is decisive for Section II-D.
 
 ### C. Region of interest and two-sided censoring
 
@@ -208,9 +191,9 @@ justification. Censored conditions are excluded from continuous error metrics an
 share is reported alongside.
 
 One caveat: **the censoring share depends on the decision threshold.** Correcting the
-bias of Sec. II-D raises the effective threshold, which increases the right-censored
+bias of Section II-D raises the effective threshold, which increases the right-censored
 share on the same grid. The adequacy of the grid ceiling must therefore be judged at the
-corrected threshold, not the naive one (Sec. VI-A).
+corrected threshold, not the naive one (Section VI-A).
 
 ### D. The systematic bias of the min-statistics z-score
 
@@ -220,9 +203,9 @@ nevertheless fits a Gaussian to the minimum and extrapolates to Z_t = 6.398, so 
 systematically underestimates the failure probability. A failure occurs if *either* lobe
 collapses, so the true failure probability is a union probability.
 
-The non-normality of the SNM distribution is itself established. Saeidi *et al.* [19]
+The non-normality of the SNM distribution is itself established. Saeidi *et al.* [13]
 showed that the one-sided read SNM follows a weighted sum of normals rather than a single
-Gaussian; Zheng and Mazumder [20] modelled within-die SNM variation as a combination of
+Gaussian; Zheng and Mazumder [14] modeled within-die SNM variation as a combination of
 folded-normal and non-central chi-squared distributions with agreement beyond 6σ. The
 contribution here is not that observation but **identifying the physical quantity that
 sets the size of the bias, measuring it from production MC output alone, and converting
@@ -231,10 +214,12 @@ it into the Vmin units of a specific product spec.**
 Given the per-lobe statistics (μ_L, σ_L, μ_R, σ_R, ρ_LR), the failure probability is
 closed-form:
 
-    p_fail = P(L<0) + P(R<0) − P(L<0, R<0)                                (4)
-    Z_eff  = Φ⁻¹(1 − p_fail)                                              (5)
+    p_fail  = P(L<0) + P(R<0) − P(L<0, R<0)                               (4)
+    Z_union = Φ⁻¹(1 − p_fail)                                             (5)
 
-The joint term is a bivariate normal CDF, computed with Owen's T function [3].
+The joint term is a bivariate normal CDF, computed with Owen's T function [17]. Z_union is
+the z that a correct union calculation assigns to a condition; the naive z of Eq. (1)
+returns a smaller value, and the gap between them is the bias this section is about.
 
 #### 1) The physical meaning of ρ_LR
 
@@ -253,7 +238,7 @@ way and co-correlates them.
 - ρ_LR → −1 : local mismatch dominates; the union failure probability, and the bias, are
   maximal.
 
-An important consequence follows. **The experiment design of Sec. III cannot mitigate
+An important consequence follows. **The experiment design of Section III cannot mitigate
 this bias.** All nine design axes are device-type-level global quantities that preserve
 the left–right symmetry of the cell, so under the design axes alone the two lobes are
 exchangeable at every condition. What makes the lobes asymmetric arises only from local
@@ -266,13 +251,16 @@ The bias affects **only the threshold** of the (μ, σ) → Vmin conversion. Sin
 the crossing of z(V_op) = Z_t, what is needed is not the whole z axis but the bias at
 the single point z = Z_t. The correction is therefore the post-processing step
 
-    Z_eff = Z_t + z_bias                                                  (6)
+    z_bias = Z_union(ρ_LR, Z_t) − Z_t                                     (6)
+    Z_eff  = Z_t + z_bias                                                  (7)
 
-and requires no re-simulation. Consequently the **ordering** conclusions of Secs. V–VII —
+where z_bias is evaluated at the target quantile: it is the amount by which the union
+calculation exceeds the naive threshold there. The corrected threshold Z_eff is what the
+crossing must reach, and the correction requires no re-simulation. Consequently the **ordering** conclusions of Sections V–VII —
 the sensitivity ranking and the corner ordering — are unaffected. Anything referenced to
 the threshold does move: pass fractions, tolerance widths and the location of the
 compliance boundary all contain Z_t, so both thresholds are reported wherever they occur
-(Tables XIII and XVIII, Sec. VII-D).
+(Tables XIII and XVIII, Section VII-D).
 
 #### 3) How ρ_LR can be measured
 
@@ -281,12 +269,15 @@ min(L, R) is a closed-form function of ρ_LR**, so ρ_LR can be inverted from th
 samples alone. Since min(L,R) = (S − |D|)/2 with S = L+R and D = L−R independent,
 
     a² = 2(1 − ρ),  c = √(2/π)
-    μ₂ = 1 − a²/(2π),  μ₃ = −a³(2c³ − c)/8
-    g₁(ρ) = μ₃ / μ₂^{3/2}                                                 (7)
+    m₂ = 1 − a²/(2π),  m₃ = −a³(2c³ − c)/8
+    g₁(ρ) = m₃ / m₂^{3/2}                                                 (8)
+
+where m₂ and m₃ are the second and third central moments of the standardized minimum —
+written m, not μ, because μ denotes the margin mean throughout.
 
 and g₁ is monotone in ρ. Skewness uses the whole sample and is therefore statistically
 more efficient than a tail fit that depends on a handful of lower quantiles. The
-measurement is reported in Sec. V-F.
+measurement is reported in Section V-F.
 
 ---
 
@@ -313,32 +304,34 @@ The nine device-variation axes of Table II are sampled jointly with the supply v
 Deck parameters follow as Vth_PG = cn + sk and Vth_PD = cn − sk; the local σ and mobility
 multipliers decompose the same way.
 
-**Read and write are each characterised only at their own worst-case temperature.**
+**Read and write are each characterized only at their own worst-case temperature.**
 Read is worst hot (125 °C), write worst cold (−40 °C). Running each mode only at its own
 worst temperature, instead of every mode at every temperature, is a deliberate **cost
-decision**, and it splits the data into two batches: SNMR at 125 °C, 2,000 conditions ×
+decision**, and it splits the data into two batches: SNMR (read static noise margin, the
+retention-side minimum) at 125 °C, 2,000 conditions ×
 5 levels, and V_trip at −40 °C, 2,000 conditions × 4 levels. The intersection of their
 nine-dimensional coordinates is **0/2000**, and the input has no temperature axis, so
 **the two cannot be merged into one GP.** There are two models; only the argument of the
 paper runs jointly.
 
-Both the price and the benefit of this choice surface in Sec. V-D. The price is that the
+Both the price and the benefit of this choice surface in Section V-D. The price is that the
 per-condition combined Vmin = max(read, write) cannot be verified against measurement in
 the 2,000-condition batches. The benefit is that the **complementarity** of the two modes
 — each filling the other's censored corner — is confirmed by measurement.
 
-### B. Common/skew parameterisation
+### B. Common/skew parameterization
 
-The pass-gate and pull-down devices share the NMOS flavour, hence share the dominant
+The pass-gate and pull-down devices share the NMOS flavor, hence share the dominant
 variation sources — gate stack, channel doping, anneal, lithographic critical dimension
 — with imperfect tracking from device geometry and layout environment. Sampling them
-independently assigns design points to states never realised in silicon, where two
-devices of the same flavour diverge in opposite directions at the mismatch level.
+independently assigns design points to states never realized in silicon, where two
+devices of the same flavor diverge in opposite directions at the mismatch level.
 
 The adopted common/skew split induces corr(l_PG, l_PD) ≈ 0.88, inside the plausible
-0.85–0.95 range for same-flavour tracking and consistent with the ρ ≈ 0.80 structure of
+0.85–0.95 range for same-flavor tracking and consistent with the ρ ≈ 0.80 structure of
 the Vth axes. The common and skew components are sampled independently, a property the
-variance-based analysis of Sec. VII requires.
+variance-based analysis of Section VII requires. Fig. 2 shows both halves of the design:
+the quadrant weighting in (a) and the tracking band it induces in (b).
 
 **Fig. 2.** (a) Quadrant weighting in the (cn, pu) plane; (b) the diagonal
 (l_PG, l_PD) tracking band induced by independent (l_com, l_sk) sampling.
@@ -354,8 +347,8 @@ generated from deterministic PCG64 draws on independent per-quadrant streams.
 
 | Metric | FSG | FN | SN | SFG |
 |---|---|---|---|---|
-| Read (SNM) | 45 % | 20 % | 15 % | 20 % |
-| Write (V_trip) | 10 % | 15 % | 30 % | 45 % |
+| Read (SNM) | 45% | 20% | 15% | 20% |
+| Write (V_trip) | 10% | 15% | 30% | 45% |
 
 An initial design hypothesis was that stratified low-discrepancy sampling would beat
 pseudo-random draws. Internal validation supported this on neither the domain-uniform nor
@@ -365,8 +358,8 @@ from quadrant weighting alone.
 ### D. Mirror-twin leakage — an early design failure and its fix
 
 An early pilot design reused a single quasi-random stream across the four quadrants,
-flipping only the signs of cn and pu. As a result, 75 % of conditions had a mirror twin
-sharing the remaining seven coordinates, and in a random hold-out about 74 % of test
+flipping only the signs of cn and pu. As a result, 75% of conditions had a mirror twin
+sharing the remaining seven coordinates, and in a random hold-out about 74% of test
 conditions had a twin in training — **inflating the accuracy metrics with no
 implementation defect anywhere.**
 
@@ -380,7 +373,7 @@ rule.
 
 ### E. Data quality audit
 
-In an internal characterisation flow with heavy manual transcription, the spreadsheet
+In an internal characterization flow with heavy manual transcription, the spreadsheet
 itself is an error source. We applied a **μ(V_op) monotonicity audit** to both batches:
 μ must increase monotonically with supply, so a violation exceeding three MC standard
 errors is a transcription error.
@@ -401,23 +394,25 @@ pointed at defects in its own training data.**
 
 ### A. Gaussian process regression
 
-A GP [4] provides non-parametric Bayesian regression that returns a calibrated predictive
+A GP [18] provides non-parametric Bayesian regression that returns a calibrated predictive
 variance alongside the predictive mean. The model maps the nine variation axes and the
 supply voltage to the margin statistics (μ, σ). Three properties justify the choice:
-behaviour under limited data, quantified predictive uncertainty, and a likelihood that
-accepts per-condition noise directly (Sec. IV-E). Appendix A gives the background.
+behavior under limited data, quantified predictive uncertainty, and a likelihood that
+accepts per-condition noise directly (Section IV-E). Appendix A gives the background.
 
 The μ process uses a Matérn-5/2 kernel with ARD, assigning an independently learned
-lengthscale to each input dimension. The σ process uses an additive kernel that separates
-the supply-voltage group from the device-variation group.
+lengthscale λ to each input dimension. The σ process uses an additive kernel that
+separates the supply-voltage group from the device-variation group. Kernel lengthscales
+are written λ throughout, to keep them distinct from the local-σ length axes l_com, lpu
+and l_sk of Table II.
 
-### B. Input standardisation
+### B. Input standardization
 
 The input vector mixes mV-scale shifts, V-scale supply levels, and dimensionless
-multipliers. Without standardisation, marginal likelihood optimisation converges to a
+multipliers. Without standardization, marginal likelihood optimization converges to a
 markedly worse optimum **with no diagnostic warning**. Most of an improvement initially
 attributed to the physics constraints was later traced to this factor. All inputs are
-standardised with training statistics.
+standardized with training statistics.
 
 ### C. Physics layer
 
@@ -434,8 +429,8 @@ Three constraints inject prior device knowledge. **Corner anchoring** augments t
 training set with virtual observations at the four global corners, preventing
 extrapolation drift at the domain extremes. A **monotonicity penalty** ReLU(−∂μ/∂V_op)²
 evaluated at probe points through the posterior suppresses the unphysical prediction that
-raising the supply degrades mean stability. Weak regularisation induces a linear σ(V_op)
-trend consistent with established mismatch scaling [2].
+raising the supply degrades mean stability. Weak regularization induces a linear σ(V_op)
+trend consistent with established mismatch scaling [19].
 
 ### E. Noise-aware likelihood
 
@@ -447,10 +442,10 @@ sensitive to kurtosis.
 This mechanism absorbs heterogeneous sample budgets into one model. When lower fidelity
 consists of **nothing but fewer samples from the same simulator**, a heteroscedastic
 single-fidelity GP is the correct model and the discrepancy term of a multi-fidelity
-formulation [5] is unnecessary. Because the posterior borrows strength from neighbouring
+formulation [20] is unnecessary. Because the posterior borrows strength from neighbouring
 conditions, an individual condition does not need a large MC batch to be informative —
 which is the basis for spending a fixed budget on **breadth of condition coverage**
-rather than depth per condition (Sec. VI-C).
+rather than depth per condition (Section VI-C).
 
 ### F. Inverse queries: axis-wise exact solution
 
@@ -470,7 +465,7 @@ narrow the crossing by bisection. Twenty-four iterations shrink a ±60 mV span b
 The direction of monotonicity is not assumed but read from the two endpoints. A slice
 where the target is not attained anywhere in the design range — for example when pu is
 fast enough that any cn meets spec — has no boundary, and is reported as "no boundary"
-rather than clipped to a range end. That distinction is part of the result (Sec. V-E).
+rather than clipped to a range end. That distinction is part of the result (Section V-E).
 
 **A planar boundary is traced by the axis-wise solution.** The boundary curve of a
 two-dimensional section such as (cn, pu) is obtained by solving cn* one-dimensionally at
@@ -490,7 +485,7 @@ computation takes seconds.
 > Obtaining the full nine-dimensional hypersurface with several axes free at once is
 > outside the scope of this paper. Gradient descent through the differentiable composite
 > function is the natural extension there, but **we claim only what we validated**
-> (Sec. VIII-D).
+> (Section VIII-D).
 
 ---
 
@@ -500,13 +495,13 @@ computation takes seconds.
 
 The split is at condition level. Of each batch's 2,000 conditions, 1,700 go to training
 and 300 to hold-out, and all supply levels of a condition always stay in the same
-partition. As established in Sec. III-D neither batch has mirror twins, so the
+partition. As established in Section III-D neither batch has mirror twins, so the
 condition-level split leaks nothing, and the training script asserts this. Vmin errors are
 reported on the non-censored subset with the censoring share alongside.
 
-Validation is stacked at three levels: **in-batch hold-out** (Sec. V-B) → **PDK corners
-absent from training** (Sec. V-D) → **an independently designed pilot batch**
-(Sec. V-G). Each step is further from the training distribution.
+Validation is stacked at three levels: **in-batch hold-out** (Section V-B) → **PDK corners
+absent from training** (Section V-D) → **an independently designed pilot batch**
+(Section V-G). Each step is further from the training distribution.
 
 ### B. Forward accuracy
 
@@ -522,7 +517,7 @@ alongside as the intermediate product that makes it.
 | μ RMSE / R² | 2.50 mV / 0.9965 | 2.17 mV / 0.9989 |
 | σ RMSE / R² | 0.256 mV / 0.9798 | **2.04 mV / 0.7318** |
 | **Vmin RMSE (per condition)** | **8.35 mV** | **14.45 mV** |
-| \|error\| median / P90 / max | 3.36 / 10.69 / 53.78 mV | 9.81 / 21.47 / 53.06 mV |
+| \|error\| median / P90 / max (percentiles of \|error\|) | 3.36 / 10.69 / 53.78 mV | 9.81 / 21.47 / 53.06 mV |
 | Censored: crossing below the grid floor | 49 / 300 | 69 / 300 |
 | Excluded: crossing above the top level | 8 / 300 | 3 / 300 |
 | **Scored conditions** | **243** | **228** |
@@ -543,6 +538,7 @@ RMSE alone does not reveal the error structure, so we look at the distribution. 
 0.4 V and is clamped to the floor. The magnitude is set by the clamp width, not by
 prediction quality, and these conditions sit more than 200 mV below the spec voltage.
 Excluding those three, the Vmin RMSE is **6.02 mV** with a maximum error of **19.3 mV**.
+Table V breaks the error down by Vmin band.
 
 **TABLE V. Read Vmin error by band (hold-out, 243 non-censored conditions)**
 
@@ -557,9 +553,10 @@ Excluding those three, the Vmin RMSE is **6.02 mV** with a maximum error of **19
 † Includes the three grid-floor clamps.
 
 Across 0.45–0.75 V, where decisions are actually made, the RMSE is 5–8 mV — **an order of
-magnitude below** the metric bias measured in Sec. V-F (+1.054 σ in z, 70 mV in Vmin).
+magnitude below** the metric bias measured in Section V-F (+1.054 σ in z, 70 mV in Vmin).
 The term that dominates the sign-off decision is not the regression error of the
-surrogate but the bias of the metric itself.
+surrogate but the bias of the metric itself. Fig. 3 plots predicted against reference
+Vmin for both modes.
 
 **Fig. 3.** Measured versus predicted Vmin on the hold-out conditions.
 
@@ -571,8 +568,8 @@ error of σ propagates straight into z and then into the crossing. The write σ 
 only R² = 0.732.
 
 Two effects overlap. First, the σ of V_trip has a wide condition-to-condition spread
-(SD 3.96 mV against 1.79 mV for read). Second, **69 % of the transcribed σ values are
-rounded to integers** (1 % in the read batch). Rounding alone contributes an RMS of
+(SD 3.96 mV against 1.79 mV for read). Second, **69% of the transcribed σ values are
+rounded to integers** (1% in the read batch). Rounding alone contributes an RMS of
 1/√12 ≈ 0.29 mV, which does not account for the observed 2.04 mV. Section V-G tests this
 diagnosis directly against an independent batch with almost no rounding, and the result
 changes how the cause is apportioned.
@@ -581,32 +578,35 @@ changes how the cause is apportioned.
 
 In early training two hold-out conditions had Vmin errors above 100 mV. Tracing them led
 not to the model but to the measurement sheet. In both, only the 0.6 V SNM mean was
-recorded at one tenth of its neighbours (e.g. 10.9 mV between 83.8 and 127.0 mV), and the
+recorded at one tenth of its neighbors (e.g. 10.9 mV between 83.8 and 127.0 mV), and the
 surrogate was predicting 109.9 mV for the same cell. This triggered the full audit of
-Sec. III-E. Using **a trained surrogate to point at defects in the data that trained it**
+Section III-E. Using **a trained surrogate to point at defects in the data that trained it**
 is a secondary but practical by-product in any internal flow with heavy transcription.
 
 ### C. Physical consistency
+
+A model can fit the numbers and still be wrong about the device. Table VI lists the
+properties the physics requires and what the fitted model does with them.
 
 **TABLE VI. Physical consistency checks (read model)**
 
 | Property | Expected | Measured | Result |
 |---|---|---|---|
-| Pass-gate dominance | ℓ_cn < ℓ_pu | ℓ_pu/ℓ_cn = **1.093** | pass |
+| Pass-gate dominance | λ_cn < λ_pu | λ_pu/λ_cn = **1.093** | pass |
 | Vth direction | ∂Vmin/∂cn < 0 | negative | pass |
 | Pull-up direction | ∂Vmin/∂pu > 0 | positive | pass |
 | Worst read corner | FSG | FSG | pass |
-| Supply sensitivity | shortest lengthscale | ℓ_Vop = **4.64**, shortest | pass |
+| Supply sensitivity | shortest lengthscale | λ_Vop = **4.64**, shortest | pass |
 
 The pass-gate dominance hierarchy — a shorter lengthscale on cn than on pu — also
 reproduced in the same direction on earlier pilot design batches; we report only the
 direction here, because the per-batch values were not re-derived into this manuscript's
 evidence ledger. These are qualitative checks; the quantitative sensitivity ranking is read from the variance-based
-indices of Sec. VII.
+indices of Section VII.
 
 ### D. Fixed-corner validation
 
-The hold-out of Sec. V-B comes from the same batch, so a bias in the design itself would
+The hold-out of Section V-B comes from the same batch, so a bias in the design itself would
 go undetected. This section asks the same question with data generated **independently of
 the training batch**: separate runs of the four global corner decks provided by the PDK,
 which appear in neither training nor hold-out.
@@ -630,7 +630,7 @@ sample count — so neither temperature nor sample size enters as a confound.
 
 On the three scorable corners the read Vmin RMSE is 9.3 mV, the same magnitude as the
 8.35 mV hold-out error. That the error does not grow on data generated outside the
-training design indicates that the model learned the behaviour over the (cn, pu) plane
+training design indicates that the model learned the behavior over the (cn, pu) plane
 rather than a particular structure of the design.
 
 **What matters for design is the ordering.** For read, both measurement and prediction
@@ -651,20 +651,21 @@ sanity check that the model is operating correctly, not a claim about population
 
 In Table VII, SFG is clamped below 0.4 V in both measurement and prediction for read.
 This is a physical fact, not a data defect — **read does not set Vmin at that corner.**
-SFG combines a fast pull-up with a slow pass-gate, which favours read stability while
+SFG combines a fast pull-up with a slow pass-gate, which favors read stability while
 making the cell hard to flip, so **write** becomes the constraint. Symmetrically, FSG is
 censored for write.
 
 Beyond that symmetry, the read worst (FSG, 0.5903 V) and the write worst (SFG, 0.5924 V)
 differ by only **2 mV**. This cell design sits near the balance point between read and
-write, with no room left to optimise one side alone; equally, it shows that **reasoning
+write, with no room left to optimize one side alone; equally, it shows that **reasoning
 about Vmin from a single mode misses the decision at the opposite corner**.
 
 The combined per-condition Vmin is max(read, write). At the four corners both
 measurements exist and Table VII gives that value directly. In the 2,000-condition
 batches the coordinates do not overlap, so the same comparison cannot be made against
 measurement; each surrogate would have to be evaluated at the other's coordinates, and
-that would be a prediction built on a prediction (Sec. VIII-C).
+that would be a prediction built on a prediction (Section VIII-C). Fig. 4 compares the
+per-corner values for both modes.
 
 **Fig. 4.** Measured versus predicted Vmin per corner, read and write.
 
@@ -684,7 +685,7 @@ measured directly in mV.
 
 The unknowns are the two knobs design actually turns, cn and pu. A condition whose target
 is not attained for any value inside the design box [−60, +60] mV is left unrecovered
-rather than clipped.
+rather than clipped. Table VIII gives the recovery error for each axis.
 
 **TABLE VIII. Coordinate recovery error (245 hold-out conditions, target = measured Vmin)**
 
@@ -698,7 +699,7 @@ readable.
 
 First, the recovery error is **smaller than the forward error implies**. Converted
 through the local sensitivity at the target, the forward Vmin RMSE of 8.35 mV corresponds
-to 4.01 mV in cn and 5.11 mV in pu; the actual recovery errors are 60–65 % of that. The
+to 4.01 mV in cn and 5.11 mV in pu; the actual recovery errors are 60–65% of that. The
 inverse constrains the coordinate through the whole z(V) curve of the condition rather
 than through a single Vmin point, so errors at one voltage partly cancel against errors
 at another. Second, the **bias is within ±0.5 mV**, so there is no systematic offset.
@@ -712,7 +713,7 @@ design can act on.
 With the target set to Vmin = 0.625 V, the inverse was run from twelve random starts
 inside the design box. **All twelve converged onto the target manifold with a maximum
 residual of 4.7 × 10⁻⁴ mV.** Each start is a one-dimensional slice at fixed pu, so the
-solution is unique, and this residual confirms that the axis-wise solver of Sec. IV-F is
+solution is unique, and this residual confirms that the axis-wise solver of Section IV-F is
 exact to machine precision.
 
 #### 2) The design boundary
@@ -721,7 +722,7 @@ The end product of the inverse is not an individual solution but a **boundary**.
 the other seven coordinates at nominal and extracting the iso-Vmin = 0.625 V contour over
 the (cn, pu) plane yields the compliant design region directly.
 
-**92.8 %** of this plane meets spec. More informative is the geometry of the boundary.
+**92.8%** of this plane meets spec. More informative is the geometry of the boundary.
 It exists only where **pu ≥ 4.3 mV** (33 of 70 pu rows); if pu is faster than that, any
 cn in ±60 mV meets spec and there is no boundary at all. On the boundary, cn* ranges from
 −59.3 to −25.1 mV.
@@ -729,40 +730,43 @@ cn in ±60 mV meets spec and there is no boundary at all. On the boundary, cn* r
 Read this as follows. **The read process window of this cell closes only along pu.**
 Once PU slows by more than about 4 mV, a lower bound appears on cn, and that bound rises
 quickly as pu slows further. Where PU is fast enough, cn is a free design variable.
-**Corner sign-off, seeing only four points, cannot see this structure.**
+**Corner sign-off, seeing only four points, cannot see this structure.** Fig. 5 shows the
+plane, the spec boundary, and the multistart solutions on it.
 
 **Fig. 5.** Vmin contours over the (cn, pu) plane with the spec boundary and the
 multistart convergence points.
 
 ### F. Lobe correlation and the min-statistics bias
 
-The problem raised in Sec. II-D is closed here by measurement.
+The problem raised in Section II-D is closed here by measurement.
 
 #### 1) Measurement data
 
 Inside the fab, **shape statistics only** were computed for nine conditions
 (V_op 0.6/0.7 V, 10⁵ MC samples each) and exported; the raw samples never leave the fab.
-The exported items are a five-point standardised quantile ladder, skewness, excess
+The exported items are a five-point standardized quantile ladder, skewness, excess
 kurtosis, and the observed minimum.
 
 #### 2) Rejecting the Gaussian hypothesis
+
+Three statistics reject normality independently, and Table IX collects them.
 
 **TABLE IX. Three independent pieces of evidence against normality (9 conditions)**
 
 | Evidence | Result | If Gaussian |
 |---|---|---|
-| Quantile-ladder χ² | 582–821 (dof 5) in 9/9 conditions | ≈ 5 |
+| Quantile-ladder χ² | 582–821 (5 degrees of freedom) in 9/9 conditions | ≈ 5 |
 | Sign of skewness | negative in 9/9, mean **−0.292** | 0 |
 | Observed min / E[min] | mean **1.18**, > 1.09 in 9/9 | 1.00 |
 
 The third indicator is independent of the quantile fit. Against the expected minimum of
-an n = 10⁵ Gaussian sample (Blom position −4.265 σ), the observed minima are 18 % deeper
+an n = 10⁵ Gaussian sample (Blom position −4.265 σ), the observed minima are 18% deeper
 on average.
 
 #### 3) Estimating ρ_LR — two paths that converge
 
-**(a) Skewness inversion (primary estimator).** Invert (7). No MC reference table is
-needed, and the closed form reproduces the fab table's `skew_ref` column to within 0.5 %
+**(a) Skewness inversion (primary estimator).** Invert Eq. (8). No MC reference table is
+needed, and the closed form reproduces the fab table's `skew_ref` column to within 0.5%
 (ρ = −0.25 → −0.2306 vs −0.2317; ρ = −0.50 → −0.3750 vs −0.3741). This checks the
 implementation against the fab's implementation of the same model, not the model itself. The standard error of
 g₁ is taken not as the Gaussian null √(6/n) = 0.00775 but as **0.00816**, simulated
@@ -789,12 +793,12 @@ estimation paths themselves, which differ by 0.027. In Vmin terms ±0.013 in ρ 
 > **The fab table's `correction_sigma` column (0.94 / 1.23) must not be used as is.**
 > Those values are (i) referenced to Z = 6.50 and (ii) **labels on a four-point ρ grid**
 > {−0.50, −0.25, 0, +0.25} rather than estimates. That eight conditions landed on −0.25
-> and one on −0.50 is an artefact of the grid spacing; a continuous fit places all nine
+> and one on −0.50 is an artifact of the grid spacing; a continuous fit places all nine
 > between −0.30 and −0.41.
 
 #### 4) Between-condition uniformity — the test is rejected, yet one scalar suffices
 
-The uniformity test is **rejected**: χ² = 53.6, dof 8, p = 8.1 × 10⁻⁹. ρ_LR does vary
+The uniformity test is **rejected**: χ² = 53.6 on 8 degrees of freedom, p = 8.1 × 10⁻⁹. ρ_LR does vary
 significantly across conditions.
 
 The **effective size of that variation is negligible**, however. Converting each
@@ -807,12 +811,14 @@ meaningless differences become significant, and this is such a case.
 #### 5) Conversion to Vmin
 
 The factor converting σ into mV is dz/dV_op in the spec band. Post-QC measurement gives a
-population median of **15.1 /V** for read (IQR 12.6–18.2) and 36.4 /V for write
-(IQR 31.9–42.3); the local slope at the read-limiting corner FSG is 14.2 /V.
+population median of **15.1 V⁻¹** for read (interquartile range 12.6–18.2) and
+36.4 V⁻¹ for write
+(IQR 31.9–42.3); the local slope at the read-limiting corner FSG is 14.2 V⁻¹.
 
 A z_bias of +1.054 σ therefore converts to **70 mV** at the population median and
 **74 mV** at the FSG local slope (tracing the z curve directly gives 71.7 mV — slightly
-less than the linear conversion because of curvature).
+less than the linear conversion because of curvature). Table X applies that shift to the
+four corners.
 
 **TABLE X. Read Vmin per corner before and after correction (125 °C)**
 
@@ -837,11 +843,11 @@ The measured **+1.054 σ is twice that headroom**. The corrected FSG Vmin is the
 0.662 V, **37 mV past spec**.
 
 Two conditions attach to that number. The nine tail conditions carry no corner labels and
-between-condition uniformity is rejected (Sec. V-F.4), so applying the pooled z_bias at
-FSG is an **extrapolation into an unsampled quadrant**; a corner-labelled re-measurement
-is what would close it, and it is item 3 of Sec. VIII-F. And 0.662 V is the worst value in
-**corner space**, where the other seven axes are held at nominal — Sec. VII-B puts at
-least 39 % of the margin variance on those axes, so the nine-dimensional worst case is
+between-condition uniformity is rejected (Section V-F.4), so applying the pooled z_bias at
+FSG is an **extrapolation into an unsampled quadrant**; a corner-labeled re-measurement
+is what would close it, and it is item 3 of Section VIII-F. And 0.662 V is the worst value in
+**corner space**, where the other seven axes are held at nominal — Section VII-B puts at
+least 39% of the margin variance on those axes, so the nine-dimensional worst case is
 worse than this, and 37 mV is a lower bound on the shortfall rather than the shortfall.
 
 **This is a result, not a failure of the method.** It means three things.
@@ -849,16 +855,19 @@ worse than this, and 37 mV is a lower bound on the shortfall rather than the sho
 1. **Corner sign-off passed only thanks to min-statistics optimism.** The naive FSG value
    of 0.590 V leaves 35 mV of margin, but that margin comes from an assumption about the
    tail shape.
-2. At the 128 Mb / 99 % target this design is closed on the read side, and what is needed
+2. At the 128 Mb / 99% target this design is closed on the read side, and what is needed
    is **either a 37 mV increase in V_op or a design change that brings ρ_LR above
    +0.145** — the latter meaning a smaller local-mismatch share in the lobe difference,
    i.e. more pass-gate/pull-down area.
 3. **The earlier "silicon upper-bound consistency" argument is withdrawn.** It used
    z(0.625 V) = 8.06 at FSG to set a bound z_bias ≤ +1.56 σ and claimed the measurement
-   sat at 74 % of it; after QC the measured value is 6.927. More fundamentally the
+   sat at 74% of it; after QC the measured value is 6.927. More fundamentally the
    argument was **circular**: corner simulation is the very source of the naive z being
    corrected, so it cannot bound the correction. An independent check requires actual
-   silicon Vmin measurement, which this study does not have (Sec. VIII-A).
+   silicon Vmin measurement, which this study does not have (Section VIII-A).
+
+Fig. 6 shows the two estimates side by side and the shift the correction imposes on the
+corners.
 
 **Fig. 6.** (a) ρ_LR from the two estimation paths; (b) the shift the correction imposes
 on the corner Vmin values.
@@ -870,7 +879,7 @@ on the corner Vmin values.
   contains only `vtrip_avg`/`vtrip_std`. The write-limiting corner SFG already sits at
   0.5924 V, touching spec, so **the value of the write ρ_LR decides pass or fail
   directly. This is the highest-priority additional measurement.**
-- **A corner-labelled re-measurement.** The nine conditions were run without corner
+- **A corner-labeled re-measurement.** The nine conditions were run without corner
   labels, so between-corner uniformity is untested.
 - **Direct per-lobe statistics.** ρ_LR is inverted from the distribution shape and
   therefore presumes the min-of-two model. Recording (μ_L, σ_L, μ_R, σ_R, ρ_LR) directly
@@ -878,8 +887,8 @@ on the corner Vmin values.
 
 ### G. External validation on an independent batch
 
-The hold-out of Sec. V-B came from the **same batch** as training — same generation, same
-deck template, same MC settings — so it shows an upper bound on generalisation. The
+The hold-out of Section V-B came from the **same batch** as training — same generation, same
+deck template, same MC settings — so it shows an upper bound on generalization. The
 stronger question is what survives a move to an **independently designed batch**.
 
 #### 1) The external batch
@@ -890,10 +899,10 @@ sweeps only (cn, sk, pu) and fixes the six length/multiplier axes exactly at nom
 every condition lies on a three-dimensional subspace of the nine-dimensional space. The
 script asserts three things: **inside the training box** (not extrapolation), **no
 leakage** (coincidence with the 1,700 training coordinates is 0/348 for read and 0/399
-for write), and **no retraining** (the Sec. V-B checkpoints are evaluated as they are).
+for write), and **no retraining** (the Section V-B checkpoints are evaluated as they are).
 
 Whether the two batches measure the same physical quantity is checked separately. The
-coefficients of μ(V_op) regressed on (cn, sk, pu) agree to within 0.7 % — at 0.6 V for
+coefficients of μ(V_op) regressed on (cn, sk, pu) agree to within 0.7% — at 0.6 V for
 write, (187.04, −1.095, −1.746, +0.638) in 9-D against (187.59, −1.088, −1.744, +0.637)
 in the pilot. **The pilot calls the metric BWRM and the 9-D batch calls it V_trip, but it
 is the same measurement.**
@@ -907,7 +916,7 @@ condition **shifted by one row**. We audit on the assumption that defects remain
 The criterion **must be independent of the surrogate**, otherwise it becomes circular —
 blaming the data wherever the model is wrong. At each voltage we fit a quadratic surface
 to the pilot batch's **own** μ(cn, sk, pu) and flag conditions whose mean residual exceeds
-five times the robust SD. This flags **13/348 (3.7 %)** for read and **8/399 (2.0 %)** for
+five times the robust SD. This flags **13/348 (3.7%)** for read and **8/399 (2.0%)** for
 write (robust SD 1.00 / 0.93 mV; worst mean residual −54.4 / −35.4 mV).
 
 Two independent confirmations follow. First, both sheets accidentally contain a duplicated
@@ -918,6 +927,9 @@ contain **all five** of the largest Vmin errors: two independent criteria point 
 same conditions. No correction was applied — that requires the original decks (O-06).
 
 #### 3) Results
+
+Table XI gives the read batch and Table XII the write batch, each with and without the
+conditions the batch's own consistency audit flags.
 
 **TABLE XI. External validation — read (all five levels inside the training range)**
 
@@ -941,7 +953,7 @@ same conditions. No correction was applied — that requires the original decks 
 
 On censoring, read shows a floor clamp of 50 measured against 49 predicted — **one
 disagreement** — and 2/2 agreement above the ceiling. Write shows 75 measured against
-66 predicted, with **33 disagreements (8.3 %)**.
+66 predicted, with **33 disagreements (8.3%)**.
 
 #### 4) The two modes say different things
 
@@ -952,8 +964,8 @@ precisely what creates the condition-to-condition spread of σ (the pilot's σ i
 constant at 13.4 ± 0.27 mV across all conditions). With the denominator of z = μ/σ
 effectively fixed, σ RMSE falls from 0.256 to 0.146 mV, z RMSE from 0.373 to 0.137, and
 the Vmin error follows. The representative figure for the full nine-dimensional window
-remains the **8.35 mV** of Sec. V-B. **This is also an independent prediction that the
-variance decomposition of Sec. VII-B will name the length/multiplier axes as the main
+remains the **8.35 mV** of Section V-B. **This is also an independent prediction that the
+variance decomposition of Section VII-B will name the length/multiplier axes as the main
 contributors to σ — the two sections cross-check each other.**
 
 **Write — external and in-batch are nearly identical** (13.63 vs 14.45 mV). The plane does
@@ -961,8 +973,8 @@ not get easier, because the write bottleneck is σ and the write σ does not shr
 the length/multiplier axes are fixed.
 
 This yields **an independent answer to the σ transcription question raised in
-Sec. V-B**. The nine-dimensional write batch has 69.3 % of its σ values rounded to
-integers; the pilot has **0.9 %** — effectively no rounding, hence a much cleaner
+Section V-B**. The nine-dimensional write batch has 69.3% of its σ values rounded to
+integers; the pilot has **0.9%** — effectively no rounding, hence a much cleaner
 reference. Against that clean reference the σ RMSE is still 1.78 mV, so **rounding is
 part of the cause of the write σ error but not all of it.** The remainder is a genuine
 limitation of the model. The 33 write censoring disagreements (against one for read) are
@@ -979,7 +991,7 @@ extrapolation **one level outside the training range**.
 the error is **systematic bias**: the model consistently underestimates the write margin
 at 0.8 V. Against the interpolation-range μ RMSE of 2.08 mV this is 3.6×. Voltage-axis
 extrapolation produces bias even one level out, and that fact constrains the grid
-reduction argument of Sec. VI-A.
+reduction argument of Section VI-A.
 
 ---
 
@@ -990,7 +1002,7 @@ The campaign cost is a product of three factors.
     cost = (number of voltage levels) × (number of conditions) × (MC samples per condition)
 
 We cut each factor in turn and measure what is lost. All three experiments are scored on
-**the same 300-condition hold-out as Sec. V-B**, so the curves are mutually comparable,
+**the same 300-condition hold-out as Section V-B**, so the curves are mutually comparable,
 and no experiment touches the hold-out — only the training budget is reduced.
 
 ### A. Voltage levels
@@ -1002,36 +1014,37 @@ interpolation of those two points. The 0.8 V sample **cannot participate** in th
 decision — this is the structure of the interpolation formula, not an empirical
 approximation. Comparing z(0.625 V) from the full five-level grid against the same value
 from the 0.6/0.7 pair alone over all 2,000 conditions gives max |Δz| = **1.78 × 10⁻¹⁵**,
-machine epsilon. **If the decision is the only deliverable, two levels suffice and 60 %
+machine epsilon. **If the decision is the only deliverable, two levels suffice and 60%
 can be removed.** That is the upper bound; the rest of this section asks whether it can
 actually be taken.
 
 #### 2) But Vmin contours do use the top level — and the correction increases that use
 
 Vmin is the crossing z(V) = Z_t, so each condition needs a **bracket** around its own
-crossing. We examine both before (Z_t = 6.398) and after (Z_eff = 7.453) correction.
+crossing. We examine both before (Z_t = 6.398) and after (Z_eff = 7.453) correction, and
+Table XIII gives the resulting distribution.
 
 **TABLE XIII. Distribution of crossing brackets.** The write Z_eff column applies the
-read-measured z_bias; write ρ_LR is unmeasured (Sec. V-F.7).
+read-measured z_bias; write ρ_LR is unmeasured (Section V-F.7).
 
 | Read (2,000 conditions, 0.4–0.8) | Z_t = 6.398 | Z_eff = 7.453 |
 |---|---|---|
-| Floor clamp | 16.4 % | 6.8 % |
-| [0.4,0.5] / [0.5,0.6] / [0.6,0.7] | 32.0 / 29.9 / 14.4 % | 25.8 / 29.0 / 20.2 % |
-| **[0.7,0.8]** ← conditions that use 0.8 V | **3.8 %** | **7.5 %** |
-| Above ceiling (> 0.8 V) | 3.5 % | **10.8 %** |
+| Floor clamp | 16.4% | 6.8% |
+| [0.4,0.5] / [0.5,0.6] / [0.6,0.7] | 32.0 / 29.9 / 14.4% | 25.8 / 29.0 / 20.2% |
+| **[0.7,0.8]** ← conditions that use 0.8 V | **3.8%** | **7.5%** |
+| Above ceiling (> 0.8 V) | 3.5% | **10.8%** |
 
 | Write (1,972 conditions, 0.4–0.7) | Z_t = 6.398 | Z_eff = 7.453 |
 |---|---|---|
-| Floor clamp | 22.4 % | 14.8 % |
-| **[0.4,0.5]** ← conditions that use 0.4 V | **8.8 %** | **4.9 %** |
-| [0.5,0.6] / [0.6,0.7] | 46.2 / 21.5 % | 40.6 / 36.3 % |
-| Above ceiling (> 0.7 V) | 1.1 % | **3.5 %** |
+| Floor clamp | 22.4% | 14.8% |
+| **[0.4,0.5]** ← conditions that use 0.4 V | **8.8%** | **4.9%** |
+| [0.5,0.6] / [0.6,0.7] | 46.2 / 21.5% | 40.6 / 36.3% |
+| Above ceiling (> 0.7 V) | 1.1% | **3.5%** |
 
 > **The lobe correction changes the voltage-budget argument.** A higher effective
 > threshold pushes crossings up the voltage axis. The read conditions that need 0.8 V grow
-> from 3.8 % to 7.5 %, and those beyond the ceiling from 3.5 % to 10.8 %: after correction
-> **18.3 %** of the population sits near or above 0.8 V. "Removing 0.8 V is lossless" is
+> from 3.8% to 7.5%, and those beyond the ceiling from 3.5% to 10.8%: after correction
+> **18.3%** of the population sits near or above 0.8 V. "Removing 0.8 V is lossless" is
 > true **only for the decision**; it is false when the contour is the deliverable.
 
 #### 3) Which level can be removed differs by mode
@@ -1059,10 +1072,10 @@ stated:
 2. **The contour nevertheless survives.** Scoring the reduced model on the full grid gives
    a Vmin RMSE of **6.99 mV** over 244 conditions, equal to or better than the baseline
    (8.35 mV over 243). Without simulating 0.8 V at all, the surrogate fills that level in
-   with a **bias of −0.18 mV**. For read, **the 20 % reduction is effectively lossless.**
+   with a **bias of −0.18 mV**. For read, **the 20% reduction is effectively lossless.**
 3. **Write is different: removing 0.4 V causes a structural loss** — hold-out censored
-   conditions grow from 69 to **90** (+21 of 297, 7 %), and for those Vmin cannot be
-   produced at all. This matches the population prediction (floor clamp 14.8 → 19.7 %),
+   conditions grow from 69 to **90** (+21 of 297, 7%), and for those Vmin cannot be
+   produced at all. This matches the population prediction (floor clamp 14.8 → 19.7%),
    and it is grid geometry, not fit noise.
 4. **The write σ error is concentrated at 0.4 V.** The same original model has σ RMSE
    2.041 mV over all four levels but 1.336 mV over 0.5–0.7 alone.
@@ -1070,16 +1083,16 @@ stated:
 **Voltage extrapolation bends with opposite signs at the two ends.** Three measurements
 form one picture: write 0.7 → 0.8 V, **−6.45 mV** (margin underestimated); write
 0.5 → 0.4 V, **+5.66 mV** (overestimated); read 0.7 → 0.8 V, −0.18 mV (no bias). This is
-the textbook behaviour of a GP reverting to the mean outside its training range and
+the textbook behavior of a GP reverting to the mean outside its training range and
 **compressing the slope of μ(V_op)**. The read bias is essentially zero because the read
-dz/dV_op of 15 /V is gentler than the write 36 /V, so the absolute compression is smaller.
+dz/dV_op of 15 V⁻¹ is gentler than the write 36 V⁻¹, so the absolute compression is smaller.
 **The decision to trim a grid end is conditional on that mode's slope.**
 
 ### B. Number of conditions
 
 Training conditions are reduced along nested subsets and scored on the same hold-out.
 Simulation cost is **linear** in the condition count while exact GP training is roughly
-cubic — the fit times show it.
+cubic — the fit times show it. Table XIV gives the result.
 
 **TABLE XIV. Effect of the training condition count (read)**
 
@@ -1100,9 +1113,9 @@ draws was not run, so every row here carries the fit-to-fit spread of a single d
 differences of a few mV are unresolved.
 
 Subject to that, the knee is at **400 conditions**. Going from 1,700 to 400 removes
-**76 %** of the simulation volume and moves the Vmin RMSE from 8.35 to 8.78 mV. That
+**76%** of the simulation volume and moves the Vmin RMSE from 8.35 to 8.78 mV. That
 0.4 mV is below what a single draw can resolve, and below the 1.09 mV batch repeatability
-floor of Sec. V-G — though that floor is a per-condition repeatability and not a bound on
+floor of Section V-G — though that floor is a per-condition repeatability and not a bound on
 the sampling error of an RMSE over 243 conditions, so it is an indication, not a proof.
 At 100–200 conditions the error clearly collapses to 12–17 mV, so **the reduction has a
 floor.**
@@ -1113,7 +1126,7 @@ The actual campaign ran 5,000 samples per condition and no shallower data exists
 we **reproduce the situation by adding the extra sampling noise that a label would have
 carried at n′ < 5,000**. Since Var(μ̂) = σ²/n, we add independent noise of
 σ²(1/n′ − 1/5000) to the μ labels and σ²(1/2n′ − 1/10000) to σ̂, and re-supply y_noise at
-n′ to the noise-aware GP. The hold-out labels are untouched.
+n′ to the noise-aware GP. The hold-out labels are untouched. Table XV gives the result.
 
 **TABLE XV. Effect of MC depth (read)**
 
@@ -1126,7 +1139,7 @@ n′ to the noise-aware GP. The hold-out labels are untouched.
 
 **The curve is flat.** The full span of μ RMSE is **0.02 mV** and the four R² values agree
 to four decimals. The 7.63–8.71 mV fluctuation in Vmin is the same size as the
-fit-to-fit noise band identified in Sec. VI-B. **Cutting the MC depth tenfold, from 5,000
+fit-to-fit noise band identified in Section VI-B. **Cutting the MC depth tenfold, from 5,000
 to 500 samples per condition, produces no measurable loss.**
 
 The reason: label noise degrades the precision of one condition's μ and σ, but what the GP
@@ -1145,9 +1158,10 @@ the sample bias of σ̂, tail-shape distortion, and convergence failures are abs
 Each of the three sections cut **one factor** and left the other two at full budget.
 Whether the losses multiply, add, or explode when all three are cut at once is not
 answered by those experiments. One worsening mechanism is clearly present: **with only
-400 conditions, each label has fewer neighbours to average against, so the n′ = 500 noise
-bites harder than it did at 1,700 conditions.** The flatness of Sec. VI-C is a result
-obtained with 1,700 neighbours. So we ran the combined experiment directly.
+400 conditions, each label has fewer neighbors to average against, so the n′ = 500 noise
+bites harder than it did at 1,700 conditions.** The flatness of Section VI-C is a result
+obtained with 1,700 neighbors. So we ran the combined experiment directly, and Table XVI
+reports it.
 
 **TABLE XVI. Combined reduction (400 conditions × reduced levels × 500 MC, same hold-out)**
 
@@ -1173,7 +1187,7 @@ mismatch plain.
 | **All three together (measured)** | **10.95 mV** | **+2.6** |
 
 **The single-factor experiments predict no degradation at all.** Their deltas sum to
-−1.7 mV, and each one on its own lies inside the ±1 mV fit-noise band of Sec. VI-B. The
+−1.7 mV, and each one on its own lies inside the ±1 mV fit-noise band of Section VI-B. The
 combined cut degrades the error by **+2.6 mV**, which is outside that band. We report the
 **4.3 mV gap** between the naive prediction and the measurement rather than a ratio,
 because the denominator is indistinguishable from zero. μ moves the same way (2.489–2.715
@@ -1184,11 +1198,13 @@ The smaller write degradation (+1.4 vs +2.6 mV) follows from not removing a volt
 there, and is consistent with the write error budget being dominated by σ and therefore
 less sensitive to training-budget cuts.
 
-> **Each subsection here is a Pareto curve, not an assembly part.** The inference "20 %
-> off the voltage axis, 76 % off conditions and 90 % off MC, each lossless, therefore 53×
+> **Each subsection here is a Pareto curve, not an assembly part.** The inference "20%
+> off the voltage axis, 76% off conditions and 90% off MC, each lossless, therefore 53×
 > for free" is **refuted** by this data. The 53× remains achievable, but its price is
 > **Vmin RMSE 8.35 → 10.95 mV**. We report it as a Pareto point with a stated price, not
 > as lossless.
+
+Fig. 7 collects the three single-factor curves and the combined point.
 
 **Fig. 7.** Budget-reduction Pareto — (a) conditions, (b) MC depth, (c) single factor
 versus all three.
@@ -1196,7 +1212,7 @@ versus all three.
 ### E. What must be excluded from the reduction
 
 **The tail-diagnosis budget is not in the calculation above and is not a candidate for
-reduction.** The ρ_LR measurement of Sec. V-F required **10⁵** samples per condition
+reduction.** The ρ_LR measurement of Section V-F required **10⁵** samples per condition
 (nine conditions). Five hundred samples suffice to estimate z but not to see the
 **shape** of the distribution — a tail fit needs the observed minimum near −4.3 σ, whereas
 500 samples reach only about −3.2 σ. A campaign must be designed as a **two-tier
@@ -1218,40 +1234,41 @@ The first answer is free and turns out to be nearly useless; the second costs 45
 surrogate evaluations and no new simulation; the third is what a designer asks for.
 
 Nothing in this section refits. Both trained models are loaded from the checkpoints of
-Sec. V-B.
+Section V-B.
 
 ### A. Fitted lengthscales
 
 ARD gives one lengthscale per input, learned from the data, so it is tempting to read the
-fitted values as a sensitivity ranking. Since inputs are standardised over the training
+fitted values as a sensitivity ranking. Since inputs are standardized over the training
 box, the values are comparable across axes, and relevance can be defined as the
-normalised inverse lengthscale ℓ⁻¹/Σℓ⁻¹.
+normalized inverse lengthscale λ⁻¹/Σλ⁻¹.
 
-For the read μ kernel the nine device lengthscales span 7.41 (c_n, the shortest) to 8.41
+For the read μ kernel the nine device lengthscales span 7.41 (cn, the shortest) to 8.41
 (l_sk), which is a relevance spread of 0.108–0.123 against the 0.111 an axis would get if
-all nine were equal. The supply axis is the one clear signal: ℓ_Vop = **4.64**, far
+all nine were equal. The supply axis is the one clear signal: λ_Vop = **4.64**, far
 shorter than any device axis, which is the physical-consistency check already reported in
-Sec. V-C. The write model behaves the same way (device axes 6.71–8.82, ℓ_Vop = 4.00).
+Section V-C. The write model behaves the same way (device axes 6.71–8.82, λ_Vop = 4.00).
 
 The σ kernel is flatter still: **all nine device lengthscales fall inside 7.83–7.92**, a
-spread of about 1 %. Read literally, the fit says no process axis matters more than any
-other for σ. Sec. VII-C shows that this reading is wrong.
+spread of about 1%. Read literally, the fit says no process axis matters more than any
+other for σ. Section VII-C shows that this reading is wrong.
 
 ### B. Variance decomposition
 
-**What is decomposed, and why it is not Vmin.** Sobol indices [6] partition the variance
+**What is decomposed, and why it is not Vmin.** Sobol indices [21] partition the variance
 of a scalar output under a stated input distribution — here a uniform prior over the
 training box. The output is z at the spec voltage, not Vmin. Vmin is undefined wherever
 z never reaches the threshold inside the voltage grid, and discarding those samples would
-break the pairing that the Saltelli estimator depends on. z(V_T0) is finite everywhere,
+break the pairing that the Saltelli estimator depends on. Writing V_T0 = 0.625 V for the
+time-zero spec voltage of Table I, z(V_T0) is finite everywhere,
 is monotone in the sign-off margin, and is the quantity the T0 decision actually reads.
 μ(V_T0) and σ(V_T0) are decomposed as well, because σ is the write bottleneck of
-Sec. V-B and the subject of an open prediction from Sec. V-G.
+Section V-B and the subject of an open prediction from Section V-G.
 
-**Estimation.** S1 uses the Saltelli 2010 estimator [7] and S_T the Jansen estimator [8],
+**Estimation.** S1 uses the Saltelli 2010 estimator [22] and S_T the Jansen estimator [23],
 on a base sample of N = 4,096 (45,056 surrogate evaluations per mode). Both are sample
 means, so their sampling error is what separates a small index from zero; we resample the
-Saltelli rows 500 times and report 95 % bootstrap intervals. Resampling costs no further
+Saltelli rows 500 times and report 95% bootstrap intervals. Resampling costs no further
 GP evaluations.
 
 The uniform prior is a stated choice, not the process distribution. It weights every point
@@ -1260,19 +1277,19 @@ The shares below therefore answer "across the window we are signing off", not "i
 population we will ship"; a population-weighted decomposition would need the fab's joint
 distribution over the nine axes, which this study does not have.
 
-**TABLE XVII. Total-order Sobol indices over the training box (N = 4,096; 95 % bootstrap
+**TABLE XVII. Total-order Sobol indices over the training box (N = 4,096; 95% bootstrap
 interval on the read z column)**
 
 | Axis | ARD rel. (read) | S_T of z, read | S_T of z, write | S_T of σ, read | S_T of σ, write |
 |---|---|---|---|---|---|
-| c_n (NMOS V_th) | 0.123 | **0.419** [0.397, 0.441] | **0.421** | 0.001 | 0.006 |
+| cn (NMOS Vth) | 0.123 | **0.419** [0.397, 0.441] | **0.421** | 0.001 | 0.006 |
 | l_com (common local σ) | 0.109 | **0.276** [0.259, 0.293] | 0.170 | **0.847** | **0.722** |
-| p_u (PMOS V_th) | 0.112 | 0.188 [0.178, 0.199] | 0.168 | 0.007 | 0.017 |
-| s_k (V_th skew) | 0.111 | 0.067 [0.064, 0.071] | 0.097 | 0.001 | 0.011 |
-| l_pu (pull-up local σ) | 0.109 | 0.043 [0.040, 0.046] | 0.060 | 0.137 | 0.193 |
+| pu (PMOS Vth) | 0.112 | 0.188 [0.178, 0.199] | 0.168 | 0.007 | 0.017 |
+| sk (Vth skew) | 0.111 | 0.067 [0.064, 0.071] | 0.097 | 0.001 | 0.011 |
+| lpu (pull-up local σ) | 0.109 | 0.043 [0.040, 0.046] | 0.060 | 0.137 | 0.193 |
 | m_com (common multiplier) | 0.110 | 0.015 [0.014, 0.017] | 0.032 | 0.001 | 0.013 |
 | m_sk (multiplier skew) | 0.109 | 0.014 [0.014, 0.015] | 0.005 | 0.002 | 0.000 |
-| m_pu (pull-up multiplier) | 0.109 | 0.008 [0.008, 0.009] | 0.026 | 0.000 | 0.016 |
+| mpu (pull-up multiplier) | 0.109 | 0.008 [0.008, 0.009] | 0.026 | 0.000 | 0.016 |
 | l_sk (local σ skew) | 0.108 | 0.001 [0.001, 0.001] | 0.008 | 0.004 | 0.031 |
 | **Σ** | 1.000 | **1.031** | 0.987 | 1.000 | 1.007 |
 
@@ -1282,32 +1299,32 @@ Three results follow.
 two threshold axes. Their total-order indices sum to 0.61 for read (0.419 + 0.188) and
 0.59 for write. Total-order indices overlap through interactions and do not partition the
 variance, so those sums are an **upper bound** on the joint share of the two corner axes;
-the remaining seven axes therefore carry **at least 39 % (read) and 41 % (write)** of the
+the remaining seven axes therefore carry **at least 39% (read) and 41% (write)** of the
 margin variance. The overlap is small here — ΣS_T exceeds 1 by only 0.031 for read — so the
 bound is close to tight. The largest single non-corner axis, l_com, carries more of the
-read margin variance than p_u does. This is the quantitative form of the limitation stated
-in Sec. I-C: the gap is not a rounding effect, it is two fifths of the problem.
+read margin variance than pu does. This is the quantitative form of the limitation stated
+in Section I-C: the gap is not a rounding effect, it is two fifths of the problem.
 
 **2) σ is a length story, and only a length story.** The three local-σ length axes carry
-**98.8 % (read) and 93.8 % (write)** of the σ variance, and l_com alone carries 85 % and
-72 %. The three multiplier axes together carry 0.3 % and 2.9 %. Sec. V-G predicted, from
+**98.8% (read) and 93.8% (write)** of the σ variance, and l_com alone carries 85% and
+72%. The three multiplier axes together carry 0.3% and 2.9%. Section V-G predicted, from
 the pilot batch alone, that the length and multiplier axes would be named here as the
 main contributors to σ. That pilot observation froze the length and multiplier axes
 **together**, so on its own it established only that the six frozen axes carry the σ
-spread; the decomposition resolves that lumped set, putting 98.8 % on the three length
-axes and 0.3 % on the multipliers.
+spread; the decomposition resolves that lumped set, putting 98.8% on the three length
+axes and 0.3% on the multipliers.
 
 Two cautions on how far this cross-check reaches. The pilot observation is empirical and
 the decomposition is not: these indices describe the **fitted surrogate** and inherit its
 error, so the confirmation runs one way, from data to model, and not back. And a variance
-share is not an error budget — freezing 98.8 % of the read σ variance moved the read σ
+share is not an error budget — freezing 98.8% of the read σ variance moved the read σ
 RMSE only from 0.256 to 0.146 mV, so the axes that carry the variance are not
 proportionally the axes that carry the model's error.
 
 **3) The first-order indices are too noisy to interpret, and we do not.** S_T is the
 better-determined of the two: no total-order interval exceeds 0.05 in the z columns or
 0.07 in the σ columns, in either mode. S1 is not. The
-read z column gives S1(c_n) = 0.302 with an interval of [0.199, 0.416], and the nine S1
+read z column gives S1(cn) = 0.302 with an interval of [0.199, 0.416], and the nine S1
 estimates sum to 0.790 while the nine S_T sum to 1.031. For a purely additive response
 both sums would be 1. The S_T excess of 0.031 says interactions are small; the S1 deficit
 of 0.21 is within the combined noise of nine estimates each carrying a ±0.1 interval. The
@@ -1333,8 +1350,8 @@ Panels (a) and (c) of Fig. 8 rank the same nine axes with the same model. They d
 ARD relevance spans a factor of 1.13 across the nine axes; S_T spans a factor of 400. The
 order disagrees too: by ARD relevance l_com is indistinguishable from three other axes
 (all 0.109 at the precision of Table XVII), yet it ranks **second of nine** by variance
-share. The σ kernel is the extreme case — nine lengthscales within about 1 % of each
-other, while one of those axes carries 85 % of the σ variance.
+share. The σ kernel is the extreme case — nine lengthscales within about 1% of each
+other, while one of those axes carries 85% of the σ variance.
 
 The reason is that the two quantities answer different questions. A lengthscale measures
 how quickly the function *wiggles* along an axis: it responds to curvature. A Sobol index
@@ -1343,58 +1360,59 @@ that is strong, smooth and nearly linear — which is what l_com does to σ — 
 lengthscale and a large variance share at the same time. The two rankings coincide only
 when the axes have comparable curvature, and here they do not.
 
-What survives from Sec. VII-A is narrower than a ranking. ℓ_Vop = 4.64 is genuinely the
+What survives from Section VII-A is narrower than a ranking. λ_Vop = 4.64 is genuinely the
 shortest lengthscale in the model, and the supply axis is genuinely the most curved one.
-The direction of the pass-gate check in Sec. V-C also holds up: ARD puts ℓ_cn below ℓ_pu,
-and Sobol puts S_T(c_n) above S_T(p_u). Directions can be read off a fitted kernel;
+The direction of the pass-gate check in Section V-C also holds up: ARD puts λ_cn below λ_pu,
+and Sobol puts S_T(cn) above S_T(pu). Directions can be read off a fitted kernel;
 rankings and magnitudes cannot. This is the caution referred to in Appendix A, and it
 applies to any GP surrogate whose lengthscales are reported as a sensitivity result.
 
 ### D. Skew tolerance
 
-Sec. VII-B measured how much the threshold skew s_k contributes on average. A designer
-asks the sharper question: with the rest of the process fixed, how far can s_k drift
+Section VII-B measured how much the threshold skew sk contributes on average. A designer
+asks the sharper question: with the rest of the process fixed, how far can sk drift
 before the T0 margin is gone?
 
-We sweep s_k across its full training range (±20 mV) at each of 625 cells of the (cn, pu)
+We sweep sk across its full training range (±20 mV) at each of 625 cells of the (cn, pu)
 plane, holding the other six axes at nominal, and record the fraction of that range which
 keeps z(V_T0) at or above the threshold. Both thresholds are reported, because the lobe
-correction of Sec. V-F raises the bar the margin must clear.
+correction of Section V-F raises the bar the margin must clear. Table XVIII summarizes the
+result and Fig. 9 maps it.
 
-**TABLE XVIII. Skew tolerance over the (cn, pu) plane (625 cells, s_k swept ±20 mV).**
+**TABLE XVIII. Skew tolerance over the (cn, pu) plane (625 cells, sk swept ±20 mV).**
 **The write Z_eff columns apply the read-measured z_bias, which is an assumption: write
-ρ_LR has not been measured (Sec. V-F.7).**
+ρ_LR has not been measured (Section V-F.7).**
 
 | | Read, Z_t | Read, Z_eff | Write, Z_t | Write, Z_eff |
 |---|---|---|---|---|
-| Cells with some passing skew | 97.3 % | 90.9 % | 100 % | 97.0 % |
-| Cells passing at **every** skew | **82.7 %** | **67.0 %** | **77.6 %** | **62.9 %** |
+| Cells with some passing skew | 97.3% | 90.9% | 100% | 97.0% |
+| Cells passing at **every** skew | **82.7%** | **67.0%** | **77.6%** | **62.9%** |
 | Passing width, median | 40.0 mV | 40.0 mV | 40.0 mV | 40.0 mV |
 | Passing width, IQR | 40.0–40.0 | 38.5–40.0 | 40.0–40.0 | 30.6–40.0 |
 
 **Tolerance is close to binary.** The median passing width is the full 40 mV in every
 column: a cell that has any margin at all almost always tolerates the entire skew range.
 What the correction removes is whole cells, not slices of the axis — the fully tolerant
-fraction falls from 82.7 % to 67.0 % for read and from 77.6 % to 62.9 % for write, while
+fraction falls from 82.7% to 67.0% for read and from 77.6% to 62.9% for write, while
 the median width does not move. About one sixth of the plane's skew freedom is the price
 of the correction for read. The write figure is what the same correction would cost if
-z_bias transfers between modes; since write ρ_LR is unmeasured (Sec. V-F.7), that column
+z_bias transfers between modes; since write ρ_LR is unmeasured (Section V-F.7), that column
 is a projection, not a measurement.
 
 **Where it closes is where the paper has been pointing all along.** Fig. 9 shows the
-tolerance collapsing in the fast-NMOS / slow-PMOS region — the FSG quadrant that Sec. V-D
-identifies as the read-limiting corner and Sec. V-F pushes past spec. The write mode keeps
-more cells (97.0 % retain some margin at Z_eff) but loses more inside them: its IQR falls
-to 30.6–40.0 mV, consistent with the larger s_k variance share in Table XVII (0.097 versus
+tolerance collapsing in the fast-NMOS / slow-PMOS region — the FSG quadrant that Section V-D
+identifies as the read-limiting corner and Section V-F pushes past spec. The write mode keeps
+more cells (97.0% retain some margin at Z_eff) but loses more inside them: its IQR falls
+to 30.6–40.0 mV, consistent with the larger sk variance share in Table XVII (0.097 versus
 0.067).
 
 **Fig. 9.** Passing skew width over the (cn, pu) plane, read mode, (a) at Z_t = 6.398 and
 (b) at Z_eff = 7.453. The contour marks the boundary of full tolerance.
 
 Two limits on this number. It is a one-axis tolerance with the other six non-threshold
-axes at nominal, and Table XVII says l_com moves the read margin more than s_k does, so a
+axes at nominal, and Table XVII says l_com moves the read margin more than sk does, so a
 joint tolerance region over several axes would be tighter than this one. And the map is a
-surrogate prediction: cells within roughly one model error (8.35 mV in Vmin, Sec. V-B) of
+surrogate prediction: cells within roughly one model error (8.35 mV in Vmin, Section V-B) of
 the boundary should be read as boundary cells, not as decided ones.
 
 
@@ -1417,12 +1435,12 @@ Placing this paper's numbers side by side makes the priority clear.
 **The metric bias exceeds every other error source by an order of magnitude** — and is
 three times all of them combined. Effort
 spent making the model more accurate ranks below it. That is why a paper about surrogate
-methodology places Sec. V-F where it does — as the evidence that underwrites the accuracy
+methodology places Section V-F where it does — as the evidence that underwrites the accuracy
 of the method.
 
 The status of the bias is as follows. It is **measured**: two independent estimators
 converge on ρ_LR ≈ −0.34 … −0.37, and normality is rejected by three independent lines of
-evidence. The **correction is post-processing**, Eq. (6), requiring no re-simulation. But
+evidence. The **correction is post-processing**, Eqs. (6)–(7), requiring no re-simulation. But
 it is **not verified against silicon.** The earlier claim that inverted an upper bound
 from corner simulation and reported the measurement as "inside the bound" was circular and
 has been withdrawn: corner simulation is the very source of the naive z being corrected,
@@ -1432,25 +1450,25 @@ check requires an actual silicon Vmin measurement, which this study does not hav
 ### B. The limit of write σ prediction — the diagnosis is only half confirmed
 
 Section V-B attributed the write σ error (RMSE 2.04 mV, R² 0.732) to a wide
-condition-to-condition spread plus the 69 % integer rounding of transcribed σ values.
-Section V-G tested that diagnosis **independently**: the pilot batch, with only 0.9 %
+condition-to-condition spread plus the 69% integer rounding of transcribed σ values.
+Section V-G tested that diagnosis **independently**: the pilot batch, with only 0.9%
 rounding, is a clean reference, and even against it the σ RMSE remains 1.78 mV.
 
 **Rounding is therefore part of the cause but not all of it**; the remainder is a genuine
 limitation of the model. The practical consequence is the 33 write censoring
-disagreements (one for read), and Sec. VI-A localised much of the write σ error to the
+disagreements (one for read), and Section VI-A localized much of the write σ error to the
 lowest voltage (0.4 V). Three observations point the same way — the write σ varies
 strongly across conditions at low supply and the current model does not track it.
 **There are two improvement paths:** ask the fab to transcribe σ at full decimal
 resolution (immediately available, partial effect), and increase the condition density in
 the low-voltage region.
 
-Sec. VII-B supplies the axis-level detail that was missing from both: the σ **variance**
-is carried almost entirely by the local-σ length axes — 85 % by l_com alone for read, 72 %
-for write — while the three multiplier axes together account for under 3 %.
+Section VII-B supplies the axis-level detail that was missing from both: the σ **variance**
+is carried almost entirely by the local-σ length axes — 85% by l_com alone for read, 72%
+for write — while the three multiplier axes together account for under 3%.
 
 That is a statement about where σ varies, not about where the model's σ **error** lives,
-and the two are not the same. Sec. V-G.4 is the direct test: the pilot batch freezes all
+and the two are not the same. Section V-G.4 is the direct test: the pilot batch freezes all
 six length and multiplier axes at nominal, removing most of the σ variance, and the write
 σ RMSE still only moves from 2.04 to 1.78 mV. So placing added conditions along the
 local-σ length axes is a **hypothesis** worth testing for read, where the same freeze cut
@@ -1461,8 +1479,8 @@ simulation — and that is the next step this section points to.
 
 ### C. Combined decisions across the two modes — a prediction on top of a prediction
 
-Characterising read and write only at their own worst temperature is a deliberate cost
-decision (Sec. III-A), and its price appears here. Because the nine-dimensional
+Characterizing read and write only at their own worst temperature is a deliberate cost
+decision (Section III-A), and its price appears here. Because the nine-dimensional
 coordinates of the two batches do not intersect, the per-condition combined
 Vmin = max(read, write) **cannot be verified against measurement in the 2,000-condition
 batches.**
@@ -1484,7 +1502,7 @@ decision matters would suffice, and this is a design item for the next campaign.
 The results concern a single technology node and a single cell topology. The multiplier
 spill band that appears when the common component approaches the range edge sits at the
 margin of compact-model calibration, and predictions there should be read conservatively.
-The voltage-level reduction of Sec. VI-A is conditional on the spec of Table I; if the
+The voltage-level reduction of Section VI-A is conditional on the spec of Table I; if the
 IR-drop budget changes so that the spec leaves the grid, it must be revisited.
 
 The scope of the inverse must also be stated. What is validated is the **axis-wise
@@ -1504,15 +1522,15 @@ Only items that a campaign design can act on directly.
 
 1. **The spec sets the voltage levels.** The bracket around the spec point cannot be
    removed in either mode. Trimming a grid end is conditional on that mode's dz/dV_op
-   (Sec. VI-A); in a steep mode, one level of extrapolation produces 5–6 mV of systematic
+   (Section VI-A); in a steep mode, one level of extrapolation produces 5–6 mV of systematic
    bias.
 2. **Spend the budget on breadth of condition coverage.** Cutting MC depth tenfold
    produces no measurable loss, while cutting the condition count to 100–200 clearly
    collapses. Only reducing the condition count cuts both the simulation cost (linear) and
-   the training cost (cubic). Where breadth is added, Sec. VII-B says where it pays: the
+   the training cost (cubic). Where breadth is added, Section VII-B says where it pays: the
    local-σ length axes for σ accuracy, the threshold axes for the margin itself.
 3. **Re-measure the price when cutting all three factors together.** The product of
-   single-factor curves is optimistic relative to measurement (Sec. VI-D).
+   single-factor curves is optimistic relative to measurement (Section VI-D).
 4. **Record tail-shape information in the MC flow as standard.** The μ and σ of the
    minimum discard the shape information, and that loss makes sign-off tens of mV
    optimistic. Record at least the skewness and the lower quantiles, and preferably the
@@ -1529,10 +1547,10 @@ Only items that a campaign design can act on directly.
    decides pass or fail directly. The left and right terms are separate MC outputs, so
    adding the record makes it a direct correlation measurement.
 2. **Silicon Vmin measurement.** The only independent check on the size of the correction.
-3. **Corner-labelled tail re-measurement.** The present nine conditions carry no corner
+3. **Corner-labeled tail re-measurement.** The present nine conditions carry no corner
    labels, so between-corner uniformity is untested.
 4. **Conditions shared by both modes.** Required to validate the combined decision
-   (Sec. VIII-C).
+   (Section VIII-C).
 5. **Re-confirmation of the 13 flagged Stage-B pilot conditions** against the original
    decks. They look like coordinate-label misalignment, but confirming that requires the
    decks (O-06).
@@ -1569,11 +1587,11 @@ deltas sum to −1.7 mV and predict no degradation at all. Reductions must be re
 not as lossless.
 
 **Sensitivity.** A variance decomposition of the same surrogate, taken under a uniform
-prior over the design ranges of Table II, puts at least 39 % of the read margin variance
-and 41 % of the write on axes that no corner definition contains, with a single local-σ
+prior over the design ranges of Table II, puts at least 39% of the read margin variance
+and 41% of the write on axes that no corner definition contains, with a single local-σ
 length axis outranking the PMOS threshold shift for read. The same
-decomposition resolves the σ variance — 98.8 % of it sits on the three local-σ length
-axes and 0.3 % on the multipliers — which sharpens an observation Sec. V-G could only make
+decomposition resolves the σ variance — 98.8% of it sits on the three local-σ length
+axes and 0.3% on the multipliers — which sharpens an observation Section V-G could only make
 about the six axes as a block. The fitted ARD lengthscales, the free proxy for the same
 question, rank the nine axes almost flat: a lengthscale measures curvature, not influence,
 and should not be reported as a sensitivity result.
@@ -1596,11 +1614,11 @@ A summary of the formalism for readers whose main expertise lies outside statist
 learning.
 
 A GP defines **a distribution over functions** such that any finite set of function values
-is jointly Gaussian [4]. It is specified by a mean function and a covariance kernel, the
+is jointly Gaussian [18]. It is specified by a mean function and a covariance kernel, the
 latter encoding the assumption that nearby inputs produce correlated outputs.
 Conditioning on observed data yields a posterior that returns both a predictive mean and a
 predictive variance at any query point, and the variance grows away from the observations
-— the property that distinguishes a GP from ordinary regression [17], [18].
+— the property that distinguishes a GP from ordinary regression [24], [25].
 
 The kernel lengthscale governs the distance over which correlation decays. A short
 lengthscale along an axis indicates that the output changes rapidly with that input; a
@@ -1608,7 +1626,7 @@ long one indicates insensitivity. ARD assigns an independent lengthscale to each
 dimension and learns them all from data, which is why fitted values are often read as a
 sensitivity measure. Section VII-C examines that reading critically.
 
-A heteroscedastic likelihood generalises the standard formulation by letting the
+A heteroscedastic likelihood generalizes the standard formulation by letting the
 observation noise differ per data point. Supplying per-condition MC standard errors in
 that role makes the posterior weight each condition in proportion to its statistical
 reliability, with no auxiliary correction term.
@@ -1630,7 +1648,7 @@ replacements) and 12 in the write batch. No cell quarantined; 10,000 of 10,000 c
 Before and after, for read: μ RMSE 5.44 → 2.50 mV, Vmin RMSE 14.74 → 8.35 mV.
 
 **The independent batch.** For the Stage-B pilot, the batch's own quadratic-surface
-residual criterion was used instead (Sec. V-G.2). The criteria differ because the pilot's
+residual criterion was used instead (Section V-G.2). The criteria differ because the pilot's
 original decks are unavailable, so recovery is impossible and only **flag and exclude**
 is available.
 
@@ -1638,7 +1656,7 @@ is available.
 
 Condition generation is a deterministic PCG64 stream, so the tuple (stage, condition
 count, seed, metric, method) reproduces the entire condition set bit for bit. Training
-uses GPyTorch [16] with seed 42, 150 iterations, and a fixed-noise noise-aware
+uses GPyTorch [26] with seed 42, 150 iterations, and a fixed-noise noise-aware
 likelihood. Each result corresponds to one script and one output file, and every number in
 the text traces through that correspondence table (the evidence ledger) from script to
 data to output.
@@ -1650,100 +1668,115 @@ released is the procedural specification and the relative metrics.
 
 ## References
 
-[1] E. Seevinck, F. J. List, and J. Lohstroh, "Static-noise margin analysis of
-    MOS SRAM cells," *IEEE J. Solid-State Circuits*, vol. SC-22, no. 5,
-    pp. 748–754, Oct. 1987.
+[1] C. Bae, S. Pae, C.-S. Yu, K. Kim, Y. Kim, and J. Park, "SRAM stability
+     design comprehending 14nm FinFET reliability," in *Proc. IEEE Int. Rel.
+     Phys. Symp. (IRPS)*, 2015, pp. MY.13.1–MY.13.5,
+     doi: 10.1109/IRPS.2015.7112815.
 
-[2] M. J. M. Pelgrom, A. C. J. Duinmaijer, and A. P. G. Welbers, "Matching
-    properties of MOS transistors," *IEEE J. Solid-State Circuits*, vol. 24,
-    no. 5, pp. 1433–1439, Oct. 1989.
+[2] A. T. Krishnan *et al.*, "SRAM cell static noise margin and V_MIN
+     sensitivity to transistor degradation," in *Proc. IEEE Int. Electron
+     Devices Meeting (IEDM)*, 2006, pp. 1–4, doi: 10.1109/IEDM.2006.346778.
 
-[3] D. B. Owen, "Tables for computing bivariate normal probabilities," *Ann.
-    Math. Statist.*, vol. 27, no. 4, pp. 1075–1090, Dec. 1956.
+[3] S.-M. Lim, H. Hong, S. Yu, Z. Ming, J. Park, and Y. Kim, "Effects of BTI
+     during AHTOL on SRAM V_MIN," in *Proc. IEEE Int. Rel. Phys. Symp. (IRPS)*,
+     2011, pp. 2D.4.1–2D.4.6, doi: 10.1109/IRPS.2011.5784460.
 
-[4] C. E. Rasmussen and C. K. I. Williams, *Gaussian Processes for Machine
-    Learning*. Cambridge, MA, USA: MIT Press, 2006.
+[4] Z. Guo, W. Sun, Z. Wang, Y. Cai, and L. Shi, "An efficient SRAM yield
+     analysis method using multi-fidelity neural network," in *Proc. 2nd Int.
+     Symp. Electron. Design Autom. (ISEDA)*, 2024, pp. 547–551,
+     doi: 10.1109/ISEDA62518.2024.10617638.
 
-[5] M. C. Kennedy and A. O'Hagan, "Predicting the output from a complex
-    computer code when fast approximations are available," *Biometrika*,
-    vol. 87, no. 1, pp. 1–13, Mar. 2000.
+[5] S. Yin, X. Jin, L. Shi, K. Wang, and W. W. Xing, "Efficient Bayesian yield
+     analysis and optimization with active learning," in *Proc. 59th ACM/IEEE
+     Design Autom. Conf. (DAC)*, 2022, pp. 1195–1200,
+     doi: 10.1145/3489517.3530607.
 
-[6] I. M. Sobol', "Global sensitivity indices for nonlinear mathematical models
-    and their Monte Carlo estimates," *Math. Comput. Simul.*, vol. 55,
-    no. 1–3, pp. 271–280, Feb. 2001.
+[6] S. Yin, G. Dai, and W. W. Xing, "High-dimensional yield estimation using
+     shrinkage deep features and maximization of integral entropy reduction,"
+     in *Proc. 28th Asia South Pacific Design Autom. Conf. (ASP-DAC)*, 2023,
+     pp. 283–289, doi: 10.1145/3566097.3567907.
 
-[7] A. Saltelli, P. Annoni, I. Azzini, F. Campolongo, M. Ratto, and
-    S. Tarantola, "Variance based sensitivity analysis of model output. Design
-    and estimator for the total sensitivity index," *Comput. Phys. Commun.*,
-    vol. 181, no. 2, pp. 259–270, Feb. 2010.
+[7] Y. Liu, G. Dai, and W. W. Xing, "Seeking the yield barrier:
+     High-dimensional SRAM evaluation through optimal manifold," in *Proc.
+     60th ACM/IEEE Design Autom. Conf. (DAC)*, 2023, pp. 1–6,
+     doi: 10.1109/DAC56929.2023.10247952.
 
-[8] M. J. W. Jansen, "Analysis of variance designs for model output," *Comput.
-    Phys. Commun.*, vol. 117, no. 1–2, pp. 35–43, Mar. 1999.
-
-[9] A. Singhee and R. A. Rutenbar, "Why quasi-Monte Carlo is better than Monte
+[8] A. Singhee and R. A. Rutenbar, "Why quasi-Monte Carlo is better than Monte
     Carlo or Latin hypercube sampling for statistical circuit analysis,"
     *IEEE Trans. Comput.-Aided Design Integr. Circuits Syst.*, vol. 29,
     no. 11, pp. 1763–1776, Nov. 2010.
 
-[10] Z. Guo, W. Sun, Z. Wang, Y. Cai, and L. Shi, "An efficient SRAM yield
-     analysis method using multi-fidelity neural network," in *Proc. 2nd Int.
-     Symp. Electron. Design Autom. (ISEDA)*, 2024, p. 547.
-
-[11] S. Yin, X. Jin, L. Shi, K. Wang, and W. W. Xing, "Efficient Bayesian yield
-     analysis and optimization with active learning," in *Proc. 59th ACM/IEEE
-     Design Autom. Conf. (DAC)*, 2022, pp. 1195–1200.
-
-[12] S. Yin, G. Dai, and W. W. Xing, "High-dimensional yield estimation using
-     shrinkage deep features and maximization of integral entropy reduction,"
-     in *Proc. 28th Asia South Pacific Design Autom. Conf. (ASP-DAC)*, 2023.
-
-[13] Y. Liu, G. Dai, and W. W. Xing, "Seeking the yield barrier:
-     High-dimensional SRAM evaluation through optimal manifold," in *Proc.
-     60th ACM/IEEE Design Autom. Conf. (DAC)*, 2023.
-
-[14] S. Gupta and B. H. Calhoun, "Dynamic read Vmin and yield estimation for
-     nanoscale SRAMs," *IEEE Trans. Circuits Syst. I, Reg. Papers*, vol. 68,
-     no. 3, pp. 1171–1182, Mar. 2021, doi: 10.1109/TCSI.2020.3044836.
-
-[15] S. Kinoshita, Y. Inoue, T. Watanabe, K. Ikeda, S. Nishio, A. Teruya,
+[9] S. Kinoshita, Y. Inoue, T. Watanabe, K. Ikeda, S. Nishio, A. Teruya,
      N. Sakai, and T. Goda, "Space-filling Latin hypercube design for efficient
      Bayesian optimization with application to semiconductor development,"
      *IEEE Trans. Semicond. Manuf.*, vol. 38, no. 3, pp. 446–452, 2025,
      doi: 10.1109/TSM.2025.3574791.
 
-[16] J. R. Gardner, G. Pleiss, D. Bindel, K. Q. Weinberger, and A. G. Wilson,
-     "GPyTorch: Blackbox matrix-matrix Gaussian process inference with GPU
-     acceleration," in *Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)*, 2018.
+[10] S. Gupta and B. H. Calhoun, "Dynamic read Vmin and yield estimation for
+     nanoscale SRAMs," *IEEE Trans. Circuits Syst. I, Reg. Papers*, vol. 68,
+     no. 3, pp. 1171–1182, Mar. 2021, doi: 10.1109/TCSI.2020.3044836.
 
-[17] R. M. Neal, *Bayesian Learning for Neural Networks*. New York, NY, USA:
-     Springer, 1996.
+[11] A. Singhee and R. A. Rutenbar, "Statistical blockade: Very fast statistical
+     simulation and modeling of rare circuit events and its application to memory
+     design," *IEEE Trans. Comput.-Aided Design Integr. Circuits Syst.*, vol. 28,
+     no. 8, pp. 1176–1189, Aug. 2009, doi: 10.1109/TCAD.2009.2020721.
 
-[18] M. L. Stein, *Interpolation of Spatial Data: Some Theory for Kriging*.
-     New York, NY, USA: Springer, 1999.
+[12] R. Kanj, R. Joshi, and S. Nassif, "Mixture importance sampling and its application
+     to the analysis of SRAM designs in the presence of rare failure events," in
+     *Proc. 43rd Design Automation Conf. (DAC)*, 2006, pp. 69–72,
+     doi: 10.1145/1146909.1146930.
 
-[19] R. Saeidi, M. Sharifkhani, and K. Hajsadeghi, "Statistical analysis of
+[13] R. Saeidi, M. Sharifkhani, and K. Hajsadeghi, "Statistical analysis of
      read static noise margin for near/sub-threshold SRAM cell," *IEEE Trans.
      Circuits Syst. I, Reg. Papers*, vol. 61, no. 12, pp. 3386–3393, Dec. 2014,
      doi: 10.1109/TCSI.2014.2327334.
 
-[20] N. Zheng and P. Mazumder, "Modeling and mitigation of static noise margin
+[14] N. Zheng and P. Mazumder, "Modeling and mitigation of static noise margin
      variation in subthreshold SRAM cells," *IEEE Trans. Circuits Syst. I, Reg.
      Papers*, vol. 64, no. 10, pp. 2726–2736, Oct. 2017,
      doi: 10.1109/TCSI.2017.2700818.
 
-[21] T. Song et al., "A 14 nm FinFET 128 Mb SRAM with V_MIN enhancement
+[15] E. Seevinck, F. J. List, and J. Lohstroh, "Static-noise margin analysis of
+    MOS SRAM cells," *IEEE J. Solid-State Circuits*, vol. SC-22, no. 5,
+    pp. 748–754, Oct. 1987.
+
+[16] T. Song et al., "A 14 nm FinFET 128 Mb SRAM with V_MIN enhancement
      techniques for low-power applications," *IEEE J. Solid-State Circuits*,
      vol. 50, no. 1, pp. 158–169, Jan. 2015, doi: 10.1109/JSSC.2014.2362842.
 
-[22] C. Bae, S. Pae, C.-S. Yu, K. Kim, Y. Kim, and J. Park, "SRAM stability
-     design comprehending 14nm FinFET reliability," in *Proc. IEEE Int. Rel.
-     Phys. Symp. (IRPS)*, 2015, pp. MY.13.1–MY.13.5,
-     doi: 10.1109/IRPS.2015.7112815.
+[17] D. B. Owen, "Tables for computing bivariate normal probabilities," *Ann.
+    Math. Statist.*, vol. 27, no. 4, pp. 1075–1090, Dec. 1956.
 
-[23] A. T. Krishnan *et al.*, "SRAM cell static noise margin and V_MIN
-     sensitivity to transistor degradation," in *Proc. IEEE Int. Electron
-     Devices Meeting (IEDM)*, 2006, pp. 1–4, doi: 10.1109/IEDM.2006.346778.
+[18] C. E. Rasmussen and C. K. I. Williams, *Gaussian Processes for Machine
+    Learning*. Cambridge, MA, USA: MIT Press, 2006.
 
-[24] S.-M. Lim, H. Hong, S. Yu, Z. Ming, J. Park, and Y. Kim, "Effects of BTI
-     during AHTOL on SRAM V_MIN," in *Proc. IEEE Int. Rel. Phys. Symp. (IRPS)*,
-     2011, pp. 105–110, doi: 10.1109/IRPS.2011.5784460.
+[19] M. J. M. Pelgrom, A. C. J. Duinmaijer, and A. P. G. Welbers, "Matching
+    properties of MOS transistors," *IEEE J. Solid-State Circuits*, vol. 24,
+    no. 5, pp. 1433–1439, Oct. 1989.
+
+[20] M. C. Kennedy and A. O'Hagan, "Predicting the output from a complex
+    computer code when fast approximations are available," *Biometrika*,
+    vol. 87, no. 1, pp. 1–13, Mar. 2000.
+
+[21] I. M. Sobol', "Global sensitivity indices for nonlinear mathematical models
+    and their Monte Carlo estimates," *Math. Comput. Simul.*, vol. 55,
+    no. 1–3, pp. 271–280, Feb. 2001.
+
+[22] A. Saltelli, P. Annoni, I. Azzini, F. Campolongo, M. Ratto, and
+    S. Tarantola, "Variance based sensitivity analysis of model output. Design
+    and estimator for the total sensitivity index," *Comput. Phys. Commun.*,
+    vol. 181, no. 2, pp. 259–270, Feb. 2010.
+
+[23] M. J. W. Jansen, "Analysis of variance designs for model output," *Comput.
+    Phys. Commun.*, vol. 117, no. 1–2, pp. 35–43, Mar. 1999.
+
+[24] R. M. Neal, *Bayesian Learning for Neural Networks*. New York, NY, USA:
+     Springer, 1996.
+
+[25] M. L. Stein, *Interpolation of Spatial Data: Some Theory for Kriging*.
+     New York, NY, USA: Springer, 1999.
+
+[26] J. R. Gardner, G. Pleiss, D. Bindel, K. Q. Weinberger, and A. G. Wilson,
+     "GPyTorch: Blackbox matrix-matrix Gaussian process inference with GPU
+     acceleration," in *Proc. Adv. Neural Inf. Process. Syst. (NeurIPS)*, vol. 31,
+     2018, pp. 7576–7586.
