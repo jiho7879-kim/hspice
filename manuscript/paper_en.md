@@ -285,6 +285,12 @@ measurement is reported in Section V-F.
 
 ### A. Input space and two batches
 
+**A word on vocabulary.** No silicon data enters this study. Every value the surrogate is
+scored against is HSPICE Monte Carlo output, and we call it the **reference simulation**
+throughout. "Measure" is reserved for quantities this work estimates from that output —
+ρ_LR, the repeatability floor, the budget-reduction price — and "silicon measurement" is
+used only where the paper says such a measurement is missing.
+
 The nine device-variation axes of Table II are sampled jointly with the supply voltage.
 
 **TABLE II. Variation parameters**
@@ -315,9 +321,9 @@ nine-dimensional coordinates is **0/2000**, and the input has no temperature axi
 paper runs jointly.
 
 Both the price and the benefit of this choice surface in Section V-D. The price is that the
-per-condition combined Vmin = max(read, write) cannot be verified against measurement in
-the 2,000-condition batches. The benefit is that the **complementarity** of the two modes
-— each filling the other's censored corner — is confirmed by measurement.
+per-condition combined Vmin = max(read, write) cannot be verified against the reference
+simulation in the 2,000-condition batches. The benefit is that the **complementarity** of the two modes
+— each filling the other's censored corner — is confirmed by the reference simulation.
 
 ### B. Common/skew parameterization
 
@@ -527,13 +533,13 @@ The write batch has only four supply levels (0.4–0.7 V), a narrower grid and h
 censored conditions.
 
 The two exclusions are not the same thing. A censored condition has its crossing below
-0.4 V, so both measurement and prediction are clamped to the floor and the difference
+0.4 V, so both reference and prediction are clamped to the floor and the difference
 between them is not an error. A condition excluded at the top has no crossing inside the
 grid at all, so no Vmin exists to compare. Both are outside the RMSE, which leaves 243
 scored read conditions and 228 write.
 
 RMSE alone does not reveal the error structure, so we look at the distribution. The
-53.78 mV maximum for read occurs at **three conditions only**, whose measured Vmin is
+53.78 mV maximum for read occurs at **three conditions only**, whose reference Vmin is
 0.401–0.404 V — right at the grid floor — where the surrogate predicts a crossing below
 0.4 V and is clamped to the floor. The magnitude is set by the clamp width, not by
 prediction quality, and these conditions sit more than 200 mV below the spec voltage.
@@ -542,7 +548,7 @@ Table V breaks the error down by Vmin band.
 
 **TABLE V. Read Vmin error by band (hold-out, 243 non-censored conditions)**
 
-| Measured Vmin band | Conditions | RMSE (mV) | \|error\| median | \|error\| max |
+| Reference Vmin band | Conditions | RMSE (mV) | \|error\| median | \|error\| max |
 |---|---|---|---|---|
 | 0.40 – 0.45 V | 48 | 14.03 | 3.49 | 53.8 † |
 | 0.45 – 0.55 V | 97 | 5.04 | 2.83 | 17.8 |
@@ -558,7 +564,7 @@ The term that dominates the sign-off decision is not the regression error of the
 surrogate but the bias of the metric itself. Fig. 3 plots predicted against reference
 Vmin for both modes.
 
-**Fig. 3.** Measured versus predicted Vmin on the hold-out conditions.
+**Fig. 3.** Reference-simulation versus predicted Vmin on the hold-out conditions.
 
 #### 1) The write bottleneck is the variance, not the mean
 
@@ -577,7 +583,7 @@ changes how the cause is apportioned.
 #### 2) A by-product: the surrogate as a transcription-error detector
 
 In early training two hold-out conditions had Vmin errors above 100 mV. Tracing them led
-not to the model but to the measurement sheet. In both, only the 0.6 V SNM mean was
+not to the model but to the transcription sheet. In both, only the 0.6 V SNM mean was
 recorded at one tenth of its neighbors (e.g. 10.9 mV between 83.8 and 127.0 mV), and the
 surrogate was predicting 109.9 mV for the same cell. This triggered the full audit of
 Section III-E. Using **a trained surrogate to point at defects in the data that trained it**
@@ -590,7 +596,7 @@ properties the physics requires and what the fitted model does with them.
 
 **TABLE VI. Physical consistency checks (read model)**
 
-| Property | Expected | Measured | Result |
+| Property | Expected | Fitted model | Result |
 |---|---|---|---|
 | Pass-gate dominance | λ_cn < λ_pu | λ_pu/λ_cn = **1.093** | pass |
 | Vth direction | ∂Vmin/∂cn < 0 | negative | pass |
@@ -620,7 +626,7 @@ sample count — so neither temperature nor sample size enters as a confound.
 
 **TABLE VII. Vmin per corner — independent simulation versus surrogate (Z_t = 6.398)**
 
-| Corner | (cn, pu) mV | Read measured → GP (error) | Write measured → GP (error) |
+| Corner | (cn, pu) mV | Read reference → GP (error) | Write reference → GP (error) |
 |---|---|---|---|
 | **FSG** | (−29.16, +38.64) | **0.5903 → 0.5908 (+0.6 mV)** ← read worst | < 0.4 V, both clamped |
 | **SFG** | (+31.63, −36.76) | < 0.4 V, both clamped | **0.5924 → 0.6070 (+14.6 mV)** ← write worst |
@@ -633,23 +639,23 @@ On the three scorable corners the read Vmin RMSE is 9.3 mV, the same magnitude a
 training design indicates that the model learned the behavior over the (cn, pu) plane
 rather than a particular structure of the design.
 
-**What matters for design is the ordering.** For read, both measurement and prediction
+**What matters for design is the ordering.** For read, both reference and prediction
 name **FSG** as the worst corner, and the error there is 0.6 mV, the smallest of the four.
 The second and third places (FFG 0.4731 V, SSG 0.4672 V) do swap in the prediction.
-Their measured gap of **5.9 mV** is smaller than the model's corner RMSE (9.3 mV), which
+Their reference gap of **5.9 mV** is smaller than the model's corner RMSE (9.3 mV), which
 means this accuracy cannot separate them. The claim that can be supported is therefore
 "the read-limiting corner is identified", not the ordering of mid-table corners 5 mV
 apart. For sign-off this is not a problem — the decision uses the worst corner. On the
 write side the corners are more than 40 mV apart and the **ordering reproduces 4/4**.
 
 At the spec voltage of 0.625 V, the sign of the z margin (pass/fail) agrees between
-measurement and prediction at all four corners for both modes (4/4, 4/4). This is a
+reference and prediction at all four corners for both modes (4/4, 4/4). This is a
 sanity check that the model is operating correctly, not a claim about population yield.
 **This paper does not estimate yield.**
 
 #### 1) The two modes fill each other's gaps
 
-In Table VII, SFG is clamped below 0.4 V in both measurement and prediction for read.
+In Table VII, SFG is clamped below 0.4 V in both reference and prediction for read.
 This is a physical fact, not a data defect — **read does not set Vmin at that corner.**
 SFG combines a fast pull-up with a slow pass-gate, which favors read stability while
 making the cell hard to flip, so **write** becomes the constraint. Symmetrically, FSG is
@@ -661,25 +667,26 @@ write, with no room left to optimize one side alone; equally, it shows that **re
 about Vmin from a single mode misses the decision at the opposite corner**.
 
 The combined per-condition Vmin is max(read, write). At the four corners both
-measurements exist and Table VII gives that value directly. In the 2,000-condition
+reference runs exist and Table VII gives that value directly. In the 2,000-condition
 batches the coordinates do not overlap, so the same comparison cannot be made against
-measurement; each surrogate would have to be evaluated at the other's coordinates, and
+the reference simulation; each surrogate would have to be evaluated at the other's
+coordinates, and
 that would be a prediction built on a prediction (Section VIII-C). Fig. 4 compares the
 per-corner values for both modes.
 
-**Fig. 4.** Measured versus predicted Vmin per corner, read and write.
+**Fig. 4.** Reference-simulation versus predicted Vmin per corner, read and write.
 
 ### E. Inverse validation
 
 The forward surrogate answers "what is the Vmin of this condition". The use this paper
 targets is the reverse — **"which process condition meets a target Vmin?"** This section
-validates that direction against measurement.
+validates that direction against the reference simulation.
 
 So that the validation is not a self-consistency check of the model against its own
-output, the target is always **the Vmin taken from the measured z curve**. The procedure:
+output, the target is always **the Vmin taken from the reference z curve**. The procedure:
 pick a hold-out condition, fix eight of the nine coordinates at the deck's actual values,
 leave the ninth unknown, and find the value at which the surrogate's Vmin equals that
-condition's measured Vmin. Then compare it with the coordinate the deck actually had.
+condition's reference Vmin. Then compare it with the coordinate the deck actually had.
 **Because the answer to be recovered is already in the data**, the inverse error can be
 measured directly in mV.
 
@@ -687,7 +694,7 @@ The unknowns are the two knobs design actually turns, cn and pu. A condition who
 is not attained for any value inside the design box [−60, +60] mV is left unrecovered
 rather than clipped. Table VIII gives the recovery error for each axis.
 
-**TABLE VIII. Coordinate recovery error (245 hold-out conditions, target = measured Vmin)**
+**TABLE VIII. Coordinate recovery error (245 hold-out conditions, target = reference Vmin)**
 
 | Unknown | Recovered | RMSE | Median | P90 | Max | Bias | \|∂Vmin/∂x\| | Implied by forward 8.35 mV |
 |---|---|---|---|---|---|---|---|---|
@@ -738,9 +745,9 @@ multistart convergence points.
 
 ### F. Lobe correlation and the min-statistics bias
 
-The problem raised in Section II-D is closed here by measurement.
+The problem raised in Section II-D is closed here by measuring ρ_LR.
 
-#### 1) Measurement data
+#### 1) The fab tail table
 
 Inside the fab, **shape statistics only** were computed for nine conditions
 (V_op 0.6/0.7 V, 10⁵ MC samples each) and exported; the raw samples never leave the fab.
@@ -810,7 +817,7 @@ meaningless differences become significant, and this is such a case.
 
 #### 5) Conversion to Vmin
 
-The factor converting σ into mV is dz/dV_op in the spec band. Post-QC measurement gives a
+The factor converting σ into mV is dz/dV_op in the spec band. The post-QC data give a
 population median of **15.1 V⁻¹** for read (interquartile range 12.6–18.2) and
 36.4 V⁻¹ for write
 (IQR 31.9–42.3); the local slope at the read-limiting corner FSG is 14.2 V⁻¹.
@@ -861,7 +868,7 @@ worse than this, and 37 mV is a lower bound on the shortfall rather than the sho
    i.e. more pass-gate/pull-down area.
 3. **The earlier "silicon upper-bound consistency" argument is withdrawn.** It used
    z(0.625 V) = 8.06 at FSG to set a bound z_bias ≤ +1.56 σ and claimed the measurement
-   sat at 74% of it; after QC the measured value is 6.927. More fundamentally the
+   sat at 74% of it; after QC the value is 6.927. More fundamentally the
    argument was **circular**: corner simulation is the very source of the naive z being
    corrected, so it cannot bound the correction. An independent check requires actual
    silicon Vmin measurement, which this study does not have (Section VIII-A).
@@ -905,7 +912,7 @@ Whether the two batches measure the same physical quantity is checked separately
 coefficients of μ(V_op) regressed on (cn, sk, pu) agree to within 0.7% — at 0.6 V for
 write, (187.04, −1.095, −1.746, +0.638) in 9-D against (187.59, −1.088, −1.744, +0.637)
 in the pilot. **The pilot calls the metric BWRM and the 9-D batch calls it V_trip, but it
-is the same measurement.**
+is the same quantity.**
 
 #### 2) Self-consistency audit of the pilot batch
 
@@ -951,8 +958,8 @@ conditions the batch's own consistency audit flags.
 | Vmin RMSE | 14.42 mV (312) | **13.63 mV** (305) | 14.45 mV (228) |
 | \|error\| P50/P90/max | 9.32 / 23.81 / 54.40 | **9.28 / 22.71 / 43.67** | 9.81 / 21.47 / 53.06 |
 
-On censoring, read shows a floor clamp of 50 measured against 49 predicted — **one
-disagreement** — and 2/2 agreement above the ceiling. Write shows 75 measured against
+On censoring, read shows a floor clamp of 50 reference against 49 predicted — **one
+disagreement** — and 2/2 agreement above the ceiling. Write shows 75 reference against
 66 predicted, with **33 disagreements (8.3%)**.
 
 #### 4) The two modes say different things
@@ -984,7 +991,7 @@ steep, so a σ error flips the clamp decision outright.
 #### 5) Voltage extrapolation — write at 0.8 V
 
 The nine-dimensional write batch has 0/2000 entries at 0.8 V, so the model was trained
-only over 0.4–0.7 V. The pilot batch has 400 rows at 0.8 V, giving a direct measurement of
+only over 0.4–0.7 V. The pilot batch has 400 rows at 0.8 V, giving a direct check of
 extrapolation **one level outside the training range**.
 
 μ RMSE **7.55 mV**, μ bias **−6.45 mV**, R² 0.969, σ RMSE 1.19 mV, z RMSE 0.854. Most of
@@ -1080,7 +1087,7 @@ stated:
 4. **The write σ error is concentrated at 0.4 V.** The same original model has σ RMSE
    2.041 mV over all four levels but 1.336 mV over 0.5–0.7 alone.
 
-**Voltage extrapolation bends with opposite signs at the two ends.** Three measurements
+**Voltage extrapolation bends with opposite signs at the two ends.** Three observations
 form one picture: write 0.7 → 0.8 V, **−6.45 mV** (margin underestimated); write
 0.5 → 0.4 V, **+5.66 mV** (overestimated); read 0.7 → 0.8 V, −0.18 mV (no bias). This is
 the textbook behavior of a GP reverting to the mean outside its training range and
@@ -1135,7 +1142,7 @@ n′ to the noise-aware GP. The hold-out labels are untouched. Table XV gives th
 | **500** | 2.489 mV | 0.9965 | 0.265 mV | 7.63 mV | 10.97 |
 | 1,000 | 2.482 | 0.9965 | 0.252 | 8.59 | 11.65 |
 | 2,500 | 2.486 | 0.9965 | 0.253 | 8.71 | 11.64 |
-| 5,000 (measured) | 2.502 | 0.9965 | 0.256 | 8.35 | 10.69 |
+| 5,000 (as run) | 2.502 | 0.9965 | 0.256 | 8.35 | 10.69 |
 
 **The curve is flat.** The full span of μ RMSE is **0.02 mV** and the four R² values agree
 to four decimals. The 7.63–8.71 mV fluctuation in Vmin is the same size as the
@@ -1184,12 +1191,12 @@ mismatch plain.
 | Conditions only (400) | 8.78 | +0.4 |
 | MC only (500) | 7.63 | −0.7 |
 | **Naive sum of the three deltas** | **≈ 6.7 mV** | **−1.7** |
-| **All three together (measured)** | **10.95 mV** | **+2.6** |
+| **All three together (run directly)** | **10.95 mV** | **+2.6** |
 
 **The single-factor experiments predict no degradation at all.** Their deltas sum to
 −1.7 mV, and each one on its own lies inside the ±1 mV fit-noise band of Section VI-B. The
 combined cut degrades the error by **+2.6 mV**, which is outside that band. We report the
-**4.3 mV gap** between the naive prediction and the measurement rather than a ratio,
+**4.3 mV gap** between the naive prediction and the combined run rather than a ratio,
 because the denominator is indistinguishable from zero. μ moves the same way (2.489–2.715
 for single factors, 3.425 mV combined), and μ and Vmin move together, so coincidence is
 unlikely. **The mechanism is the one predicted.**
@@ -1438,9 +1445,11 @@ spent making the model more accurate ranks below it. That is why a paper about s
 methodology places Section V-F where it does — as the evidence that underwrites the accuracy
 of the method.
 
-The status of the bias is as follows. It is **measured**: two independent estimators
-converge on ρ_LR ≈ −0.34 … −0.37, and normality is rejected by three independent lines of
-evidence. The **correction is post-processing**, Eqs. (6)–(7), requiring no re-simulation. But
+The status of the bias is as follows. It is **estimated from data rather than assumed**:
+two estimators built on different moments of the same exported statistics converge on
+ρ_LR ≈ −0.34 … −0.37, and normality is rejected by three independent lines of evidence.
+Their agreement tests the estimator, not the min-of-two-Gaussians premise that both share
+(Section V-F.7). The **correction is post-processing**, Eqs. (6)–(7), requiring no re-simulation. But
 it is **not verified against silicon.** The earlier claim that inverted an upper bound
 from corner simulation and reported the measurement as "inside the bound" was circular and
 has been withdrawn: corner simulation is the very source of the naive z being corrected,
@@ -1482,13 +1491,13 @@ simulation — and that is the next step this section points to.
 Characterizing read and write only at their own worst temperature is a deliberate cost
 decision (Section III-A), and its price appears here. Because the nine-dimensional
 coordinates of the two batches do not intersect, the per-condition combined
-Vmin = max(read, write) **cannot be verified against measurement in the 2,000-condition
-batches.**
+Vmin = max(read, write) **cannot be verified against the reference simulation in the
+2,000-condition batches.**
 
 The distinction must be kept. **What is possible**: at the four PDK corners both
-measurements exist, so the combined decision can be checked directly, and Table VII gives
+reference runs exist, so the combined decision can be checked directly, and Table VII gives
 those values. The result that the two worst corners are each other's censored corner and
-lie 2 mV apart is measurement. **What is not possible**: a combined contour over the full
+lie 2 mV apart is a reference-simulation result. **What is not possible**: a combined contour over the full
 2,000-condition window. Each surrogate could be evaluated at the other's coordinates to
 *propose* a combined decision, but that is a prediction built on an unvalidated
 prediction, and this paper does not report that surface as a result.
@@ -1530,7 +1539,7 @@ Only items that a campaign design can act on directly.
    the training cost (cubic). Where breadth is added, Section VII-B says where it pays: the
    local-σ length axes for σ accuracy, the threshold axes for the margin itself.
 3. **Re-measure the price when cutting all three factors together.** The product of
-   single-factor curves is optimistic relative to measurement (Section VI-D).
+   single-factor curves is optimistic relative to the combined run (Section VI-D).
 4. **Record tail-shape information in the MC flow as standard.** The μ and σ of the
    minimum discard the shape information, and that loss makes sign-off tens of mV
    optimistic. Record at least the skewness and the lower quantiles, and preferably the
@@ -1570,7 +1579,7 @@ retraining to an independently designed pilot batch, the read Vmin RMSE is 21.4 
 all 348 conditions and 4.26 mV over the 283 that pass that batch's own consistency audit.
 Three levels of validation return the same order of magnitude.
 
-**Inverse.** Recovering one of nine coordinates from a measured Vmin gives an RMSE of
+**Inverse.** Recovering one of nine coordinates from a reference Vmin gives an RMSE of
 2.60 mV for the NMOS Vth shift and 3.20 mV for the PMOS Vth shift — smaller than the
 forward error implies, with a systematic bias inside ±0.5 mV. The axis-wise solution is
 exact to machine precision without an optimizer (12/12 starts, maximum residual
@@ -1631,7 +1640,7 @@ observation noise differ per data point. Supplying per-condition MC standard err
 that role makes the posterior weight each condition in proportion to its statistical
 reliability, with no auxiliary correction term.
 
-## Appendix B: Measurement Data QC Audit
+## Appendix B: Reference Data QC Audit
 
 The audit procedure applied to both batches, and its record.
 
@@ -1661,7 +1670,7 @@ likelihood. Each result corresponds to one script and one output file, and every
 the text traces through that correspondence table (the evidence ledger) from script to
 data to output.
 
-The PDK and the measurement data are internal assets and are not released. What can be
+The PDK and the reference data are internal assets and are not released. What can be
 released is the procedural specification and the relative metrics.
 
 ---

@@ -171,7 +171,7 @@ if want(3):
                          f" {cen.size - ok.sum()} censored or off-grid)")
         assert ok.sum() == r["vmin_conditions_scored"], "legend count ≠ reported n"
         ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
-        ax.set_xlabel("measured $V_{min}$ (V)")
+        ax.set_xlabel("reference $V_{min}$ (V)")
         ax.set_ylabel("surrogate $V_{min}$ (V)")
         ax.set_title(mode)
         ax.text(0.04, 0.96, f"RMSE {r['vmin_rmse_mV_holdout']:.2f} mV\n"
@@ -196,7 +196,7 @@ if want(4):
         meas = np.array([q["vmin_meas"] for q in cs])
         pred = np.array([q["vmin_pred"] for q in cs])
         cen = np.array([q["censored_meas"] or q["censored_pred"] for q in cs])
-        ax.bar(x - 0.19, meas, 0.36, color=c, alpha=0.85, label="independent sim")
+        ax.bar(x - 0.19, meas, 0.36, color=c, alpha=0.85, label="independent reference run")
         ax.bar(x + 0.19, pred, 0.36, color=c, alpha=0.35, label="surrogate")
         ax.axhline(V_T0, color="k", ls="--", lw=0.8)
         ax.text(len(cs) - 0.45, V_T0 + 0.004, "$V_{T0}$ = 0.625 V", fontsize=6.6,
