@@ -95,6 +95,42 @@ else:
         if a != b:
             fails.append(f"COUNT    {et}: blockquote blocks KR {a} vs EN {b}")
 
+# Cross-language reference ORDER. Counting is not enough: inserting a table renumbers
+# everything after it, and a renumbering pass that misses "Tables XIII" (plural) or
+# "표 XVII의" (particle attached) leaves one language pointing at the wrong table. The
+# two versions are the same paper, so their in-text references must line up one to one.
+ROM = r"(?:XIX|XVIII|XVII|XVI|XV|XIV|XIII|XII|XI|IX|VIII|VII|VI|IV|V|X|III|II|I)"
+
+
+def ref_sequence(text, caption_pat, word):
+    """In-text table references in document order, captions excluded."""
+    out = []
+    for line in text.split("\n"):
+        if re.match(caption_pat, line):
+            continue
+        # guard against 목표 Vmin (Korean) and Vth-like tails swallowing a numeral
+        out += re.findall(rf"(?<![가-힣A-Za-z]){word}s? ({ROM})(?![A-Za-z])", line)
+    return out
+
+
+kr_refs = ref_sequence(KR, r"^\*\*표 [IVX]+\.", "표")
+en_refs = ref_sequence(EN, r"^\*\*TABLE [IVX]+\.", "Table")
+if kr_refs != en_refs:
+    first = next((i for i, (a, b) in enumerate(zip(kr_refs, en_refs)) if a != b), None)
+    where = f" first differs at reference {first}: KR {kr_refs[first]} vs EN {en_refs[first]}" \
+        if first is not None else f" lengths differ: KR {len(kr_refs)}, EN {len(en_refs)}"
+    fails.append("ORDER   table references do not line up across languages;" + where)
+
+for name, text, cap, word in (("KR", KR, r"^\*\*표 ([IVX]+)\.", "표"),
+                              ("EN", EN, r"^\*\*TABLE ([IVX]+)\.", "Table")):
+    defined = re.findall(cap, text, re.M)
+    if defined != sorted(set(defined), key=defined.index) or len(set(defined)) != len(defined):
+        fails.append(f"ORDER   {name}: duplicate table numbers {defined}")
+    cited = set(ref_sequence(text, cap.replace("([IVX]+)", "[IVX]+"), word))
+    missing = [d for d in defined if d not in cited]
+    if missing:
+        fails.append(f"UNCITED {name}: tables never referenced in the text: {missing}")
+
 for f in fails:
     print("FAIL " + f)
 print(f"\n{len(kr)} sections compared, {len(fails)} problems")

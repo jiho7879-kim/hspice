@@ -28,6 +28,7 @@ ext, extw = load("external.json"), load("external_write.json")
 cv, cc, cm = load("cost_voltage.json"), load("cost_conditions.json"), load("cost_mc.json")
 cb, cbw = load("cost_combined.json"), load("cost_combined_write.json")
 sen, senw = load("sensitivity.json"), load("sensitivity_write.json")
+rob, robw = load("robustness.json"), load("robustness_write.json")
 corner = {c["corner"]: c for c in cor["corners"]}
 cornerw = {c["corner"]: c for c in corw["corners"]}
 lobe_c = {c["corner"]: c for c in lob["corners"]}
@@ -80,6 +81,23 @@ CHECKS = [
     ("skew full range, read Zeff", sen["skew_tolerance"]["z_eff"]["full_range_pct"],     "67.0"),
     ("skew full range, write Zt",  senw["skew_tolerance"]["z_target"]["full_range_pct"], "77.6"),
     ("skew full range, write Zeff", senw["skew_tolerance"]["z_eff"]["full_range_pct"],   "62.9"),
+    # §III-E repaired-label check and §V-B.3 baseline (O-09)
+    ("read RMSE, quad-repaired conditions dropped",
+     rob["repaired"]["rmse_excluding_quadratic"]["rmse_mV"],                   "8.39"),
+    ("read RMSE, every repaired condition dropped",
+     rob["repaired"]["rmse_excluding_any_repair"]["rmse_mV"],                  "8.44"),
+    ("write RMSE, every repaired condition dropped",
+     robw["repaired"]["rmse_excluding_any_repair"]["rmse_mV"],                 "14.48"),
+    ("quad mu RMSE read",     rob["quadratic_surface"]["mu_rmse_mV"],          "2.386"),
+    ("quad sigma RMSE read",  rob["quadratic_surface"]["sigma_rmse_mV"],       "0.137"),
+    ("quad Vmin RMSE read",   rob["quadratic_surface"]["vmin"]["rmse_mV"],     "7.69"),
+    ("quad mu RMSE write",    robw["quadratic_surface"]["mu_rmse_mV"],         "3.455"),
+    ("quad sigma RMSE write", robw["quadratic_surface"]["sigma_rmse_mV"],      "1.622"),
+    ("quad Vmin RMSE write",  robw["quadratic_surface"]["vmin"]["rmse_mV"],    "13.97"),
+    ("GP corner RMSE read",   rob["corners"]["comparison"]["gp"]["rmse_mV"],   "9.34"),
+    ("quad corner RMSE read", rob["corners"]["comparison"]["quad"]["rmse_mV"], "6.11"),
+    ("GP corner RMSE write",  robw["corners"]["comparison"]["gp"]["rmse_mV"],  "16.70"),
+    ("quad corner RMSE write", robw["corners"]["comparison"]["quad"]["rmse_mV"], "18.86"),
 ]
 
 # The shares quoted in Sec. VII-B are sums over Table XVII, not stored fields. Recompute

@@ -260,7 +260,7 @@ crossing must reach, and the correction requires no re-simulation. Consequently 
 the sensitivity ranking and the corner ordering — are unaffected. Anything referenced to
 the threshold does move: pass fractions, tolerance widths and the location of the
 compliance boundary all contain Z_t, so both thresholds are reported wherever they occur
-(Tables XIII and XVIII, Section VII-D).
+(Tables XIV and XIX, Section VII-D).
 
 #### 3) How ρ_LR can be measured
 
@@ -394,6 +394,17 @@ The effect is large: for read, μ RMSE improved from 5.44 to **2.50 mV** and Vmi
 from 14.74 to **8.35 mV**. Section V-B describes what triggered the audit — **the model
 pointed at defects in its own training data.**
 
+**A repaired label is no longer a measurement, so it must not quietly grade the model.**
+Thirteen read conditions were repaired by the quadratic-in-V_op route, and that route
+borrows exactly the smoothness a GP also assumes; a repaired cell sitting in the hold-out
+would be a label the model is nearly guaranteed to match. Four of the thirteen do sit in
+the hold-out. Scoring without them gives **8.39 mV over 240 conditions** against 8.35 mV
+over 243, and dropping every condition touched by the audit — decade restorations and
+typos included, seven in total — gives **8.44 mV over 237**. The headline number does not
+depend on the repairs. For write the question does not arise: no write condition was
+repaired by the quadratic route, and excluding all six touched conditions moves 14.45 mV
+to 14.48 mV.
+
 ---
 
 ## IV. Surrogate Model
@@ -491,7 +502,7 @@ computation takes seconds.
 > Obtaining the full nine-dimensional hypersurface with several axes free at once is
 > outside the scope of this paper. Gradient descent through the differentiable composite
 > function is the natural extension there, but **we claim only what we validated**
-> (Section VIII-D).
+> (Section VIII-E).
 
 ---
 
@@ -589,12 +600,50 @@ surrogate was predicting 109.9 mV for the same cell. This triggered the full aud
 Section III-E. Using **a trained surrogate to point at defects in the data that trained it**
 is a secondary but practical by-product in any internal flow with heavy transcription.
 
+#### 3) How much of this is the Gaussian process?
+
+A surrogate paper should say what its choice of regressor buys, so we scored the simplest
+alternative that could plausibly work: a full quadratic response surface in the same ten
+inputs (66 terms), least squares on the same training rows, through the same physics
+layer, on the same hold-out. Table VI puts the two side by side.
+
+**TABLE VI. Gaussian process against a quadratic response surface**
+
+| | GP, read | Quadratic, read | GP, write | Quadratic, write |
+|---|---|---|---|---|
+| μ RMSE | 2.502 mV | **2.386 mV** | **2.171 mV** | 3.455 mV |
+| σ RMSE | 0.256 mV | **0.137 mV** | 2.041 mV | **1.622 mV** |
+| Vmin RMSE, hold-out | 8.35 mV | **7.69 mV** | 14.45 mV | **13.97 mV** |
+| Vmin RMSE, PDK corners | 9.34 mV | **6.11 mV** | **16.70 mV** | 18.86 mV |
+
+**The quadratic is not worse, and for read it is better** — including at the four PDK
+corners, which the fit never saw, so this is not an in-batch artifact. For write the two
+trade places: the GP has the better μ and the better corners, the quadratic the better σ
+and a marginally better hold-out Vmin.
+
+We report this rather than bury it, and it bounds the claim this paper makes. **Nothing
+in the rest of the paper turns on the regressor.** The physics layer, the censoring
+treatment, the axis-wise inverse, the budget curves and the ρ_LR correction all take μ and
+σ as inputs and would accept either model. What this comparison says is that over a
+process box this smooth, a quadratic surface is sufficient for the mean and the spread —
+which is useful news for a fab flow, since it removes GP training from the deployment
+path entirely.
+
+What the GP supplies that the quadratic does not is a per-point predictive variance and a
+likelihood that weights conditions by their MC standard error. Neither is exercised as a
+deliverable here: no result in this paper consumes the predictive variance, and every
+condition in this dataset carries the same 5,000 samples (Section VI-C). We therefore do
+not claim them as demonstrated advantages. Two caveats on the comparison itself: the GP
+was fitted with 150 Adam iterations and was not tuned further, and the condition-count
+knee of Section VI-B is a property of the GP — a 66-coefficient surface would be expected
+to need far fewer conditions, which we did not measure.
+
 ### C. Physical consistency
 
-A model can fit the numbers and still be wrong about the device. Table VI lists the
+A model can fit the numbers and still be wrong about the device. Table VII lists the
 properties the physics requires and what the fitted model does with them.
 
-**TABLE VI. Physical consistency checks (read model)**
+**TABLE VII. Physical consistency checks (read model)**
 
 | Property | Expected | Fitted model | Result |
 |---|---|---|---|
@@ -624,7 +673,7 @@ script verifies it coordinate by coordinate. The corner decks were simulated und
 same conditions as each mode's batch — 125 °C for read, −40 °C for write, the same MC
 sample count — so neither temperature nor sample size enters as a confound.
 
-**TABLE VII. Vmin per corner — independent simulation versus surrogate (Z_t = 6.398)**
+**TABLE VIII. Vmin per corner — independent simulation versus surrogate (Z_t = 6.398)**
 
 | Corner | (cn, pu) mV | Read reference → GP (error) | Write reference → GP (error) |
 |---|---|---|---|
@@ -655,7 +704,7 @@ sanity check that the model is operating correctly, not a claim about population
 
 #### 1) The two modes fill each other's gaps
 
-In Table VII, SFG is clamped below 0.4 V in both reference and prediction for read.
+In Table VIII, SFG is clamped below 0.4 V in both reference and prediction for read.
 This is a physical fact, not a data defect — **read does not set Vmin at that corner.**
 SFG combines a fast pull-up with a slow pass-gate, which favors read stability while
 making the cell hard to flip, so **write** becomes the constraint. Symmetrically, FSG is
@@ -667,7 +716,7 @@ write, with no room left to optimize one side alone; equally, it shows that **re
 about Vmin from a single mode misses the decision at the opposite corner**.
 
 The combined per-condition Vmin is max(read, write). At the four corners both
-reference runs exist and Table VII gives that value directly. In the 2,000-condition
+reference runs exist and Table VIII gives that value directly. In the 2,000-condition
 batches the coordinates do not overlap, so the same comparison cannot be made against
 the reference simulation; each surrogate would have to be evaluated at the other's
 coordinates, and
@@ -692,9 +741,9 @@ measured directly in mV.
 
 The unknowns are the two knobs design actually turns, cn and pu. A condition whose target
 is not attained for any value inside the design box [−60, +60] mV is left unrecovered
-rather than clipped. Table VIII gives the recovery error for each axis.
+rather than clipped. Table IX gives the recovery error for each axis.
 
-**TABLE VIII. Coordinate recovery error (245 hold-out conditions, target = reference Vmin)**
+**TABLE IX. Coordinate recovery error (245 hold-out conditions, target = reference Vmin)**
 
 | Unknown | Recovered | RMSE | Median | P90 | Max | Bias | \|∂Vmin/∂x\| | Implied by forward 8.35 mV |
 |---|---|---|---|---|---|---|---|---|
@@ -756,9 +805,9 @@ kurtosis, and the observed minimum.
 
 #### 2) Rejecting the Gaussian hypothesis
 
-Three statistics reject normality independently, and Table IX collects them.
+Three statistics reject normality independently, and Table X collects them.
 
-**TABLE IX. Three independent pieces of evidence against normality (9 conditions)**
+**TABLE X. Three independent pieces of evidence against normality (9 conditions)**
 
 | Evidence | Result | If Gaussian |
 |---|---|---|
@@ -824,10 +873,10 @@ population median of **15.1 V⁻¹** for read (interquartile range 12.6–18.2) 
 
 A z_bias of +1.054 σ therefore converts to **70 mV** at the population median and
 **74 mV** at the FSG local slope (tracing the z curve directly gives 71.7 mV — slightly
-less than the linear conversion because of curvature). Table X applies that shift to the
+less than the linear conversion because of curvature). Table XI applies that shift to the
 four corners.
 
-**TABLE X. Read Vmin per corner before and after correction (125 °C)**
+**TABLE XI. Read Vmin per corner before and after correction (125 °C)**
 
 | Corner | Naive | Corrected (Z_eff = 7.453) | Shift |
 |---|---|---|---|
@@ -852,7 +901,7 @@ The measured **+1.054 σ is twice that headroom**. The corrected FSG Vmin is the
 Two conditions attach to that number. The nine tail conditions carry no corner labels and
 between-condition uniformity is rejected (Section V-F.4), so applying the pooled z_bias at
 FSG is an **extrapolation into an unsampled quadrant**; a corner-labeled re-measurement
-is what would close it, and it is item 3 of Section VIII-F. And 0.662 V is the worst value in
+is what would close it, and it is item 3 of Section VIII-G. And 0.662 V is the worst value in
 **corner space**, where the other seven axes are held at nominal — Section VII-B puts at
 least 39% of the margin variance on those axes, so the nine-dimensional worst case is
 worse than this, and 37 mV is a lower bound on the shortfall rather than the shortfall.
@@ -935,10 +984,10 @@ same conditions. No correction was applied — that requires the original decks 
 
 #### 3) Results
 
-Table XI gives the read batch and Table XII the write batch, each with and without the
+Table XII gives the read batch and Table XIII the write batch, each with and without the
 conditions the batch's own consistency audit flags.
 
-**TABLE XI. External validation — read (all five levels inside the training range)**
+**TABLE XII. External validation — read (all five levels inside the training range)**
 
 | Metric | All (348) | 13 defects excluded (335) | In-batch hold-out |
 |---|---|---|---|
@@ -948,7 +997,7 @@ conditions the batch's own consistency audit flags.
 | Vmin RMSE | 21.39 mV (296) | **4.26 mV** (283) | 8.35 mV (243) |
 | \|error\| P50/P90/max | 3.33 / 6.54 / 250.6 | **3.21 / 6.12 / 17.56** | 3.36 / 10.69 / 53.78 |
 
-**TABLE XII. External validation — write (scored on the trained range 0.4–0.7 V)**
+**TABLE XIII. External validation — write (scored on the trained range 0.4–0.7 V)**
 
 | Metric | All (399) | 8 defects excluded (391) | In-batch hold-out |
 |---|---|---|---|
@@ -1029,9 +1078,9 @@ actually be taken.
 
 Vmin is the crossing z(V) = Z_t, so each condition needs a **bracket** around its own
 crossing. We examine both before (Z_t = 6.398) and after (Z_eff = 7.453) correction, and
-Table XIII gives the resulting distribution.
+Table XIV gives the resulting distribution.
 
-**TABLE XIII. Distribution of crossing brackets.** The write Z_eff column applies the
+**TABLE XIV. Distribution of crossing brackets.** The write Z_eff column applies the
 read-measured z_bias; write ρ_LR is unmeasured (Section V-F.7).
 
 | Read (2,000 conditions, 0.4–0.8) | Z_t = 6.398 | Z_eff = 7.453 |
@@ -1099,9 +1148,9 @@ dz/dV_op of 15 V⁻¹ is gentler than the write 36 V⁻¹, so the absolute compr
 
 Training conditions are reduced along nested subsets and scored on the same hold-out.
 Simulation cost is **linear** in the condition count while exact GP training is roughly
-cubic — the fit times show it. Table XIV gives the result.
+cubic — the fit times show it. Table XV gives the result.
 
-**TABLE XIV. Effect of the training condition count (read)**
+**TABLE XV. Effect of the training condition count (read)**
 
 | Conditions | Training rows | GP fit | μ RMSE | σ RMSE | **Vmin RMSE** | P90 |
 |---|---|---|---|---|---|---|
@@ -1133,9 +1182,9 @@ The actual campaign ran 5,000 samples per condition and no shallower data exists
 we **reproduce the situation by adding the extra sampling noise that a label would have
 carried at n′ < 5,000**. Since Var(μ̂) = σ²/n, we add independent noise of
 σ²(1/n′ − 1/5000) to the μ labels and σ²(1/2n′ − 1/10000) to σ̂, and re-supply y_noise at
-n′ to the noise-aware GP. The hold-out labels are untouched. Table XV gives the result.
+n′ to the noise-aware GP. The hold-out labels are untouched. Table XVI gives the result.
 
-**TABLE XV. Effect of MC depth (read)**
+**TABLE XVI. Effect of MC depth (read)**
 
 | n′ | μ RMSE | μ R² | σ RMSE | **Vmin RMSE** | P90 |
 |---|---|---|---|---|---|
@@ -1167,10 +1216,10 @@ Whether the losses multiply, add, or explode when all three are cut at once is n
 answered by those experiments. One worsening mechanism is clearly present: **with only
 400 conditions, each label has fewer neighbors to average against, so the n′ = 500 noise
 bites harder than it did at 1,700 conditions.** The flatness of Section VI-C is a result
-obtained with 1,700 neighbors. So we ran the combined experiment directly, and Table XVI
+obtained with 1,700 neighbors. So we ran the combined experiment directly, and Table XVII
 reports it.
 
-**TABLE XVI. Combined reduction (400 conditions × reduced levels × 500 MC, same hold-out)**
+**TABLE XVII. Combined reduction (400 conditions × reduced levels × 500 MC, same hold-out)**
 
 | | Read | Write |
 |---|---|---|
@@ -1284,7 +1333,7 @@ The shares below therefore answer "across the window we are signing off", not "i
 population we will ship"; a population-weighted decomposition would need the fab's joint
 distribution over the nine axes, which this study does not have.
 
-**TABLE XVII. Total-order Sobol indices over the training box (N = 4,096; 95% bootstrap
+**TABLE XVIII. Total-order Sobol indices over the training box (N = 4,096; 95% bootstrap
 interval on the read z column)**
 
 | Axis | ARD rel. (read) | S_T of z, read | S_T of z, write | S_T of σ, read | S_T of σ, write |
@@ -1356,7 +1405,7 @@ Panels (a) and (c) of Fig. 8 rank the same nine axes with the same model. They d
 
 ARD relevance spans a factor of 1.13 across the nine axes; S_T spans a factor of 400. The
 order disagrees too: by ARD relevance l_com is indistinguishable from three other axes
-(all 0.109 at the precision of Table XVII), yet it ranks **second of nine** by variance
+(all 0.109 at the precision of Table XVIII), yet it ranks **second of nine** by variance
 share. The σ kernel is the extreme case — nine lengthscales within about 1% of each
 other, while one of those axes carries 85% of the σ variance.
 
@@ -1383,10 +1432,10 @@ before the T0 margin is gone?
 We sweep sk across its full training range (±20 mV) at each of 625 cells of the (cn, pu)
 plane, holding the other six axes at nominal, and record the fraction of that range which
 keeps z(V_T0) at or above the threshold. Both thresholds are reported, because the lobe
-correction of Section V-F raises the bar the margin must clear. Table XVIII summarizes the
+correction of Section V-F raises the bar the margin must clear. Table XIX summarizes the
 result and Fig. 9 maps it.
 
-**TABLE XVIII. Skew tolerance over the (cn, pu) plane (625 cells, sk swept ±20 mV).**
+**TABLE XIX. Skew tolerance over the (cn, pu) plane (625 cells, sk swept ±20 mV).**
 **The write Z_eff columns apply the read-measured z_bias, which is an assumption: write
 ρ_LR has not been measured (Section V-F.7).**
 
@@ -1410,14 +1459,14 @@ is a projection, not a measurement.
 tolerance collapsing in the fast-NMOS / slow-PMOS region — the FSG quadrant that Section V-D
 identifies as the read-limiting corner and Section V-F pushes past spec. The write mode keeps
 more cells (97.0% retain some margin at Z_eff) but loses more inside them: its IQR falls
-to 30.6–40.0 mV, consistent with the larger sk variance share in Table XVII (0.097 versus
+to 30.6–40.0 mV, consistent with the larger sk variance share in Table XVIII (0.097 versus
 0.067).
 
 **Fig. 9.** Passing skew width over the (cn, pu) plane, read mode, (a) at Z_t = 6.398 and
 (b) at Z_eff = 7.453. The contour marks the boundary of full tolerance.
 
 Two limits on this number. It is a one-axis tolerance with the other six non-threshold
-axes at nominal, and Table XVII says l_com moves the read margin more than sk does, so a
+axes at nominal, and Table XVIII says l_com moves the read margin more than sk does, so a
 joint tolerance region over several axes would be tighter than this one. And the map is a
 surrogate prediction: cells within roughly one model error (8.35 mV in Vmin, Section V-B) of
 the boundary should be read as boundary cells, not as decided ones.
@@ -1495,7 +1544,7 @@ Vmin = max(read, write) **cannot be verified against the reference simulation in
 2,000-condition batches.**
 
 The distinction must be kept. **What is possible**: at the four PDK corners both
-reference runs exist, so the combined decision can be checked directly, and Table VII gives
+reference runs exist, so the combined decision can be checked directly, and Table VIII gives
 those values. The result that the two worst corners are each other's censored corner and
 lie 2 mV apart is a reference-simulation result. **What is not possible**: a combined contour over the full
 2,000-condition window. Each surrogate could be evaluated at the other's coordinates to
@@ -1506,7 +1555,29 @@ There is exactly one way to remove the limitation — **acquire even a small set
 condition coordinates shared by both modes.** A few tens of conditions where the combined
 decision matters would suffice, and this is a design item for the next campaign.
 
-### D. Scope
+### D. What the Gaussian process is and is not doing here
+
+Section V-B.3 scored a 66-term quadratic response surface against the GP and found it at
+least as accurate — better for read on both the hold-out and the independent corners. The
+honest reading is that **this window is smooth enough that the regressor is not the
+difficulty**; the difficulty is the metric (Section VIII-A), the censoring, and the labels.
+Three consequences follow.
+
+First, the paper's results are portable: every downstream step consumes only μ and σ, so
+a flow that prefers least squares to a GP keeps the physics layer, the inverse, the budget
+curves and the ρ_LR correction unchanged.
+
+Second, the case for the GP here rests on two properties this study never puts to work —
+a per-point predictive variance, which no result in the paper consumes, and a noise-aware
+likelihood, which cannot show its value on a dataset where every condition carries the
+same 5,000 samples. A campaign with genuinely heterogeneous depth, which Section VI-E
+argues for on other grounds, is also what would make that likelihood earn its place.
+
+Third, the budget conclusions of Section VI are GP-specific. A 66-coefficient surface
+should saturate at far fewer than 400 conditions, so the knee reported there is a property
+of the model as much as of the problem. We did not measure the quadratic's knee.
+
+### E. Scope
 
 The results concern a single technology node and a single cell topology. The multiplier
 spill band that appears when the common component approaches the range edge sits at the
@@ -1525,7 +1596,7 @@ method in the methodology section.
 The PDK is proprietary, so absolute values are not externally reproducible. What is
 reproducible is the procedure and the relative conclusions; Appendix C specifies both.
 
-### E. Recommendations
+### F. Recommendations
 
 Only items that a campaign design can act on directly.
 
@@ -1550,7 +1621,7 @@ Only items that a campaign design can act on directly.
    transcription errors in the read batch and 12 in the write batch, and after correction
    the Vmin RMSE improved from 14.74 to 8.35 mV.
 
-### F. Next measurements, in priority order
+### G. Next measurements, in priority order
 
 1. **Write ρ_LR.** The write-limiting corner SFG already touches spec, so this value
    decides pass or fail directly. The left and right terms are separate MC outputs, so
