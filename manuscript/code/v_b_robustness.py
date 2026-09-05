@@ -228,8 +228,42 @@ for r in corner_rows:
     print(f"   {r['corner']}: ref {r['vmin_ref']:.4f}  GP {r['gp_err_mV']:+.1f}  "
           f"quad {r['quad_err_mV']:+.1f} mV")
 
+# =============================================================================
+# D. how accurate is the contour, where the contour is used (O-04)
+# =============================================================================
+# The deliverable is the Vmin contour, so its error should be quoted where the T0
+# decision reads it, not averaged over a window that runs 200 mV below spec. We
+# report the vertical error in a band around the spec voltage and convert it into an
+# in-plane displacement with the measured |dVmin/dx| of §V-E. A Hausdorff distance
+# between predicted and reference contours is the other candidate and we do not use
+# it: the plane's two axes are both mV of Vth shift but move Vmin at different rates,
+# so a Euclidean distance in (cn, pu) has no physical meaning.
+BAND_mV = 25.0
+near = np.abs(vt - V_T0) <= BAND_mV * 1e-3
+ok = ~cen & np.isfinite(vt) & np.isfinite(vp)
+e_near = (vp[near & ok] - vt[near & ok]) * 1e3
+contour = dict(band_mV=BAND_mV, n=int((near & ok).sum()),
+               rmse_mV=float(np.sqrt(np.mean(e_near ** 2))),
+               p90_mV=float(np.percentile(np.abs(e_near), 90)))
+# inverse.json is read-mode only, and dVmin/dx differs between the modes, so the
+# in-plane conversion is reported for read alone rather than borrowing read slopes.
+slopes = {}
+if not args.write:
+    try:
+        inv = json.load(open(RESULTS / "inverse.json"))
+        slopes = {a: inv["recovery"][a]["dvmin_dx_median"] for a in ("cn", "pu")}
+    except (FileNotFoundError, KeyError):
+        pass
+contour["in_plane_mV"] = {a: contour["rmse_mV"] / s for a, s in slopes.items()}
+print(f"\ncontour band |Vmin - {V_T0} V| <= {BAND_mV:.0f} mV: "
+      f"{contour['n']} conditions, RMSE {contour['rmse_mV']:.2f} mV "
+      f"(P90 {contour['p90_mV']:.2f})")
+for a, v in contour["in_plane_mV"].items():
+    print(f"   -> {v:.2f} mV of {a} displacement (|dVmin/d{a}| = {slopes[a]:.3f})")
+
 out = dict(
     mode=MODE, seed=SEED, z_target=Z_TARGET,
+    contour_accuracy=contour,
     corners=dict(per_corner=corner_rows, comparison=corner_cmp),
     baseline_gp=base,
     repaired=dict(

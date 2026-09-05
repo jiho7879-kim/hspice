@@ -98,6 +98,12 @@ CHECKS = [
     ("quad corner RMSE read", rob["corners"]["comparison"]["quad"]["rmse_mV"], "6.11"),
     ("GP corner RMSE write",  robw["corners"]["comparison"]["gp"]["rmse_mV"],  "16.70"),
     ("quad corner RMSE write", robw["corners"]["comparison"]["quad"]["rmse_mV"], "18.86"),
+    # §V-E.2 contour accuracy in the spec band (O-04)
+    ("contour RMSE read",  rob["contour_accuracy"]["rmse_mV"],                    "7.67"),
+    ("contour P90 read",   rob["contour_accuracy"]["p90_mV"],                     "11.7"),
+    ("contour RMSE write", robw["contour_accuracy"]["rmse_mV"],                   "10.44"),
+    ("contour displacement, cn", rob["contour_accuracy"]["in_plane_mV"]["cn"],    "3.7"),
+    ("contour displacement, pu", rob["contour_accuracy"]["in_plane_mV"]["pu"],    "4.7"),
 ]
 
 # The shares quoted in Sec. VII-B are sums over Table XVII, not stored fields. Recompute

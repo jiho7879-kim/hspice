@@ -2,6 +2,13 @@
   "mode": "write",
   "seed": 42,
   "z_target": 6.3984,
+  "contour_accuracy": {
+    "band_mV": 25.0,
+    "n": 54,
+    "rmse_mV": 10.44268158977753,
+    "p90_mV": 14.13099133940161,
+    "in_plane_mV": {}
+  },
   "corners": {
     "per_corner": [
       {

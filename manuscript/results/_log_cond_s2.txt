@@ -4,14 +4,3 @@
   warnings.warn(
 /home/jiho7879-kim/hspice/.venv/lib/python3.11/site-packages/gpytorch/distributions/multivariate_normal.py:375: NumericalWarning: Negative variance values detected. This is likely due to numerical instabilities. Rounding negative variances up to 1e-06.
   warnings.warn(
-mode=read @125 C  Vop [np.float64(0.4), np.float64(0.5), np.float64(0.6), np.float64(0.7), np.float64(0.8)]  train 1700 conditions / hold-out 300
-  [load] checkpoint <- /home/jiho7879-kim/hspice/manuscript/results/surrogate_vb.pth
-baseline (full budget): mu 2.502 mV  Vmin 8.35 mV
-    100 conditions (  500 rows,  0.1 min): mu 3.037 mV  Vmin 17.89 mV
-    200 conditions ( 1000 rows,  0.3 min): mu 2.822 mV  Vmin 12.67 mV
-    400 conditions ( 2000 rows,  1.6 min): mu 2.618 mV  Vmin 10.46 mV
-    800 conditions ( 4000 rows,  6.9 min): mu 2.545 mV  Vmin 8.78 mV
-   1200 conditions ( 6000 rows, 11.3 min): mu 2.520 mV  Vmin 9.39 mV
-   1700 conditions ( 8500 rows, baseline): mu 2.502 mV  Vmin 8.35 mV
-
-saved /home/jiho7879-kim/hspice/manuscript/results/cost_conditions_s1.json

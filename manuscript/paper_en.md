@@ -783,6 +783,16 @@ It exists only where **pu ≥ 4.3 mV** (33 of 70 pu rows); if pu is faster than 
 cn in ±60 mV meets spec and there is no boundary at all. On the boundary, cn* ranges from
 −59.3 to −25.1 mV.
 
+**How well is the boundary located?** The contour is the deliverable, so its error belongs
+where the decision reads it, not averaged over a window that runs 200 mV below spec. Of the
+hold-out conditions whose Vmin lies within ±25 mV of the spec voltage — 26 for read, 54 for
+write — the Vmin RMSE is **7.67 mV** (P90 11.7) and **10.44 mV** respectively. Dividing the
+read figure by the measured |∂Vmin/∂x| of Table IX turns it into an in-plane displacement:
+the boundary is located to within **3.7 mV of cn** or **4.7 mV of pu**. We quote the error
+this way rather than as a Hausdorff distance between the predicted and reference contours,
+because the two axes of the plane move Vmin at different rates, so a Euclidean distance in
+(cn, pu) mixes quantities that are not interchangeable.
+
 Read this as follows. **The read process window of this cell closes only along pu.**
 Once PU slows by more than about 4 mV, a lower bound appears on cn, and that bound rises
 quickly as pu slows further. Where PU is fast enough, cn is a free design variable.
