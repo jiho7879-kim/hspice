@@ -1,0 +1,338 @@
+{
+  "mode": "read",
+  "temp": "125 C",
+  "z_target": 6.3984,
+  "seed": 42,
+  "n_iter": 150,
+  "n_train": 8500,
+  "n_holdout": 1500,
+  "mu_rmse_mV": 2.5019163444571695,
+  "mu_r2": 0.9964743351018198,
+  "variants": [
+    {
+      "sigma_kernel": "additive",
+      "sigma_target": "linear",
+      "sigma_rmse_mV": 0.25597205803425527,
+      "sigma_r2": 0.9797667292914667,
+      "vmin_rmse_mV": 8.351073777197255,
+      "vmin_conditions_scored": 243,
+      "fit_seconds": 1032.3
+    },
+    {
+      "sigma_kernel": "full",
+      "sigma_target": "linear",
+      "sigma_rmse_mV": 0.16061208540310704,
+      "sigma_r2": 0.9920340529770676,
+      "vmin_rmse_mV": 4.782326144370447,
+      "vmin_conditions_scored": 245,
+      "fit_seconds": 798.0
+    },
+    {
+      "sigma_kernel": "additive",
+      "sigma_target": "log",
+      "sigma_rmse_mV": 11.526200685498246,
+      "sigma_r2": -40.02544736578576,
+      "vmin_rmse_mV": 205.0493214155351,
+      "vmin_conditions_scored": 245,
+      "fit_seconds": 2181.2
+    },
+    {
+      "sigma_kernel": "full",
+      "sigma_target": "log",
+      "sigma_rmse_mV": 0.09660213792984491,
+      "sigma_r2": 0.9971182623026518,
+      "vmin_rmse_mV": 4.039816423522739,
+      "vmin_conditions_scored": 245,
+      "fit_seconds": 523.6
+    }
+  ],
+  "production": {
+    "sigma_kernel": "additive",
+    "sigma_target": "linear"
+  },
+  "best": {
+    "sigma_kernel": "full",
+    "sigma_target": "log"
+  },
+  "qc_audit": [
+    {
+      "batch": "SNMR",
+      "deck": 489,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": "93..1",
+      "new": 93.1,
+      "why": "'93..1' double-dot decimal typo; fits 82.36->93.1 trend"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1895,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": "182.9612.14",
+      "new": 182.96,
+      "why": "'182.9612.14' = avg+std merged into avg cell; std cell blank"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1895,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": NaN,
+      "new": 12.14,
+      "why": "'182.9612.14' = avg+std merged into avg cell; std cell blank"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 11,
+      "vop": 0.7,
+      "col": "snmr_avg",
+      "old": 9.73,
+      "new": 97.3,
+      "why": "9.73 x10; interp(0.6,0.8)=95.4"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 350,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 10.664,
+      "new": 106.64,
+      "why": "10.664 x10; 0.7V=94.6 trend ~105"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 636,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 11.73,
+      "new": 117.3,
+      "why": "11.73 x10; interp(0.5,0.7)=108.6"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 786,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 10.919,
+      "new": 109.19,
+      "why": "10.919 x10; interp(0.5,0.7)=105.4"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 803,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 13.69,
+      "new": 136.9,
+      "why": "13.69 x10; interp(0.5,0.7)=134.0"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1360,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 10.321,
+      "new": 103.21,
+      "why": "10.321 x10; interp(0.5,0.7)=99.9"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 555,
+      "vop": 0.7,
+      "col": "snmr_avg",
+      "old": 114.17,
+      "new": 143.33,
+      "why": "114.17 < 0.6V value; quad fit of other 4 -> 143.33"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 852,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 114.6,
+      "new": 144.1,
+      "why": "114.60 < 0.5V value; quad fit of other 4 -> 144.10"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 965,
+      "vop": 0.5,
+      "col": "snmr_avg",
+      "old": 73.84,
+      "new": 107.74,
+      "why": "73.84 < 0.4V value; quad fit -> 107.74, sigma 11.33 -> 12.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 965,
+      "vop": 0.5,
+      "col": "snmr_std",
+      "old": 11.33,
+      "new": 12.78,
+      "why": "73.84 < 0.4V value; quad fit -> 107.74, sigma 11.33 -> 12.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1074,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 142.45,
+      "new": 182.89,
+      "why": "142.45 < 0.7V value; quad fit -> 182.89, sigma 15.83 -> 13.72"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1074,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": 15.83,
+      "new": 13.72,
+      "why": "142.45 < 0.7V value; quad fit -> 182.89, sigma 15.83 -> 13.72"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1077,
+      "vop": 0.8,
+      "col": "snmr_avg",
+      "old": 185.38,
+      "new": 226.54,
+      "why": "185.38 < 0.7V value; quad fit -> 226.54, sigma 15.55 -> 10.34"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1077,
+      "vop": 0.8,
+      "col": "snmr_std",
+      "old": 15.55,
+      "new": 10.34,
+      "why": "185.38 < 0.7V value; quad fit -> 226.54, sigma 15.55 -> 10.34"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1241,
+      "vop": 0.6,
+      "col": "snmr_avg",
+      "old": 22.8,
+      "new": 122.5,
+      "why": "22.80 (leading digit lost); quad fit of other 4 -> 122.50"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1545,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 73.75,
+      "new": 26.78,
+      "why": "73.75 > 0.5V value; quad fit -> 26.78"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1547,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 89.74,
+      "new": 54.23,
+      "why": "89.74 > 0.5V value; quad fit -> 54.23, sigma 16.79 -> 12.61"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1547,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 16.79,
+      "new": 12.61,
+      "why": "89.74 > 0.5V value; quad fit -> 54.23, sigma 16.79 -> 12.61"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1552,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 109.81,
+      "new": 54.2,
+      "why": "109.81 > 0.5V value; quad fit -> 54.20, sigma 14.81 -> 11.65"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1552,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 14.81,
+      "new": 11.65,
+      "why": "109.81 > 0.5V value; quad fit -> 54.20, sigma 14.81 -> 11.65"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1555,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 87.55,
+      "new": 39.31,
+      "why": "87.55 > 0.5V value; quad fit -> 39.31, sigma 14.77 -> 12.57"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1555,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 14.77,
+      "new": 12.57,
+      "why": "87.55 > 0.5V value; quad fit -> 39.31, sigma 14.77 -> 12.57"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1557,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 55.09,
+      "new": 21.72,
+      "why": "55.09 > 0.5V value; quad fit -> 21.72, sigma 11.83 -> 13.90"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1557,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 11.83,
+      "new": 13.9,
+      "why": "55.09 > 0.5V value; quad fit -> 21.72, sigma 11.83 -> 13.90"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1561,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 93.33,
+      "new": 43.25,
+      "why": "93.33 > 0.5V value; quad fit -> 43.25, sigma 15.06 -> 12.25"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1561,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 15.06,
+      "new": 12.25,
+      "why": "93.33 > 0.5V value; quad fit -> 43.25, sigma 15.06 -> 12.25"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1563,
+      "vop": 0.4,
+      "col": "snmr_avg",
+      "old": 69.65,
+      "new": 21.92,
+      "why": "69.65 > 0.5V value; quad fit -> 21.92, sigma 12.25 -> 12.86"
+    },
+    {
+      "batch": "SNMR",
+      "deck": 1563,
+      "vop": 0.4,
+      "col": "snmr_std",
+      "old": 12.25,
+      "new": 12.86,
+      "why": "69.65 > 0.5V value; quad fit -> 21.92, sigma 12.25 -> 12.86"
+    }
+  ]
+}
