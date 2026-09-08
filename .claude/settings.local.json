@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(npx --yes skills add K-Dense-AI/scientific-agent-skills)",
+      "Bash(claude plugin *)",
+      "Bash(.venv/bin/python *)",
+      "Bash(npx skills *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Read(//home/jiho7879-kim/.claude/**)",
+      "Read(//home/jiho7879-kim/.claude/plugins/**)",
+      "Bash(/home/jiho7879-kim/hspice/.venv/bin/python -c ' *)",
+      "Bash(echo \"--- exit $? ---\")"
     ]
   }
 }

@@ -82,6 +82,15 @@
 `VTRIP_FIX_TREND`). 4점(0.8 V 미전사)이라 손상 셀 선택은 나머지 3점의 직선 잔차로,
 복구값은 2차식으로 계산한다.
 
+**메커니즘 보충 (2026-09-05) — "왜 read/write 좌표가 다른가" 반복 질문 방지**:
+좌표가 다른 것은 아래가 겹친 결과이며 어느 하나도 버그가 아니다.
+
+- **seed 자체가 다르다**: `python/src/inhouse_deck_gen.py` L195 `SEEDS = {"snmr": 2027, "vtrip": 2028}` — metric별 seed, 팹과 공유하는 재현성 계약.
+- **quadrant 가중이 다르다**: `python/src/condition_gen.py` L65-66 — `QW_SNMR`은 FSG(cn−,pu+) 45%, `QW_VTRIP`은 SFG(cn+,pu−) 45% (L169 metric에 따라 선택). **같은 seed라도 (cn,pu) marginal이 달라진다.**
+- **Vop 레벨 수도 다르다**: 읽기 5레벨(0.4–0.8) vs 쓰기 4레벨(0.4–0.7).
+- read/write가 같은 좌표를 공유했던 것은 Stage C **파일럿** `260713_stageB_snmr.xlsx`(stageB_snmr + stageB_bwrm, 399조건 공유, `stageC_readwrite.py` L16)에 한정된다. "이전에 random을 통일했다"는 기억은 이 파일럿의 것이며, 최종 2000조건 배치는 처음부터 분리 설계다.
+- **등고선(contour)은 이미 worst=max**다: 통합 Vmin = `smooth_max(Vmin_SNMR, Vmin_Vtrip, alpha=2mV)` (`stageC_readwrite.py` L10·L173), §V-D도 각 코너에서 max로 합산. 각 mode GP를 공통 (cn,pu) 그리드에 평가 후 점별 max를 취하므로 **training 좌표 공유는 필요 없다** — 통합 Vmin을 조건별로 실측 검증할 수 없는 이유는 이것이 아니라 공통 조건 0건(교집합 0/2000) 때문이다.
+
 ---
 
 ## D-04. 서사 축 = surrogate 방법론 (현행 9장 구조 유지)
@@ -451,6 +460,37 @@ Hausdorff 거리는 쓰지 않는다.
 
 산출: `code/v_b_robustness.py` D절 → `results/robustness[_write].json:contour_accuracy`.
 본문 §V-E 2에 기재.
+
+---
+
+## D-16. σ GP의 커널 오지정을 **측정**한다 (2026-09-08) — production 반영은 보류
+
+**결정**. σ 모델을 2×2로 교차한 ablation을 `code/v_b_sigma_model.py`로 남긴다.
+현 production(가법 커널 · linear σ)이 네 칸 중 최악이고, full ARD · log σ가 Vmin RMSE를
+읽기 **8.35 → 4.04 mV**, 쓰기 **14.45 → 7.21 mV**로 반으로 줄인다(N020–N021).
+**production `src/surrogate.py`는 이번에 바꾸지 않는다.**
+
+**근거**:
+
+1. **baseline이 N012–N014를 정확히 재현한다.** 읽기 0.256 / 0.9798 / 8.35, 쓰기
+   2.041 / 0.7318 / 14.45. 스크립트가 production 경로를 충실히 복제했다는 확인이고,
+   네 칸 모두 μ를 고정했으므로 차이는 전부 σ 탓이다.
+2. **원인이 특정된다.** μ는 `ExactGPModel`(10차원 full ARD)인데 σ만
+   `AdditiveGPModel` = k_op(Vop) + k_dev(9축)이다. 가법 분리는 "σ–Vop 곡선의 모양이
+   device 좌표에 무관하다"는 제약이며, 이는 물리적 근거가 없다. 별개로 σ의 관측잡음이
+   σ/√(2N)로 비례하므로 등분산 축은 log σ다.
+3. **두 변경이 상호작용한다.** 단독으로는 쓰기 14.45 → 13.05(커널) / 13.35(log)에
+   그치고, 함께 넣어야 7.21이 된다. 읽기에서 additive · log는 발산한다(σ R² −40).
+4. **§IV-A의 물리 서사가 무효가 된다.** 쓰기 σ R²가 0.9881로 읽기(0.9798)를 넘어선다.
+   "V_trip은 두 구동전류의 비라서 σ 산포가 크다"는 설명은 성립하지 않는다. 격차는
+   물리가 아니라 커널 오지정이었다. 식 (4) 자체는 항등식이라 살아남고 *귀속*만 죽는다.
+
+**production 반영을 보류하는 이유**: `surrogate_vb*.pth`를 읽는 결과가 §V-D·V-E·V-F·
+VI·VII 전부다. 지금 바꾸면 그 JSON들이 stale이 되어 README 원칙("숫자는 반드시 출처가
+있다")이 깨진다. 특히 `lobe.json`은 진행 중인 검토 대상이다.
+
+**영향받는 곳**: §V-B 표 IV(N012–N014), §IV-A 전체, LEDGER N020–N021.
+재유도 시 §VIII 한계 서술의 "σ 병목"도 다시 쓴다.
 
 ---
 

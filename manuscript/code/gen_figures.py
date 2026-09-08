@@ -14,6 +14,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+from matplotlib.colors import TwoSlopeNorm
 
 import _paths  # noqa: F401
 from _paths import DEVICE_COLS, FIGURES, RESULTS, V_T0, Z_EFF, Z_TARGET
@@ -88,7 +89,9 @@ if want(1):
                                      mutation_scale=9, lw=0.9, ls=ls, color=c,
                                      shrinkA=0, shrinkB=0))
 
-    box(1, 14, 17, 12, "9 process axes\n$+\\;V_{op}$\n(Table II)")
+    # No table number here: the axis table is II in v4.0/B/C and III in D, and one
+    # shared figure cannot cite both. The box is self-explanatory without it.
+    box(1, 14, 17, 12, "9 process axes\n$+\\;V_{op}$")
     box(22, 14, 20, 12, "GP posterior\n$\\hat\\mu(\\mathbf{x},V)$, "
                         "$\\hat\\sigma(\\mathbf{x},V)$\nnoise-aware", fc="#e3ecf7")
     box(46, 14, 21, 12, "physics layer\n$z=\\mu/\\sigma$\n"
@@ -126,8 +129,8 @@ if want(2):
                            (-42, -42, "FFG", "20 %"), (42, -42, "SFG", "15 %")]:
         a.text(x, y, f"{lab}\n{w}", ha="center", va="center", fontsize=7,
                bbox=dict(fc="w", ec="0.6", lw=0.5, alpha=0.9, pad=1.6))
-    a.set_xlabel("$c_n$: NMOS $V_{th}$ shift (mV)")
-    a.set_ylabel("$p_u$: PMOS $V_{th}$ shift (mV)")
+    a.set_xlabel("$\\Delta V_{th,N}$: NMOS $V_{th}$ shift (mV)")
+    a.set_ylabel("$\\Delta V_{th,P}$: PMOS $V_{th}$ shift (mV)")
     a.set_title("(a) quadrant-weighted read design")
 
     b = axes[1]
@@ -184,39 +187,54 @@ if want(3):
 # Fig. 4 -- fixed-corner validation
 # =============================================================================
 if want(4):
-    print("Fig. 4  corner validation")
-    fig, axes = plt.subplots(1, 2, figsize=(DCOL, 2.9))
-    for ax, j, ttl, c in ((axes[0], "corner.json", "read @ 125 $^\\circ$C", C_READ),
-                          (axes[1], "corner_write.json",
-                           "write @ $-40$ $^\\circ$C", C_WRITE)):
-        r = load(j)
-        cs = r["corners"]
-        names = [q["corner"] for q in cs]
-        x = np.arange(len(cs))
+    # One axes for both modes: the point of the figure is that each mode is
+    # limited by a *different* corner (read FSG, write SFG), and side-by-side
+    # panels make the reader hold two y-axes in their head to see it.
+    print("Fig. 4  corner validation (read + write merged)")
+    fig, ax = plt.subplots(figsize=(DCOL, 3.1))
+    read, write = load("corner.json"), load("corner_write.json")
+    names = [q["corner"] for q in read["corners"]]
+    assert [q["corner"] for q in write["corners"]] == names, "corner order differs"
+    x = np.arange(len(names))
+
+    W = 0.19
+    for cs, c, off, lbl in ((read["corners"], C_READ, -W, "read"),
+                            (write["corners"], C_WRITE, +W, "write")):
+        # the limiting corner gets a heavy outline instead of an arrow: with four
+        # bars per group an annotation collides with the error labels and legend
+        live = [(i, q) for i, q in enumerate(cs) if not q["censored_meas"]]
+        i_lim = max(live, key=lambda t: t[1]["vmin_meas"])[0]
+        edges = [1.1 if i == i_lim else 0.0 for i in range(len(cs))]
         meas = np.array([q["vmin_meas"] for q in cs])
         pred = np.array([q["vmin_pred"] for q in cs])
-        cen = np.array([q["censored_meas"] or q["censored_pred"] for q in cs])
-        ax.bar(x - 0.19, meas, 0.36, color=c, alpha=0.85, label="independent reference run")
-        ax.bar(x + 0.19, pred, 0.36, color=c, alpha=0.35, label="surrogate")
-        ax.axhline(V_T0, color="k", ls="--", lw=0.8)
-        ax.text(len(cs) - 0.45, V_T0 + 0.004, "$V_{T0}$ = 0.625 V", fontsize=6.6,
-                ha="right", va="bottom")
-        for xi, q, cc in zip(x, cs, cen):
-            if cc:
-                ax.text(xi, 0.362, "censored\n($<$0.4 V)", ha="center",
-                        fontsize=6.2, color="0.35")
+        ax.bar(x + off - W / 2, meas, W, color=c, alpha=0.85,
+               edgecolor="k", linewidth=edges, label=f"{lbl} — reference")
+        ax.bar(x + off + W / 2, pred, W, color=c, alpha=0.32,
+               edgecolor="k", linewidth=edges, label=f"{lbl} — surrogate")
+        for xi, q in zip(x, cs):
+            if q["censored_meas"] or q["censored_pred"]:
+                ax.text(xi + off, 0.359, "censored\n($<$0.4 V)", ha="center",
+                        va="bottom", fontsize=5.6, color="0.4", rotation=90)
             else:
-                # keep the error label clear of the V_T0 rule: a corner sitting
-                # just under spec would otherwise print its number on the line.
-                top = max(q["vmin_meas"], q["vmin_pred"]) + 0.008
-                if V_T0 - 0.012 < top < V_T0 + 0.010:
+                top = max(q["vmin_meas"], q["vmin_pred"]) + 0.006
+                if V_T0 - 0.012 < top < V_T0 + 0.010:   # keep clear of the V_T0 rule
                     top = V_T0 + 0.013
-                ax.text(xi, top, f"{sgn(q['err_mV'])} mV", ha="center", fontsize=6.6)
-        ax.set_xticks(x); ax.set_xticklabels(names)
-        ax.set_ylim(0.35, 0.70)
-        ax.set_ylabel("$V_{min}$ (V)")
-        ax.set_title(ttl)
-        ax.legend(loc="upper left", frameon=False, ncol=1)
+                lab = f"{sgn(q['err_mV'])}"
+                if xi == i_lim:
+                    lab += "\nlimiting"
+                ax.text(xi + off, top, lab, ha="center", va="bottom",
+                        fontsize=6.2, color=c, linespacing=1.25)
+
+    ax.axhline(V_T0, color="k", ls="--", lw=0.8)
+    ax.text(len(names) - 0.5, V_T0 + 0.004, "$V_{T0}$ = 0.625 V", fontsize=6.6,
+            ha="right", va="bottom")
+    ax.set_xticks(x); ax.set_xticklabels(names)
+    ax.set_xlim(-0.55, len(names) - 0.45)
+    ax.set_ylim(0.35, 0.70)
+    ax.set_ylabel("$V_{min}$ (V)")
+    ax.set_xlabel("PDK corner (labels above bars are surrogate $-$ reference, mV)")
+    ax.legend(loc="upper left", frameon=False, ncol=2, columnspacing=1.2,
+              handlelength=1.2, borderaxespad=0.2)
     save(fig, 4, "corner")
 
 # =============================================================================
@@ -224,28 +242,70 @@ if want(4):
 # =============================================================================
 if want(5):
     print("Fig. 5  inverse boundary")
+    # Read and write share one plane. A cell has to pass BOTH at the same supply,
+    # so the usable window is the intersection of the two T0 boundaries -- and the
+    # two modes are limited from opposite directions in (cn, pu), which a
+    # read-only plane cannot show.
     z = np.load(RESULTS / "inverse_boundary.npz")
+    zw = np.load(RESULTS / "inverse_boundary_write.npz")
     inv = load("inverse.json")
     cn, pu, vmin = z["cn"], z["pu"], z["vmin"]
     pu_axis, cn_star = z["pu_axis"], z["cn_star"]
-    fig, ax = plt.subplots(figsize=(COL, 2.9))
+    assert np.allclose(cn, zw["cn"]) and np.allclose(pu, zw["pu"]), \
+        "read/write boundary grids differ -- cannot overlay"
+    vmin_w = zw["vmin"]
+
+    fig, ax = plt.subplots(figsize=(COL, 3.0))
     CN, PU = np.meshgrid(cn, pu)          # 'xy' -- matches how v_e_inverse built VM
     lv = np.arange(0.40, 0.76, 0.025)
-    cf = ax.contourf(CN, PU, vmin, levels=lv, cmap="viridis", extend="both")
-    ax.contour(CN, PU, vmin, levels=[V_T0], colors="w", linewidths=3.0)
+    # The cell has to work in BOTH modes at one supply, so what it costs is
+    # max(read, write) -- not read alone. Filling with read makes the region past
+    # SFG look best-in-plane when write is in fact driving Vmin up there.
+    # NaN = no crossing below the top supply, i.e. worse than the grid can show.
+    vcell = np.maximum(np.nan_to_num(vmin, nan=0.85),
+                       np.nan_to_num(vmin_w, nan=0.85))
+    # Colour is pinned to the spec: everything at or under V_T0 reads cool/blue
+    # (passes), everything above reads warm/red (fails). A sequential map makes
+    # the reader hunt for the threshold in the colourbar instead of seeing it.
+    cf = ax.contourf(CN, PU, vcell, levels=lv, cmap="RdYlBu_r",
+                     norm=TwoSlopeNorm(vmin=lv[0], vcenter=V_T0, vmax=lv[-1]),
+                     extend="both")
+
+    # the true spec boundary is the T0 contour of the cell, not of either mode.
+    # It is kept thin: it lies on top of the read boundary in the upper left and
+    # on the write boundary in the lower right, and a heavy line hides both.
+    ax.contour(CN, PU, vcell, levels=[V_T0], colors="k", linewidths=1.3)
+    ax.plot([], [], color="k", lw=1.3, label="cell $V_{T0}$ boundary")
     good = np.isfinite(cn_star)
-    ax.plot(cn_star[good], pu_axis[good], color="#c1121f", lw=1.1, ls="--",
-            label="$V_{T0}$ contour / axis-wise exact solution")
+    ax.plot(cn_star[good], pu_axis[good], color="#c1121f", lw=1.2, ls="--",
+            label="read $V_{T0}$ boundary (axis-wise exact)")
+    ax.contour(CN, PU, vmin_w, levels=[V_T0], colors="#ffd166", linewidths=1.6,
+               linestyles="-")
+    ax.plot([], [], color="#ffd166", lw=1.6, label="write $V_{T0}$ boundary")
+
+    # No "both pass" hatch here: with the cell-Vmin fill the black T0 contour
+    # already separates pass from fail, and at T0 the passing region is most of
+    # the plane, so hatching it buries the colormap.
+
+    # which mode owns the boundary, said once instead of left to the line colours
+    ax.text(-46, 46, "read-limited", fontsize=6.4, ha="center", va="center",
+            rotation=41, color="0.15")
+    # the write boundary is near-vertical at cn ~ 50 mV, so its label runs up it
+    ax.text(55.5, -38, "write-limited", fontsize=6.4, ha="center", va="center",
+            rotation=90, color="0.15")
+
     ms = inv["multistart"]
-    ax.scatter([m["cn_solution"] for m in ms], [m["pu"] for m in ms], s=16,
-               marker="o", facecolor="none", edgecolor="w", lw=0.9,
-               label="multistart converged (12/12)")
-    ax.set_xlabel("$c_n$: NMOS $V_{th}$ shift (mV)")
-    ax.set_ylabel("$p_u$: PMOS $V_{th}$ shift (mV)")
-    ax.set_title("read $V_{min}$ over the two design knobs")
-    ax.legend(loc="lower left", frameon=True, framealpha=0.85, fontsize=6.4)
+    # filled white with a dark rim: the solutions sit ON the red boundary line,
+    # and an unfilled white ring disappears into both the line and the dark fill
+    ax.scatter([m["cn_solution"] for m in ms], [m["pu"] for m in ms], s=20,
+               marker="o", facecolor="w", edgecolor="k", lw=0.7, zorder=7,
+               label=f"multistart converged ({len(ms)}/{len(ms)})")
+    ax.set_xlabel("$\\Delta V_{th,N}$: NMOS $V_{th}$ shift (mV)")
+    ax.set_ylabel("$\\Delta V_{th,P}$: PMOS $V_{th}$ shift (mV)")
+    ax.set_title("cell $V_{min}=\\max$(read, write) with each mode's boundary")
+    ax.legend(loc="lower left", frameon=True, framealpha=0.85, fontsize=6.2)
     cb = fig.colorbar(cf, ax=ax, pad=0.02)
-    cb.set_label("$V_{min}$ (V)", fontsize=7.5)
+    cb.set_label("cell $V_{min}$ (V)", fontsize=7.5)
     cb.ax.tick_params(labelsize=6.5)
     save(fig, 5, "inverse")
 
@@ -315,9 +375,20 @@ if want(7):
     fig, axes = plt.subplots(1, 3, figsize=(DCOL, 2.55))
 
     a = axes[0]
+    # One curve per random draw of the nested subsets. A single curve invites the
+    # reader to trust its wiggles; three show how much of the wiggle is the draw.
+    draws = [cond] + [load(f"cost_conditions_s{k}.json") for k in (1, 2)
+                      if (RESULTS / f"cost_conditions_s{k}.json").exists()]
     n = [p["n_conditions"] for p in cond["pareto"]]
-    v = [p["vmin_rmse_mV"] for p in cond["pareto"]]
-    a.plot(n, v, "o-", color=C_READ, ms=3.4)
+    for i, d in enumerate(draws):
+        a.plot([p["n_conditions"] for p in d["pareto"]],
+               [p["vmin_rmse_mV"] for p in d["pareto"]], "o-", color=C_READ, ms=3.0,
+               alpha=1.0 if i == 0 else 0.45, lw=1.1 if i == 0 else 0.8,
+               label="draw 1" if i == 0 else ("draws 2–3" if i == 1 else None))
+    if len(draws) > 1:
+        band = np.array([[p["vmin_rmse_mV"] for p in d["pareto"]] for d in draws])
+        a.fill_between(n, band.min(axis=0), band.max(axis=0), color=C_READ, alpha=0.12, lw=0)
+        a.legend(loc="upper right", frameon=False, fontsize=6.0)
     a.axhline(base, color="k", ls="--", lw=0.7)
     a.axvline(400, color=C_ACC, lw=0.8, ls=":")
     a.text(430, 16, "knee\n400", fontsize=6.4, color=C_ACC)
@@ -363,9 +434,13 @@ if want(7):
 if want(8):
     print("Fig. 8  sensitivity")
     s, sw = load("sensitivity.json"), load("sensitivity_write.json")
-    LAB = {"cn": "$c_n$", "sk": "$s_k$", "pu": "$p_u$", "lpu": "$l_{pu}$",
-           "l_com": "$l_{com}$", "l_sk": "$l_{sk}$", "mpu": "$m_{pu}$",
-           "m_com": "$m_{com}$", "m_sk": "$m_{sk}$"}
+    # Display symbols follow Table III of paper_*_D.md: Delta = absolute shift (mV),
+    # k = dimensionless multiplier, Delta-k = pass-gate/pull-down mismatch. The dict keys
+    # stay the internal code names, which is what results/*.json is keyed by.
+    LAB = {"cn": "$\\Delta V_{th,N}$", "sk": "$\\Delta V_{th,skew}$",
+           "pu": "$\\Delta V_{th,P}$", "lpu": "$k_{\\sigma P}$",
+           "l_com": "$k_{\\sigma N}$", "l_sk": "$\\Delta k_{\\sigma N}$",
+           "mpu": "$k_{\\mu P}$", "m_com": "$k_{\\mu N}$", "m_sk": "$\\Delta k_{\\mu N}$"}
     fig, axes = plt.subplots(1, 3, figsize=(DCOL, 2.85))
 
     def st_panel(ax, key, title, xlab):
@@ -426,13 +501,13 @@ if want(9):
                            vmax=t["sk_axis_range_mV"], shading="auto")
         ax.contour(cn_a, pu_a, w.T, levels=[t["sk_axis_range_mV"] - 1e-6],
                    colors="k", linewidths=0.8)
-        ax.set_xlabel("$c_n$: NMOS $V_{th}$ shift (mV)")
+        ax.set_xlabel("$\\Delta V_{th,N}$: NMOS $V_{th}$ shift (mV)")
         ax.set_title(ttl)
         ax.text(0.03, 0.03, f"{t['full_range_pct']:.0f} % of the plane\n"
                             f"tolerates every skew", transform=ax.transAxes,
                 fontsize=6.4, va="bottom",
                 bbox=dict(fc="w", ec="0.6", lw=0.5, alpha=0.9, pad=2))
-    axes[0].set_ylabel("$p_u$: PMOS $V_{th}$ shift (mV)")
+    axes[0].set_ylabel("$\\Delta V_{th,P}$: PMOS $V_{th}$ shift (mV)")
     cb = fig.colorbar(im, ax=axes, pad=0.015, fraction=0.045)
     cb.set_label("passing $s_k$ width (mV of 40)", fontsize=7)
     cb.ax.tick_params(labelsize=6.5)
@@ -440,5 +515,82 @@ if want(9):
         fig.savefig(FIGURES / f"fig9_skew.{ext}", bbox_inches="tight")
     plt.close(fig)
     print("  wrote figures/fig9_skew.png|pdf")
+
+# =============================================================================
+# Fig. 10 -- §IV-B scenario: what has to improve to reach V_min = 0.575 V
+# =============================================================================
+if want(10):
+    print("Fig. 10  50 mV scenario")
+    sc = load("scenario.json")
+    z = np.load(RESULTS / "scenario_contours.npz", allow_pickle=False)
+    keys = [str(k) for k in z["panel_keys"]]
+    labels = [str(k) for k in z["panel_labels"]]
+    cn_a, pu_a = z["cn"], z["pu"]
+    VT = float(z["v_target"])
+    CN, PU = np.meshgrid(cn_a, pu_a)
+    s_of = {c["case"]: c for c in sc["cases"]}
+    pan_of = {p["key"]: p for p in sc["panels"]}
+    shifts = sc["corner_shifts"]
+
+    ncol = 2
+    nrow = int(np.ceil(len(keys) / ncol))
+    fig, axes = plt.subplots(nrow, ncol, figsize=(DCOL, 2.85 * nrow),
+                             squeeze=False, sharex=True, sharey=True)
+    lv = np.arange(0.40, 0.76, 0.025)
+    cf = None
+    for ax, key, lab in zip(axes.ravel(), keys, labels):
+        vr, vw = z[f"{key}_read"], z[f"{key}_write"]
+        # fill with the cell Vmin = max(read, write); see Fig. 5
+        vcell = np.maximum(np.nan_to_num(vr, nan=0.85), np.nan_to_num(vw, nan=0.85))
+        # colour pinned to the NEW target: cool/blue passes, warm/red fails, so
+        # the fill itself is the verdict and no grey mask is needed on top
+        cf = ax.contourf(CN, PU, vcell, levels=lv, cmap="RdYlBu_r",
+                         norm=TwoSlopeNorm(vmin=lv[0], vcenter=VT, vmax=lv[-1]),
+                         extend="both")
+        # today's spec drawn too: FSG/SFG clear V_T0 but not the new target, and
+        # without both lines the reader cannot see that the corner sits between them
+        ax.contour(CN, PU, vcell, levels=[V_T0], colors="0.25", linewidths=1.0,
+                   linestyles="dashed")
+        # everything outside this box is GP extrapolation, not fitted behaviour
+        th = float(z["train_half"])
+        ax.add_patch(plt.Rectangle((-th, -th), 2 * th, 2 * th, fill=False,
+                                   ec="0.15", lw=0.9, ls=":", zorder=4))
+        ax.contour(CN, PU, vr, levels=[VT], colors="k", linewidths=1.8)
+        ax.contour(CN, PU, vw, levels=[VT], colors="k", linewidths=1.8,
+                   linestyles="dashdot")
+        # pass/fail comes from the solved corner Vmin in scenario.json, not from
+        # the ~2 mV contour grid, which would snap the corner to a neighbour
+        cv = pan_of[key]["corner_vmin"]
+        for cname, mode in (("FSG", "read"), ("SFG", "write")):
+            x0, y0 = shifts[cname]
+            ok = float(cv[f"{cname}_{mode}"]) <= VT + 1e-4
+            ax.scatter([x0], [y0], s=46, marker="*", zorder=5,
+                       facecolor=("#111111" if ok else "none"),
+                       edgecolor="#111111", lw=1.0)
+            ax.annotate(cname, (x0, y0), textcoords="offset points",
+                        xytext=(5, 3), fontsize=6.4, color="#111111",
+                        fontweight="bold")
+        sub = ""
+        if key in s_of and s_of[key].get("sigma_reduction_pct") is not None:
+            sub = f"\n$\\sigma$ reduced {s_of[key]['sigma_reduction_pct']:.1f}%"
+        ax.set_title(f"{lab}{sub}", fontsize=7.4, linespacing=1.35)
+    for ax in axes[-1, :]:
+        ax.set_xlabel("$\\Delta V_{th,N}$ (mV)")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("$\\Delta V_{th,P}$ (mV)")
+    for ax in axes.ravel()[len(keys):]:
+        ax.axis("off")
+    fig.suptitle(f"process window at the NEW target $V_{{min}} \\leq$ {VT} V — "
+                 f"blue passes, red fails. Solid black = read limit, "
+                 f"long-dash = write limit, grey dash = today's spec {V_T0} V. "
+                 f"Dotted box = training range; outside it the GP extrapolates.",
+                 fontsize=7.4, y=1.004)
+    cb = fig.colorbar(cf, ax=axes, pad=0.015, fraction=0.04)
+    cb.set_label("cell $V_{min}=\\max$(read, write)  (V)", fontsize=7)
+    cb.ax.tick_params(labelsize=6.5)
+    for ext in ("png", "pdf"):
+        fig.savefig(FIGURES / f"fig10_scenario.{ext}", bbox_inches="tight")
+    plt.close(fig)
+    print("  wrote figures/fig10_scenario.png|pdf")
 
 print(f"\nfigures in {FIGURES}")

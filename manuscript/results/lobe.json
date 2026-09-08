@@ -701,10 +701,19 @@
     },
     {
       "batch": "Vtrip",
-      "deck": 300,
+      "deck": 1027,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2422.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
+      "deck": 1681,
       "vop": 0.5,
-      "col": "vtrip_std",
-      "old": "51.23.43",
+      "col": "vtrip_avg",
+      "old": 3258.0,
       "new": null,
       "why": "unrecoverable gross typo -> NaN"
     },
@@ -728,19 +737,19 @@
     },
     {
       "batch": "Vtrip",
-      "deck": 1756,
-      "vop": 0.7,
-      "col": "vtrip_avg",
-      "old": 2023.0,
+      "deck": 300,
+      "vop": 0.5,
+      "col": "vtrip_std",
+      "old": "51.23.43",
       "new": null,
       "why": "unrecoverable gross typo -> NaN"
     },
     {
       "batch": "Vtrip",
-      "deck": 1565,
+      "deck": 1756,
       "vop": 0.7,
       "col": "vtrip_avg",
-      "old": 2179.0,
+      "old": 2023.0,
       "new": null,
       "why": "unrecoverable gross typo -> NaN"
     },
@@ -764,28 +773,19 @@
     },
     {
       "batch": "Vtrip",
+      "deck": 1565,
+      "vop": 0.7,
+      "col": "vtrip_avg",
+      "old": 2179.0,
+      "new": null,
+      "why": "unrecoverable gross typo -> NaN"
+    },
+    {
+      "batch": "Vtrip",
       "deck": 1995,
       "vop": 0.4,
       "col": "vtrip_avg",
       "old": 99387.0,
-      "new": null,
-      "why": "unrecoverable gross typo -> NaN"
-    },
-    {
-      "batch": "Vtrip",
-      "deck": 1027,
-      "vop": 0.7,
-      "col": "vtrip_avg",
-      "old": 2422.0,
-      "new": null,
-      "why": "unrecoverable gross typo -> NaN"
-    },
-    {
-      "batch": "Vtrip",
-      "deck": 1681,
-      "vop": 0.5,
-      "col": "vtrip_avg",
-      "old": 3258.0,
       "new": null,
       "why": "unrecoverable gross typo -> NaN"
     },

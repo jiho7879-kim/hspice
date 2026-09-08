@@ -15,9 +15,9 @@ against the model's own output:
      exercised here; it still needs its own validation.
   3. design boundary -- the iso-Vmin contour that the inverse delivers. (N032)
 
-Reuses results/surrogate_vb.pth. No retraining.
+Reuses results/surrogate_vb[_write].pth. No retraining.
 
-    .venv/bin/python manuscript/code/v_e_inverse.py
+    .venv/bin/python manuscript/code/v_e_inverse.py [--write]
 """
 import json
 import sys
@@ -29,7 +29,7 @@ import torch
 import _paths  # noqa: F401
 from _paths import DEVICE_COLS, FIGURES, RESULTS, V_T0, Z_TARGET
 
-from src.final_data import load_final_snmr
+from src.final_data import load_final_snmr, load_final_vtrip
 from src.surrogate import Surrogate
 from src.data import grouped_train_test_split
 from src.physics_layer import compute_vmin_from_z
@@ -40,14 +40,23 @@ RECOVER_AXES = ["cn", "pu"]          # the two knobs the design actually turns
 rng = np.random.default_rng(SEED)
 torch.manual_seed(SEED)
 
+# Both modes run the same inversion; write is needed because the design window is
+# the INTERSECTION of the two T0 boundaries -- a cell has to pass read and write
+# at the same supply, and the two modes are limited from opposite directions.
+WRITE = "--write" in sys.argv
+MODE = "write" if WRITE else "read"
+AVG, STD = ("vtrip_avg", "vtrip_std") if WRITE else ("snmr_avg", "snmr_std")
+TAG = "_write" if WRITE else ""
+
 # --- data + surrogate, identical split to v_b_forward -------------------------
-df = load_final_snmr()
-df = df[df["snmr_avg"].notna() & df["snmr_std"].notna() & df["n_mc"].notna()].copy()
+df = (load_final_vtrip if WRITE else load_final_snmr)()
+df = df[df[AVG].notna() & df[STD].notna() & df["n_mc"].notna()].copy()
 X = df[DEVICE_COLS + ["vop"]].to_numpy(float)
-y = df[["snmr_avg", "snmr_std"]].to_numpy(float) * 1e-3
+y = df[[AVG, STD]].to_numpy(float) * 1e-3
 _, cond_idx = np.unique(X[:, :N_DEVICE], axis=0, return_inverse=True)
 X_tr, X_te, y_tr, y_te = grouped_train_test_split(X, y, cond_idx, 0.15, SEED)
-surr = Surrogate.load(RESULTS / "surrogate_vb.pth", X_tr, y_tr, n_device=N_DEVICE)
+surr = Surrogate.load(RESULTS / f"surrogate_vb{TAG}.pth", X_tr, y_tr, n_device=N_DEVICE)
+print(f"mode={MODE}")
 
 VOPS = np.array(sorted(df["vop"].unique()))
 NV = len(VOPS)
@@ -57,11 +66,12 @@ print("design box:", {k: (round(v[0], 2), round(v[1], 2)) for k, v in BOX.items(
 
 def predict_mean(Xq):
     """Posterior means only. Inversion never uses the predictive variance, and
-    computing it dominates the runtime, so skip it."""
-    xt = surr._to_tensor(surr._x_scaler.transform(Xq))
-    with torch.no_grad(), gpytorch.settings.skip_posterior_variances(True):
-        return (surr.mu_gp(xt).mean.cpu().numpy(),
-                surr.sigma_gp(xt).mean.cpu().numpy())
+    computing it dominates the runtime, so skip it.
+
+    Delegates to Surrogate.predict_mean: sigma_gp's posterior is on log sigma
+    (D-16), so reading its .mean here directly would silently return log volts.
+    """
+    return surr.predict_mean(Xq)
 
 
 def vmin_of(rows):
@@ -126,6 +136,10 @@ def bisect_axis(rows, axis, targets, lo, hi, iters=24):
     return np.where(inside, 0.5 * (a + b), np.nan)
 
 
+# The forward RMSE this run is compared against is read from §V-B's own output,
+# never typed in: a re-derivation that moves forward.json must move this too.
+FWD_RMSE_MV = json.load(open(RESULTS / f"forward{TAG}.json"))["vmin_rmse_mV_holdout"]
+
 recovery = {}
 for axis_name in RECOVER_AXES:
     axis = DEVICE_COLS.index(axis_name)
@@ -149,14 +163,15 @@ for axis_name in RECOVER_AXES:
         p90_mV=float(np.percentile(np.abs(err), 90)),
         max_mV=float(np.abs(err).max()), bias_mV=float(err.mean()),
         dvmin_dx_median=float(np.nanmedian(slope)),
-        implied_from_forward_mV=float(8.35 / np.nanmedian(slope)),
+        implied_from_forward_mV=float(FWD_RMSE_MV / np.nanmedian(slope)),
     )
     r = recovery[axis_name]
     print(f"\n[{axis_name}] recovered {r['n_recovered']}/{r['n_target']} conditions")
     print(f"  error RMSE {r['rmse_mV']:.2f} mV  P50 {r['p50_mV']:.2f}  P90 {r['p90_mV']:.2f}  "
           f"max {r['max_mV']:.2f}  bias {r['bias_mV']:+.2f}")
     print(f"  |dVmin/d{axis_name}| median {r['dvmin_dx_median']:.3f} "
-          f"-> forward 8.35 mV implies {r['implied_from_forward_mV']:.2f} mV of {axis_name}")
+          f"-> forward {FWD_RMSE_MV:.2f} mV implies "
+          f"{r['implied_from_forward_mV']:.2f} mV of {axis_name}")
 
 
 # =============================== 2. multi-start inversion =====================
@@ -214,7 +229,7 @@ for i in np.where(has_edge)[0]:
     row = np.tile(base, (1, 1))
     row[0, i_pu] = pu_ax[i]
     cn_star[i] = bisect_axis(row, i_cn, np.array([V_T0]), *BOX["cn"])[0]
-np.savez(RESULTS / "inverse_boundary.npz", cn=cn_ax, pu=pu_ax, vmin=VM,
+np.savez(RESULTS / f"inverse_boundary{TAG}.npz", cn=cn_ax, pu=pu_ax, vmin=VM,
          censored=cg.reshape(NG, NG), nominal=base, v_t0=V_T0,
          pu_axis=pu_ax, cn_star=cn_star)
 print(f"\nboundary grid {NG}x{NG}: Vmin {np.nanmin(VM):.3f}-{np.nanmax(VM):.3f} V, "
@@ -223,7 +238,7 @@ print(f"  a T0 boundary exists only for pu >= {pu_edge.min():.1f} mV "
       f"({has_edge.sum()}/{NG} pu rows); below that the whole cn range passes")
 print(f"  cn* on the boundary: {np.nanmin(cn_star):.1f} .. {np.nanmax(cn_star):.1f} mV")
 
-out = dict(z_target=Z_TARGET, v_t0=V_T0, seed=SEED,
+out = dict(mode=MODE, z_target=Z_TARGET, v_t0=V_T0, seed=SEED,
            n_holdout_conditions=int(len(te_dev)), n_usable_targets=int(usable.sum()),
            recovery=recovery,                                        # N030
            multistart=multi,                                         # N031
@@ -235,5 +250,5 @@ out = dict(z_target=Z_TARGET, v_t0=V_T0, seed=SEED,
                          cn_star_min=float(np.nanmin(cn_star)),
                          cn_star_max=float(np.nanmax(cn_star))),       # N032
            design_box=BOX, nominal=nominal)
-json.dump(out, open(RESULTS / "inverse.json", "w"), indent=2, default=str)
-print(f"\nsaved {RESULTS}/inverse.json + inverse_boundary.npz")
+json.dump(out, open(RESULTS / f"inverse{TAG}.json", "w"), indent=2, default=str)
+print(f"\nsaved {RESULTS}/inverse{TAG}.json + inverse_boundary{TAG}.npz")

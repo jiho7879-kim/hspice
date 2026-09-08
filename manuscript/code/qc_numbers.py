@@ -18,6 +18,12 @@ from _paths import MANUSCRIPT, RESULTS
 KR = (MANUSCRIPT / os.environ.get("QC_KR", "paper_kr.md")).read_text()
 EN = (MANUSCRIPT / os.environ.get("QC_EN", "paper_en.md")).read_text()
 
+# A condensed version (paper_*_C.md) deliberately drops most of the numbers below. There the
+# invariant is "every number printed is correct", not "every number is present", so
+# QC_SUBSET=1 downgrades absent-from-both to a report. Absent from one language only is
+# still drift, and a printed value that disagrees with results/ is still a failure.
+SUBSET = os.environ.get("QC_SUBSET") == "1"
+
 
 def load(n):
     return json.load(open(RESULTS / n))
@@ -132,6 +138,8 @@ for mode, res, pat in (("read", fwd, r"above the top level \| (\d+) / 300"),
                        ("write", fwdw, r"above the top level \| \d+ / 300 \| (\d+) / 300")):
     m = re.search(pat, EN)
     if not m:
+        if SUBSET:      # condensed versions merge the hold-out table; nothing to close
+            continue
         fails_early = f"STRUCT Table IV: no above-grid row for {mode}"
         print("FAIL " + fails_early)
         sys.exit(1)
@@ -142,7 +150,7 @@ for mode, res, pat in (("read", fwd, r"above the top level \| (\d+) / 300"),
               f"{res['vmin_conditions_censored']} censored + {off} above grid = {total} ≠ 300")
         sys.exit(1)
 
-fails = []
+fails, dropped = [], []
 for label, value, printed in CHECKS:
     # (a) the printed string must round-trip to the stored value
     digits = len(printed.split(".")[1]) if "." in printed else 0
@@ -151,9 +159,12 @@ for label, value, printed in CHECKS:
         fails.append(f"VALUE  {label}: results={value!r} but paper prints {printed!r}")
     # (b) it must appear in both languages
     pat = re.escape(printed)
-    for name, text in (("KR", KR), ("EN", EN)):
-        if not re.search(pat, text):
-            fails.append(f"MISSING {label} ({printed}) not found in {name}")
+    missing = [n for n, t in (("KR", KR), ("EN", EN)) if not re.search(pat, t)]
+    if SUBSET and len(missing) == 2:
+        dropped.append(f"{label} ({printed})")
+        continue
+    for name in missing:
+        fails.append(f"MISSING {label} ({printed}) not found in {name}")
 
 # cross-language structure: same number of tables, figures, equations
 for kind, pat_kr, pat_en in (("tables", r"^\*\*표 [IVX]+\.", r"^\*\*TABLE [IVX]+\."),
@@ -180,5 +191,8 @@ for name, text, head in (("KR", KR, "## 참고문헌"), ("EN", EN, "## Reference
 
 for f in fails:
     print("FAIL " + f)
-print(f"\n{len(CHECKS)} numbers checked, {len(fails)} problems")
+if dropped:
+    print(f"\n  not in this version ({len(dropped)}): " + "; ".join(dropped))
+print(f"\n{len(CHECKS) - len(dropped)} of {len(CHECKS)} numbers checked, "
+      f"{len(fails)} problems")
 sys.exit(1 if fails else 0)

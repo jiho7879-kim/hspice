@@ -76,11 +76,11 @@ print(f"mode={MODE} @{TEMP} C   box " +
 # A. ARD lengthscales (N070)
 # =============================================================================
 ell_mu = surr.get_lengthscales("mu")                    # order: DEVICE_COLS + [Vop]
-ell_sig_raw = surr.get_lengthscales("sigma")
-# AdditiveGPModel keeps sub-kernel 0 = OPERATING block (Vop), 1 = DEVICE block,
-# so the concatenation comes back Vop-first -- undo that before comparing.
-assert len(ell_sig_raw) == N_DEVICE + 1, f"unexpected sigma kernel: {ell_sig_raw.shape}"
-ell_sig = np.concatenate([ell_sig_raw[1:], ell_sig_raw[:1]])
+ell_sig = surr.get_lengthscales("sigma")
+# Since D-16 sigma uses the same full-ARD kernel as mu, so both come back in
+# input-column order and the old Vop-first reordering is gone.
+assert len(ell_sig) == len(ell_mu) == N_DEVICE + 1, \
+    f"unexpected kernel shapes: mu {ell_mu.shape}, sigma {ell_sig.shape}"
 labels = DEVICE_COLS + ["Vop"]
 
 

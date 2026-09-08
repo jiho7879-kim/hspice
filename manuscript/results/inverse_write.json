@@ -1,0 +1,172 @@
+{
+  "mode": "write",
+  "z_target": 6.3984,
+  "v_t0": 0.625,
+  "seed": 42,
+  "n_holdout_conditions": 300,
+  "n_usable_targets": 228,
+  "recovery": {
+    "cn": {
+      "n_target": 228,
+      "n_recovered": 222,
+      "rmse_mV": 2.4960789607951748,
+      "p50_mV": 1.524975061416626,
+      "p90_mV": 3.760685396194458,
+      "max_mV": 12.996828317642212,
+      "bias_mV": 0.4938055674235026,
+      "dvmin_dx_median": 1.6024646349251244,
+      "implied_from_forward_mV": 5.210723418174003
+    },
+    "pu": {
+      "n_target": 228,
+      "n_recovered": 222,
+      "rmse_mV": 5.0965987961133825,
+      "p50_mV": 3.4291138648986816,
+      "p90_mV": 9.149469280242922,
+      "max_mV": 17.115458726882935,
+      "bias_mV": -1.1077582406568098,
+      "dvmin_dx_median": 0.7163982838392369,
+      "implied_from_forward_mV": 11.655527642042452
+    }
+  },
+  "multistart": [
+    {
+      "pu": 40.41258160443655,
+      "cn_start": 32.874725826715604,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 50.25188872989565,
+      "cn_start": -7.334587229753723,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 29.387780935503212,
+      "cn_start": 43.0317503893659,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 17.498129698162728,
+      "cn_start": 23.68416348712367,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 35.502163285870914,
+      "cn_start": -48.698718253482056,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 8.509949085729643,
+      "cn_start": 57.074682196410706,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 50.51971445959202,
+      "cn_start": 31.336764238842363,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 39.741541951713565,
+      "cn_start": 34.32771663323446,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 46.69482570469556,
+      "cn_start": -44.62636407893449,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 24.49892824714276,
+      "cn_start": -5.953687452531945,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 58.38839134171968,
+      "cn_start": -15.50423709209025,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    },
+    {
+      "pu": 54.12166167272087,
+      "cn_start": 51.21179866183222,
+      "cn_solution": null,
+      "reason": "target outside the cn bracket at this pu"
+    }
+  ],
+  "multistart_max_residual_mV": null,
+  "boundary": {
+    "grid": 70,
+    "cn_range": [
+      -60.0,
+      60.0
+    ],
+    "pu_range": [
+      -60.0,
+      60.0
+    ],
+    "frac_plane_meeting_T0": 0.9740816326530612,
+    "pu_min_with_edge": -60.0,
+    "n_pu_rows_with_edge": 25,
+    "cn_star_min": 45.43370604515076,
+    "cn_star_max": 59.687429666519165
+  },
+  "design_box": {
+    "cn": [
+      -60.0,
+      60.0
+    ],
+    "sk": [
+      -20.0,
+      20.0
+    ],
+    "pu": [
+      -60.0,
+      60.0
+    ],
+    "lpu": [
+      0.7,
+      1.3
+    ],
+    "l_com": [
+      0.7,
+      1.3
+    ],
+    "l_sk": [
+      -0.07,
+      0.07
+    ],
+    "mpu": [
+      0.7,
+      1.3
+    ],
+    "m_com": [
+      0.7,
+      1.3
+    ],
+    "m_sk": [
+      -0.07,
+      0.07
+    ]
+  },
+  "nominal": {
+    "cn": 21.0,
+    "sk": 0.0,
+    "pu": -11.0,
+    "lpu": 1.0,
+    "l_com": 1.0,
+    "l_sk": 0.0,
+    "mpu": 1.0,
+    "m_com": 1.01,
+    "m_sk": 0.0
+  }
+}

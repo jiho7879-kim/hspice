@@ -1,0 +1,87 @@
+-Abstract
+verifying the minimum operating voltage (Vmin) of SRAM bitcells involves a difficult trade-off: Monte Carlo (MC) simulations are too expensive for routine use, while standard PDK corner analysis often misses critical variations caused by local mismatch. This paper presents a physics-guide framework that bridges this gap. Using a singel, fixed simulation budget, our method delivers high-fidelity vmin predictions and enables inverse process-window analysis. unlike black-box machine learning models, out approach explicitly separates device-level margin statistics (mean and standard deviation) from the analytic yield relaton ensuring physical interpretability.
+
+validated on production data from an advanced finfet node, the framework predicts hold-out vmin with millivolt-level accuracy (read:8.35mv, write:14.45mv rmse) and correctly identifies limiting pdk corners unseen during training. crucially, our sensitivity analysis reveals a fundamental flaw in conventional corner-based verification: local mismatch contributes significantly more tot read-margin variance than global PMOS threshold shifts. This implies that corner-only flows may underestimate Vmin by ignoring mismatch-drdiven tails. Furthermore, the framework supports inverse queries, allowing engineers to rapidly determine the specific process shifts (e.g., Vth tolerance) needed to meet a target Vmin. While we identify non-Gaussian tail behavior as a secondary risk requiring localized MC correction, the proposed method establishes a robust, efficient workflow that connects statistical variation, yield targets, and actionable process specifications.
+
+1.introduction
+in advanced techonology nodes, process variation and device mismatch increasingly constrain sram bitcell stability, defined by the minimum operating voltage (Vmin). traditional verification methods face a deilemma. full monte carlo (MC) analysis offers statistical completeness but is prohibitively expensive, while pdk corner analysis is fast but samples only a fet predefined global directions.
+the critical flaw in corner-based analysis is its inability to capture variance driven by local mismatch which does not align with standarad global corneres (e.g., SSG,FFG). Consequently, designs signed off using only corner simulations risk silicon yield loss due to unmodeled statiscal tails. conversely, relying on mc sweeps for every design iteration is impractical due to runtime constrains.
+this work proposes a physics-guided framework that resolves this trade-off. our goal is not to replace circuit simulation with a statistical surrogate, bu to maximize insight from a fixed simulation budget. toe core innovation is modeling the process-dependent statistical of the noise margin (u and s) rather than regressing vmin directly. by retaining an analytic yield relation, the framework preserves the physical link between margin distributoin and yield probability. this approach provides three key capabilities for engineers:
+1. accurate forward prediction : estimating vmin for arbitrary process conditions with millivolt precision.
+2. inverse process specification: determining the maximum allowable process shifts (process window) to meet a target Vmin.
+3. sensitivity-driven insight: quantifying the impact of global shifts versus local mismatch, exposing the blind spots of corner only vertification.
+we demonstrate this framework on an advanced Finfet node, showing that local mismatch can dominate read-margin variance a phenomenon invisible to standard corner analysis. this makes a compelling case for integrating statistical sensitivitiy analysis into the standard SRM sign-off flow.
+
+
+2. physics-guided modeling framework.
+a. decoupling margin statistic from yield definition
+directly regressing vmin often hides the physical causes of failure. instead out framework models the conditional mean u and standard deviation s of the sam noise margin as continuous functions of process parameters (e.g., Lgate, Vth ,Tox) and supply voltage (Vdd)
+we then compute the yield probability (Y) analytically using the standard normal cumulative distribution fuction:
+Y(vdd,p)=pi(u(p,vdd)sigma(p,vdd)) where p represents the process vector.
+why this matters for device engineers:
+physical transparency:the model explicitly separates how process variations affect the center of the margin distribution versus its spread. this helps diagnose whether a vmin shift stems from a global process drift or increased local variability.
+robust inverse solving: since the yield relation is analytic and monotonic with respect to vdd, finding the vmin (forward) or the limiting process parameter (inverse) becomes a stable mathematical root-finding problem, avoiding the instability of black-box inversion.
+b. capturing process continuity and sensitivity
+to model the complex mapping from process space to margin statistics, we use a Gaussian Process (GP) regressor. in device physics terms, the GP acts as a smooth, physics-consistent interpolator. it assumes that small changes it process parameters (e.g., a 1nm shift in gae lenth) result in small, continuous changesin margin statistics, respecting the continuity of semiconductor behavior.
+furthermore, the model uses automatic relevance determination(ARD) to learn sensitivity lengthscale for each process axis. this allows the framework to automatically distinguish which parameters (e.g., local vth mismatch) cause rapid variations in stability versus theos (e.g., global strain) that show smoother trends. this learned sensitivity forms the basis for the global variance analysis in section v.
+
+c. inverse query: from electrical target to process window
+a unique feature of this framework is the inverse query capability which reverses the conventinal analysis flow. instead of asking what is the vmin for this process corner? engineers can ask what process shift causes the vmin to degrade to our target limit?
+mathematically, fo a fixed target vmin and yield, we solve for the specific value of a process axis pi while holding others constant. this effectively maps the electrical specification boundary back to the process control space. this capability is invaluable for:
+-setting process spec: defining realistic 3s limits for vth or lgate based on actual circuit yield targets.
+-yield debugging : identifying the specific process parameter most likely responsibility if silicon vmin exceeds expectations.
+
+3. validation : prediction accuracy and corner generalization
+we validated the framework using silicon-calibrated simulation data from an advanced finfet techonlogy. the evaluation focused on two key metrics:
+prediction accuraccy on unseen data and generalization to standard pdk corners excluded from training.
+A. millivolt-level prediction accuracy
+the model demonstrates high fidelity in predicting vmin across the process space:
+-read vmin : 8.35mv rmse on hold-out data.
+-write vmin : 14.45mv rmse.
+the slightly higher error in write vmin arises from the complex interplay between pull-up and pass-gate strengths in the write margin tail, which is inherently harder to model. neverthless, sub-15mv accuracy is well within the margin of error required for early-stage design exploration.
+B. roustness to unseen pdk corners
+a critical test for any compact model is its ability to extrapolate to standard industry corners(e.g., ssg,ffg,sfg,fsg) not included in the training set.
+-performance : the model achieved 9.3mv (read) and 16.7mv(write) rmse on four unseen corners.
+- limiting corner identification : the model correctly identified the worst-case corner for both read and write modes in 100% of test cases.
+these results confirm that the framework acts as a high-fidelity verification layer, effecetively filling the gaps between discrete pdk corners without the cost of full mc sweeps.
+
+4. inverse analysis: deriving process specifications
+the inverse capability transforms the tool from a passive predictor into an active specification engine. we evaluated the model's ability to recover the threshold-voltage (vth) shift required to hit a specific target vmin.
+
+-recovery accuracy: the model recovered vth shifts with an rmse of 2.60-3.20mv
+-practical application:this accuracy allows process integration teams to define tighter or looser process windows based on actual circuit sensitivity. for instance, if analysis shows that 5mv vth shift causes a vmin violation, the process spec can be confidently set to +-15mV(3s). this direct mapping from electrical target --> process limit streamlines the design-techonology co-optimization (DTCO) loop.
+
+5. key insight: exposing the blind spots of corner analysis
+the most significant contribution of this work the quantitative demonstration of the limitations of corner only verification. using global sensitivity analysis, we compared the contribution of conventional global corners against local mismatch axes to the total read margin variance.
+A.. the dominance of local mismatch.
+out analysis reveals a counter -intuitive but critical finding:
+a local nmos common-mismatch axis contributes more to read margin variance than the standard pmos threshold-shift corner axis.
+quantitatively,approximately 39% of the total read-margin variance originates from process directions orthogonal to the conventinal corner set.
+B. implications for sram sign-off
+this finding has profound implications for srma verification:
+1. under-estimation of risk: standard corner analysis captures shifts in the _mean_ margin but systematically underestimates the spread(s) driven by local mismatch. since vmin is determined by the distribution tail (vmin=u-ks), ignoring theses axes leads to non-conservative (optimistic) vmin estimates.
+2. misleading worst-case identification:the worst case corner identified by traditional methos may not be the true yield limiter if local mismatch is the dominent failure mechanism.
+3. recommendation: for advanced nodes, statistical analysis of local mismatch must be integrated alongside global corner checks. relying solely on pdk corners is insufficient to guarantee yield.
+
+6. diagnostic on non-gaussian tail risks
+while the core framework assumes a gaussian distribution for efficiency, we performend a detailed post-analysis of mc data to assess this assumtion for sram bitcells.
+-observation:the read-margin distribution exhibits non-gaussian characteristics (skewness and kurtosis), primiarily due to the non-linear 'lobe' structure of the butterfly curve. we observed a correlation of pLR=-0.371 between left and right lobes, and the local mismatch contribution to lobe-difference variance was 2.2x higher than the global contribution.
+-impact on vmin: in the analyzed case neglecting these non-gaussian tails could result in a vmin estimation error of up to ~70mv
+-proposed hybrid flow: rather than forcing the surrogate to learn complex tail shapes (which risks overfitting), we recommend a two-step verfication flow.
+1. screening: use the proposed physics-guided surrogate for rapid exploration and sensitivity analysis across the entire process space.
+2. tail correction:apply localized, high-sample mc simulations only at acritical operating points identified by the surrogate to correct for non-gaussian tail effects.
+this approach balances efficiency with the rigor required for final sign-off.
+
+
+7. practical implications for design and process integration
+the proposed workflow maximizes the return on investment for simulation budgets. a single calibration compaign enables:
+1. instant what-if-analysis : predicting vmin for any hypothetical process shift without re-simulation.
+2. data-driven spec setting: deriving process control limits directly from circuit yield targets via inverse queires.
+3. risk prioritization: identifying that local mismatch, not global corners, is the primary risk driver for read vmin, allowing teams to focus mitigation efforts(e.g., layout optimization, adaptive biasing) where they matter most.
+for vlsi designers and process engineers, this translates to reduced turn-around time, lower risk of silicon failure, and a deeper physical understanding of the variation-yield relationship.
+
+8.conclusion
+we have presented a physics-guided framework for sram vmin estimation that overcomes the limitations of traditional corner analysis while avoiding the cost of exhaustive monte carlo sweeps. by explicitly modeling margin statistics and retaining an analytic yield relation, the method achieves milivolt-level accuracy in both forward prediction and inverse process recovery.
+most critically, this work provides a definitive device-level insight:
+local mismatch is a dominant driver of read-margin variance, often exceeding the impact of global threshold shifts. this exposes a significant blind spot in corner-only verification flows, which may lead to optimistic vmin estimates and yield loss. while non-gaussian tail effects remain a consideration for final sign-offf, the proposed framwork offers a robust, efficient, and insightful foundation for design-technology co-optimization(dtco), effectively connecting statistical variation, yield targets, and actionable process specifications.
+
