@@ -21,7 +21,9 @@ python/.venv/
 *.pdb
 
 # Raw data / measurement exports
+*.csv
 *.dat
+*.txt
 # ...but keep hand-entry CSV templates (they are code, not data)
 !python/templates/manual_entry_*.csv
 # ...and keep the Python dependency list (was never committed until now --
@@ -37,15 +39,10 @@ python/results/budget_pareto/pareto_checkpoint.json
 
 # In-house transcribed real HSPICE data (may be proprietary process info --
 # keep local only unless explicitly cleared for release)
+python/data/hspice_real*.xlsx
 
 # OpenCode agent state
 .omo/
-
-# Local agent/skill tooling (30 MB of installed skills, not project source)
-.agents/
-# .claude/skills/ is only symlinks into .agents/, so it is broken for anyone else
-.claude/skills/
-skills-lock.json
 
 # Codegraph index
 .codegraph/
