@@ -15,7 +15,7 @@
       "max_mV": 3.712383508682251,
       "bias_mV": 0.7029326254007767,
       "dvmin_dx_median": 2.1338602062314638,
-      "implied_from_forward_mV": 3.9130960761233013
+      "implied_from_forward_mV": 1.8656049133463715
     },
     "pu": {
       "n_target": 245,
@@ -26,7 +26,7 @@
       "max_mV": 5.425008535385132,
       "bias_mV": -0.9743169990044758,
       "dvmin_dx_median": 1.6628056764602661,
-      "implied_from_forward_mV": 5.021633085698411
+      "implied_from_forward_mV": 2.3941102327809185
     }
   },
   "multistart": [
