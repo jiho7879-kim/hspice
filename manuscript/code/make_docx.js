@@ -31,7 +31,10 @@ const R = (n, optional) => {
 const fwd = R("forward"), fwdW = R("forward_write");
 const cor = R("corner"), corW = R("corner_write");
 const inv = R("inverse"), lobe = R("lobe"), sens = R("sensitivity");
-const cost = R("cost_combined"), costW = R("cost_combined_write");
+// the combo point is part of the filename (vi_cost.py L331); the paper quotes the
+// 400-condition / 500-sample cut
+const cost = R("cost_combined_c400_mc500");
+const costW = R("cost_combined_write_c400_mc500");
 const scen = R("scenario", true);   // §IV-B; section is omitted until it exists
 
 const f = (x, n) => Number(x).toFixed(n);

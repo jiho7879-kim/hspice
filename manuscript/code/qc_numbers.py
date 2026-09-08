@@ -34,7 +34,10 @@ cor, corw = load("corner.json"), load("corner_write.json")
 inv, lob = load("inverse.json"), load("lobe.json")
 ext, extw = load("external.json"), load("external_write.json")
 cv, cc, cm = load("cost_voltage.json"), load("cost_conditions.json"), load("cost_mc.json")
-cb, cbw = load("cost_combined.json"), load("cost_combined_write.json")
+# the combo point is in the filename (vi_cost.py L331) so two runs cannot overwrite
+# each other -- the paper's combined number is the 400-condition / 500-sample cut
+cb = load("cost_combined_c400_mc500.json")
+cbw = load("cost_combined_write_c400_mc500.json")
 sen, senw = load("sensitivity.json"), load("sensitivity_write.json")
 rob, robw = load("robustness.json"), load("robustness_write.json")
 corner = {c["corner"]: c for c in cor["corners"]}

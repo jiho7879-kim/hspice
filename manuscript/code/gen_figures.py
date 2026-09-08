@@ -370,7 +370,7 @@ if want(6):
 if want(7):
     print("Fig. 7  cost")
     cond, mc = load("cost_conditions.json"), load("cost_mc.json")
-    volt, comb = load("cost_voltage.json"), load("cost_combined.json")
+    volt, comb = load("cost_voltage.json"), load("cost_combined_c400_mc500.json")
     base = cond["baseline"]["vmin_rmse_mV"]
     fig, axes = plt.subplots(1, 3, figsize=(DCOL, 2.55))
 
@@ -384,14 +384,16 @@ if want(7):
         a.plot([p["n_conditions"] for p in d["pareto"]],
                [p["vmin_rmse_mV"] for p in d["pareto"]], "o-", color=C_READ, ms=3.0,
                alpha=1.0 if i == 0 else 0.45, lw=1.1 if i == 0 else 0.8,
-               label="draw 1" if i == 0 else ("draws 2–3" if i == 1 else None))
+               label=f"draw {i + 1}")
     if len(draws) > 1:
         band = np.array([[p["vmin_rmse_mV"] for p in d["pareto"]] for d in draws])
         a.fill_between(n, band.min(axis=0), band.max(axis=0), color=C_READ, alpha=0.12, lw=0)
         a.legend(loc="upper right", frameon=False, fontsize=6.0)
     a.axhline(base, color="k", ls="--", lw=0.7)
     a.axvline(400, color=C_ACC, lw=0.8, ls=":")
-    a.text(430, 16, "knee\n400", fontsize=6.4, color=C_ACC)
+    # axes fraction, not data: the y range moves whenever the baseline moves
+    a.text(0.42, 0.90, "knee\n400", transform=a.transAxes, fontsize=6.4,
+           color=C_ACC, va="top")
     a.set_xscale("log")
     a.set_xlabel("training conditions")
     a.set_ylabel("hold-out $V_{min}$ RMSE (mV)")
@@ -403,7 +405,6 @@ if want(7):
     b.plot(n2, v2, "s-", color=C_READ, ms=3.4)
     b.axhline(base, color="k", ls="--", lw=0.7)
     b.set_xscale("log")
-    b.set_ylim(6.5, 9.5)
     b.set_xticks(n2); b.set_xticklabels([f"{v:,}" for v in n2], fontsize=6.2)
     b.minorticks_off()
     b.set_xlabel("MC samples per condition")
@@ -422,9 +423,9 @@ if want(7):
         c.text(i, v3 + 0.18, f"{v3:.1f}", ha="center", fontsize=6.4)
     c.set_xticks(np.arange(5))
     c.set_xticklabels(labels, fontsize=6.2)
-    c.set_ylim(0, 14)
+    c.set_ylim(0, max(vals) * 1.45)     # headroom for the value labels + the caption
     c.set_title("(c) one factor vs. all three")
-    c.text(4, 12.4, f"{comb['speedup']:.0f}$\\times$\ncheaper", ha="center",
+    c.text(4, max(vals) * 1.28, f"{comb['speedup']:.0f}$\\times$\ncheaper", ha="center",
            fontsize=6.6, color=C_WRITE, linespacing=1.1)
     save(fig, 7, "cost")
 

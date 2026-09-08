@@ -109,6 +109,24 @@ QC_KR=paper_kr_B.md QC_EN=paper_en_B.md .venv/bin/python manuscript/code/qc_pari
 
 둘 다 통과 확인 (수치 68개 · 15개 장, 실패 0). 미지정 시 기본값은 v4.0이다.
 
+> **⚠ 2026-09-08 σ 커널 교체(D-16) 이후 `paper_*.md` 일곱 판은 전부 옛 수치다.**
+> 재유도된 것은 `results/`·`figures/`·`LEDGER.md`이며, markdown 본문은 손대지 않았다.
+> `qc_numbers.py`는 v4.0 기준으로 첫 구조 검사(hold-out 채점 조건 수)에서 죽는다.
+> 현재 살아 있는 원고는 아래 docx 경로다.
+
+### 제출용 IEEE docx — `code/make_docx.js` (2026-09-08)
+
+```bash
+npm install docx                      # node_modules/는 .gitignore 대상, 세션마다 다시
+node manuscript/code/make_docx.js         # -> SRAM_Vmin_IEEE.docx
+node manuscript/code/make_docx.js --kr    # -> SRAM_Vmin_IEEE_KR.docx
+```
+
+7장 구성의 축약 IEEE 원고를 Word로 직접 만든다. **본문의 모든 수치는 빌드 시점에
+`results/*.json`에서 읽는다** — 손으로 옮겨 적은 숫자가 없으므로 재유도하면 문서가
+따라온다. markdown 판들과 달리 이 경로는 D-16 이후 수치와 어긋날 수 없다.
+그림은 `figures/*.png`를 그대로 삽입하므로 `gen_figures.py`를 먼저 돌린다.
+
 ---
 
 ## 진행 현황판
@@ -138,7 +156,10 @@ QC_KR=paper_kr_B.md QC_EN=paper_en_B.md .venv/bin/python manuscript/code/qc_pari
 | 제목·저자·소속·투고처 | ⬜ | O-01 · O-05 — **사용자 결정 필요** |
 | IEEE 형식 일괄 정리 | ✅ 2026-09-05 | `DECISIONS.md` D-12 — 참고문헌 재번호·표/그림 인용·초록 247단어·기호 충돌 해소 |
 | 참조 시뮬레이션 어휘 통일 | ✅ 2026-09-05 | `DECISIONS.md` D-13 — 실리콘이 없으므로 "measured/실측"을 기준값에 쓰지 않는다 |
-| 추가 실험 (O-09) | 🔄 2026-09-05 | (a) 복원 라벨 ✅ (b) 2차식 기준선 ✅ — D-14 · (c) §VI-B draw 2·3 실행 중 |
+| 추가 실험 (O-09) | ✅ 2026-09-08 | (a) 복원 라벨 ✅ (b) 2차식 기준선 ✅ — D-14 · (c) §VI-B draw 2 ✅ (draw 3은 안 돌렸다 — 두 draw로 산포가 이미 곡선 기울기 크기임이 보인다) |
+| **σ 커널 교체 + 전 결과 재유도** | ✅ 2026-09-08 | D-16 · `code/rederive_all.sh` — Vmin RMSE 읽기 8.35 → **3.98**, 쓰기 14.45 → **5.65**. `results/` 전부·`figures/` 전부·`LEDGER.md` 갱신, **`paper_*.md`는 미갱신** |
+| §V-E.2 50 mV 시나리오 + Fig. 10 | ✅ 2026-09-08 | `code/v_e_scenario.py` → `results/scenario.json` — N035–N039 |
+| 제출용 IEEE docx (KR·EN) | ✅ 2026-09-08 | `code/make_docx.js` → `SRAM_Vmin_IEEE[_KR].docx` — 수치는 빌드 시 `results/`에서 읽음 |
 
 ---
 
