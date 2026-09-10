@@ -569,8 +569,8 @@ const T = {
   },
   refh: { en: "References", kr: "참고문헌" },
 
-  f1: { en: "**Fig. {{figPipe}}.**  Pipeline overview. Two Gaussian-process regressors predict the margin mean μ and standard deviation σ over the nine process axes and the supply voltage; the analytic yield relation of (1)–(2) converts those statistics to V_{min}, and the same relation is inverted axis-wise to recover a process window.",
-        kr: "**Fig. {{figPipe}}.**  전체 pipeline. 두 개의 Gaussian process regressor가 아홉 개 공정 축과 공급 전압 위에서 margin 평균 μ와 표준편차 σ를 예측하고, 식 (1)–(2)의 analytic yield 관계식이 그 통계량을 V_{min}으로 옮긴다. 같은 관계식을 축별로 역산하면 process window가 나온다." },
+  f1: { en: "**Fig. {{figPipe}}.**  Pipeline overview. Two Gaussian-process regressors predict the margin mean μ and standard deviation σ over the nine process axes and the supply voltage; the analytic yield relation of (1)–(2) converts those statistics to V_{min}, and the same relation is inverted to recover a process window.",
+        kr: "**Fig. {{figPipe}}.**  전체 pipeline. 두 개의 Gaussian process regressor가 아홉 개 공정 축과 공급 전압 위에서 margin 평균 μ와 표준편차 σ를 예측하고, 식 (1)–(2)의 analytic yield 관계식이 그 통계량을 V_{min}으로 옮긴다. 같은 관계식을 역산하면 process window가 나온다." },
   f2: { en: "**Fig. {{figFwd}}.**  Reference-simulation versus predicted V_{min} on the hold-out conditions, read (left) and write (right). Hold-out RMSE is {{rmseR}} mV and {{rmseW}} mV respectively.",
         kr: "**Fig. {{figFwd}}.**  hold-out 조건에서의 기준 simulation 대 예측 V_{min}. 왼쪽이 read, 오른쪽이 write이며 hold-out RMSE는 각각 {{rmseR}} mV, {{rmseW}} mV다." },
   f3: { en: "**Fig. {{figCorner}}.**  V_{min} at the four PDK corners excluded from training, read and write on one axis. Outlined bars mark each mode's limiting corner — {{limR}} for read, {{limW}} for write — and the label above each pair is the surrogate-minus-reference error in millivolts.",
