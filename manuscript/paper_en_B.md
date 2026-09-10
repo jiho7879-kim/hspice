@@ -926,11 +926,11 @@ Once PU slows by more than about 4 mV, a lower bound appears on cn, and that bou
 quickly as pu slows further. Where PU is fast enough, cn is a free design variable.
 **Corner sign-off, seeing only four points, cannot see this structure** — not because four
 points are too few to interpolate, but because the boundary is absent over more than half
-the plane and a corner set has no way to report absence. Fig. 5 shows the plane, the spec
-boundary, and the multistart solutions on it.
+the plane and a corner set has no way to report absence. Fig. 5 shows the plane with the read and
+write boundaries on it.
 
-**Fig. 5.** Vmin contours over the (cn, pu) plane with the spec boundary and the
-multistart convergence points.
+**Fig. 5.** Cell Vmin = max(read, write) over the (cn, pu) plane, with each mode's
+V_T0 boundary.
 
 ### D. What the boundary costs
 

@@ -701,7 +701,7 @@ S_T = Jansen 1999[8], Saltelli 행 500회 재표집으로 95 % 부트스트랩 �
 | F002 | Fig. 2 실험 설계 — quadrant 가중 · 길이 tracking 밴드 | 설계 좌표 | ✅ |
 | F003 | Fig. 3 순방향 정확도 (읽기·쓰기) | `forward_vmin[_write].npz` | ✅ |
 | F004 | Fig. 4 코너 검증 | `corner[_write].json` | ✅ |
-| F005 | Fig. 5 역추정 경계 — 셀 Vmin = max(읽기, 쓰기) + 모드별 T0 경계 | `inverse_boundary[_write].npz` · `inverse.json` | ✅ |
+| F005 | Fig. 5 역추정 경계 — 셀 Vmin = max(읽기, 쓰기) + 읽기·쓰기 T0 경계 | `inverse_boundary[_write].npz` | ✅ |
 | F006 | Fig. 6 lobe 상관과 보정 | `lobe.json` | ✅ |
 | F007 | Fig. 7 비용 Pareto | `cost_*.json` | ✅ |
 | F008 | Fig. 8 Sobol S_T (z·σ) + ARD relevance | `sensitivity[_write].json` | ✅ |

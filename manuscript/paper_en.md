@@ -797,10 +797,10 @@ Read this as follows. **The read process window of this cell closes only along p
 Once PU slows by more than about 4 mV, a lower bound appears on cn, and that bound rises
 quickly as pu slows further. Where PU is fast enough, cn is a free design variable.
 **Corner sign-off, seeing only four points, cannot see this structure.** Fig. 5 shows the
-plane, the spec boundary, and the multistart solutions on it.
+plane with the read and write boundaries on it.
 
-**Fig. 5.** Vmin contours over the (cn, pu) plane with the spec boundary and the
-multistart convergence points.
+**Fig. 5.** Cell Vmin = max(read, write) over the (cn, pu) plane, with each mode's
+V_T0 boundary.
 
 ### F. Lobe correlation and the min-statistics bias
 

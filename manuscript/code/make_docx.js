@@ -472,8 +472,8 @@ const T = {
     kr: "이 정확도면 process integration 팀이 실제 회로 민감도를 근거로 process window를 조이거나 풀 수 있다. 5 mV의 V_{th} shift가 V_{min} 위반을 일으킨다는 분석이 나오면 공정 사양을 ±15 mV(3σ)로 자신 있게 잡는 식이다. 전기적 목표에서 공정 한계로 바로 이어지는 이 사상이 design-technology co-optimization(DTCO) loop를 짧게 만든다. 역해는 이미 검증된 surrogate 위에서 돌기 때문에 질의마다 simulation을 새로 돌릴 필요가 없다.",
   },
   f4cap: {
-    en: "**Fig. {{figInv}}.**  V_{min} contours over the (ΔV_{th,N}, ΔV_{th,P}) plane with the specification boundary recovered by axis-wise inverse query.",
-    kr: "**Fig. {{figInv}}.**  (ΔV_{th,N}, ΔV_{th,P}) 평면의 V_{min} 등고선과 축별 역방향 질의로 복원한 사양 경계.",
+    en: "**Fig. {{figInv}}.**  Cell V_{min} = max(read, write) over the (ΔV_{th,N}, ΔV_{th,P}) plane, with each mode's V_{T0} boundary.",
+    kr: "**Fig. {{figInv}}.**  (ΔV_{th,N}, ΔV_{th,P}) 평면의 셀 V_{min} = max(읽기, 쓰기)와 각 모드의 V_{T0} 경계.",
   },
 
   s4ah: { en: "A.  Coordinate Recovery Accuracy", kr: "A.  좌표 복원 정확도" },

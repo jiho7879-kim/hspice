@@ -248,7 +248,6 @@ if want(5):
     # read-only plane cannot show.
     z = np.load(RESULTS / "inverse_boundary.npz")
     zw = np.load(RESULTS / "inverse_boundary_write.npz")
-    inv = load("inverse.json")
     cn, pu, vmin = z["cn"], z["pu"], z["vmin"]
     pu_axis, cn_star = z["pu_axis"], z["cn_star"]
     assert np.allclose(cn, zw["cn"]) and np.allclose(pu, zw["pu"]), \
@@ -271,21 +270,16 @@ if want(5):
                      norm=TwoSlopeNorm(vmin=lv[0], vcenter=V_T0, vmax=lv[-1]),
                      extend="both")
 
-    # the true spec boundary is the T0 contour of the cell, not of either mode.
-    # It is kept thin: it lies on top of the read boundary in the upper left and
-    # on the write boundary in the lower right, and a heavy line hides both.
-    ax.contour(CN, PU, vcell, levels=[V_T0], colors="k", linewidths=1.3)
-    ax.plot([], [], color="k", lw=1.3, label="cell $V_{T0}$ boundary")
     good = np.isfinite(cn_star)
     ax.plot(cn_star[good], pu_axis[good], color="#c1121f", lw=1.2, ls="--",
-            label="read $V_{T0}$ boundary (axis-wise exact)")
+            label="read $V_{T0}$ boundary")
     ax.contour(CN, PU, vmin_w, levels=[V_T0], colors="#ffd166", linewidths=1.6,
                linestyles="-")
     ax.plot([], [], color="#ffd166", lw=1.6, label="write $V_{T0}$ boundary")
 
-    # No "both pass" hatch here: with the cell-Vmin fill the black T0 contour
-    # already separates pass from fail, and at T0 the passing region is most of
-    # the plane, so hatching it buries the colormap.
+    # No "both pass" hatch here: the diverging fill is pinned at V_T0, so the
+    # colour change already separates pass from fail, and at T0 the passing
+    # region is most of the plane -- hatching it buries the colormap.
 
     # which mode owns the boundary, said once instead of left to the line colours
     ax.text(-46, 46, "read-limited", fontsize=6.4, ha="center", va="center",
@@ -294,12 +288,6 @@ if want(5):
     ax.text(55.5, -38, "write-limited", fontsize=6.4, ha="center", va="center",
             rotation=90, color="0.15")
 
-    ms = inv["multistart"]
-    # filled white with a dark rim: the solutions sit ON the red boundary line,
-    # and an unfilled white ring disappears into both the line and the dark fill
-    ax.scatter([m["cn_solution"] for m in ms], [m["pu"] for m in ms], s=20,
-               marker="o", facecolor="w", edgecolor="k", lw=0.7, zorder=7,
-               label=f"multistart converged ({len(ms)}/{len(ms)})")
     ax.set_xlabel("$\\Delta V_{th,N}$: NMOS $V_{th}$ shift (mV)")
     ax.set_ylabel("$\\Delta V_{th,P}$: PMOS $V_{th}$ shift (mV)")
     ax.set_title("cell $V_{min}=\\max$(read, write) with each mode's boundary")
