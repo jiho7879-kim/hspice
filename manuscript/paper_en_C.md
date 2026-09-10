@@ -395,11 +395,11 @@ Because the boundary is *solved* rather than searched, its cost scales with the 
 rows, not with grid resolution: **858** condition evaluations against **4,900** for a
 70 × 70 grid, and the products are not equivalent, since the grid can only place boundary
 points by interpolating between cells. In HSPICE the same query would need 4,290 MC runs;
-on the trained surrogate it takes seconds. Fig. 4 shows the plane, the boundary and the
-multistart solutions.
+on the trained surrogate it takes seconds. Fig. 4 shows the plane with the read and write
+boundaries.
 
-**Fig. 4.** Vmin contours over the (cn, pu) plane with the spec boundary and the
-multistart convergence points.
+**Fig. 4.** Cell Vmin = max(read, write) over the (cn, pu) plane, with each mode's
+V_T0 boundary.
 
 ---
 

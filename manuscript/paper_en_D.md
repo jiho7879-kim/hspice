@@ -466,11 +466,11 @@ rows, not with grid resolution: **858** condition evaluations against **4,900** 
 70 × 70 grid, and the products are not equivalent, since the grid can only place boundary
 points by interpolating between cells. In HSPICE a boundary point costs 130 MC runs, so the
 33 rows would need 4,290;
-on the trained surrogate it takes seconds. Fig. 4 shows the plane, the boundary and the
-multistart solutions.
+on the trained surrogate it takes seconds. Fig. 4 shows the plane with the read and write
+boundaries.
 
-**Fig. 4.** Vmin contours over the (ΔVth,N, ΔVth,P) plane with the spec boundary and the
-multistart convergence points.
+**Fig. 4.** Cell Vmin = max(read, write) over the (ΔVth,N, ΔVth,P) plane, with each
+mode's V_T0 boundary.
 
 ---
 
