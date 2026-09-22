@@ -44,6 +44,10 @@ python/data/hspice_real*.xlsx
 # OpenCode agent state
 .omo/
 
+# Third-party agent skills (installed via skills-lock.json — do not vendor)
+.agents/
+.claude/skills/
+
 # Codegraph index
 .codegraph/
 
@@ -52,3 +56,4 @@ node_modules/
 .venv/
 __pycache__/
 *.pyc
+

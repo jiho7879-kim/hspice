@@ -251,15 +251,21 @@ class Surrogate:
         print(f"  [save] checkpoint -> {path}")
 
     @classmethod
-    def load(cls, path: str | Path, X_train: np.ndarray,
-             y_train: np.ndarray, device: str = "cpu",
+    def load(cls, path: str | Path, X_train: np.ndarray | None = None,
+             y_train: np.ndarray | None = None, device: str = "cpu",
              n_device: int = VOP_COL) -> "Surrogate":
         """Load trained GP state dicts + scaler from a .pth checkpoint.
 
-        X_train/y_train must match original training data shape because
-        ExactGP requires them at construction.  The checkpoint's scaler
-        (and per-point noise, when the model was noise-aware) is restored
-        so predict() works on raw inputs.
+        ExactGP needs the original training inputs and targets at construction.
+        Ordinary project checkpoints deliberately keep only the input matrix,
+        so callers normally supply both ``X_train`` and ``y_train``.  A
+        separately prepared *trusted inference bundle* may include
+        ``y_train``; in that narrow case both arguments can be omitted and the
+        bundled arrays are used.  This avoids making every regular checkpoint
+        carry target data by default.
+
+        The checkpoint's scaler (and per-point noise, when the model was
+        noise-aware) is restored so predict() works on raw inputs.
         n_device controls the device/operating kernel split in AdditiveGPModel
         (Stage A default 2; pass 3 for Stage B with sk).
         """
@@ -275,6 +281,34 @@ class Surrogate:
         assert ckpt_sigma == cls.SIGMA_MODEL, (
             f"{path} was written with sigma_model={ckpt_sigma!r} but this Surrogate "
             f"expects {cls.SIGMA_MODEL!r} (D-16). Re-train with --refit.")
+
+        saved_x = state.get("x_train")
+        saved_y = state.get("y_train")
+        if X_train is None:
+            if saved_x is None:
+                raise ValueError(
+                    f"{path} does not contain x_train; pass the original X_train.")
+            X_train = np.asarray(saved_x, dtype=np.float64)
+        else:
+            X_train = np.asarray(X_train, dtype=np.float64)
+        if y_train is None:
+            if saved_y is None:
+                raise ValueError(
+                    f"{path} does not contain y_train; pass the original y_train or "
+                    "use a trusted inference bundle prepared for this checkpoint.")
+            y_train = np.asarray(saved_y, dtype=np.float64)
+        else:
+            y_train = np.asarray(y_train, dtype=np.float64)
+
+        if X_train.ndim != 2 or y_train.ndim != 2 or len(X_train) != len(y_train):
+            raise ValueError(
+                f"invalid GP training arrays: X{X_train.shape}, y{y_train.shape}")
+        if saved_x is not None:
+            stored = np.asarray(saved_x, dtype=np.float64)
+            if stored.shape != X_train.shape or not np.allclose(stored, X_train):
+                raise ValueError(
+                    "provided X_train does not match the training inputs saved in "
+                    f"{path}; refusing to reconstruct a different exact GP.")
         surr = cls(device=device, n_device=n_device)
         surr._x_train = X_train.copy()
         # old checkpoints (pre noise-aware) have no "y_noise" key
