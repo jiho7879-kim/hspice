@@ -28,10 +28,10 @@
         <div class="panel-heading">
           <p class="eyebrow">01 / QUERY</p>
           <h2>조건을 정하고 경계를 찾습니다</h2>
-          <p>선택한 mode의 reference 좌표를 바탕으로, 다른 축을 고정한 한 축 inverse를 계산합니다.</p>
+          <p>한 축 inverse는 선택 mode에서 계산합니다. 공동 contour·다축 후보는 같은 좌표를 read/write 두 모델에 함께 질의합니다.</p>
         </div>
 
-        <label class="field-label" for="mode-select">inverse 대상 mode</label>
+        <label class="field-label" for="mode-select">한 축 inverse 대상 mode</label>
         <select id="mode-select" class="select-control">
           <option value="read">읽기 / SNMR</option>
           <option value="write">쓰기 / Vtrip</option>
@@ -53,8 +53,16 @@
           <button id="reset-button" class="button secondary" type="button">mode reference로 초기화</button>
           <button id="predict-button" class="button primary" type="button">Vmin 예측</button>
           <button id="inverse-button" class="button accent" type="button">선택 축 inverse</button>
-          <button id="plane-button" class="button secondary" type="button">2D 단면 계산</button>
+          <button id="joint-plane-button" class="button joint" type="button">read·write 공동 contour</button>
+          <button id="plane-button" class="button secondary" type="button">선택 mode 2D 단면</button>
         </div>
+
+        <details class="combination-controls" open>
+          <summary><span>공동 만족 후보 축</span><small>2–9개 선택</small></summary>
+          <p class="microcopy">선택 축만 함께 움직이고 나머지는 현재값에 고정합니다. 2·3축은 격자, 4축 이상은 제한된 표본으로 탐색합니다.</p>
+          <div id="combination-axis-controls" class="combination-axis-controls" aria-label="공동 만족 후보 탐색 축"></div>
+          <button id="combination-button" class="button joint" type="button">다축 공동 만족 후보 찾기</button>
+        </details>
       </section>
 
       <section class="panel process-panel">
@@ -122,20 +130,44 @@
       <section class="panel analysis-panel plane-panel">
         <div class="section-heading split-heading">
           <div>
-            <p class="eyebrow">03 / TWO-AXIS SLICE</p>
-            <h2>ΔVth,N × ΔVth,P 단면</h2>
-            <p>나머지 7축은 현재 좌표에 고정합니다. 9D 전체 공정 창이 아닙니다.</p>
+            <p class="eyebrow">03 / TWO-AXIS CONTOUR</p>
+            <h2 id="plane-title">read·write 공동 contour · ΔVth,N × ΔVth,P</h2>
+            <p id="plane-subtitle">동일 9D 좌표에서 두 target contour와 공동 만족 영역을 겹쳐 봅니다. 나머지 7축은 현재값에 고정합니다.</p>
           </div>
           <span id="plane-status" class="status-pill neutral">계산 대기</span>
         </div>
-        <div class="plane-layout">
-          <canvas id="plane-chart" width="900" height="560" aria-label="두 공정 축에 대한 Vmin 열지도"></canvas>
+        <div id="plane-layout" class="plane-layout">
+          <canvas id="plane-chart" width="900" height="560" aria-label="두 공정 축에 대한 read/write Vmin contour 또는 열지도"></canvas>
           <div class="legend-column">
             <div class="legend-gradient"></div>
             <div class="legend-labels"><span>높은 Vmin</span><span>낮은 Vmin</span></div>
-            <p id="plane-note" class="microcopy">2D 단면 계산 버튼을 누르면 선택 mode의 열지도가 표시됩니다.</p>
+            <div class="contour-key" aria-label="공동 contour 범례">
+              <span><i class="contour-swatch read"></i>read target</span>
+              <span><i class="contour-swatch write"></i>write target</span>
+              <span><i class="contour-swatch joint"></i>양쪽 통과 node</span>
+            </div>
+            <p id="plane-note" class="microcopy">공동 contour를 누르면 같은 좌표의 read/write 경계가 표시됩니다.</p>
           </div>
         </div>
+      </section>
+
+      <section class="panel analysis-panel combination-panel">
+        <div class="section-heading split-heading">
+          <div>
+            <p class="eyebrow">04 / MULTI-AXIS FEASIBLE CANDIDATES</p>
+            <h2>여러 축을 함께 바꾼 공동 만족 후보</h2>
+            <p>read와 write 모두 target 이하인 표본 후보입니다. 연속 공간의 유일한 root·전역 최적해·제조 비용 최소해가 아닙니다.</p>
+          </div>
+          <span id="combination-status" class="status-pill neutral">계산 대기</span>
+        </div>
+        <div id="combination-summary" class="result-callout combination-summary">좌측에서 2개 이상 축을 선택한 뒤 공동 만족 후보 찾기를 누르세요.</div>
+        <div class="table-scroll">
+          <table class="candidate-table" aria-label="다축 공동 만족 후보 목록">
+            <thead id="combination-table-head"></thead>
+            <tbody id="combination-table-body"></tbody>
+          </table>
+        </div>
+        <ul id="combination-caveats" class="caveat-list"></ul>
       </section>
     </section>
 

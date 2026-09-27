@@ -158,6 +158,17 @@ class PresentationRequestHandler(BaseHTTPRequestHandler):
                         payload.get("target_vmin"),
                         int(payload.get("scan_points", 81)),
                     )
+                elif path == "/api/joint-plane":
+                    result = self.server.engine.joint_plane(
+                        payload.get("coordinates"), payload.get("x_axis", "cn"),
+                        payload.get("y_axis", "pu"), payload.get("target_vmin"),
+                        payload.get("points", 31),
+                    )
+                elif path == "/api/combination":
+                    result = self.server.engine.solve_combination(
+                        payload.get("coordinates"), payload.get("axes"),
+                        payload.get("target_vmin"), payload.get("budget", 729),
+                    )
                 elif path == "/api/plane":
                     result = self.server.engine.plane(
                         payload.get("mode", "read"),

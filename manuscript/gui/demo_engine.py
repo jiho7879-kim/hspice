@@ -215,7 +215,7 @@ class DemoEngine:
             "modes": modes,
             "limitations": [
                 "표시 Vmin은 Gaussian μ/σ 정의와 이 모델의 전압 격자에서 계산한 surrogate 점예측입니다.",
-                "inverse는 다른 여덟 축을 고정한 한 축 조건부 경계를 찾습니다. 9개 원인의 유일한 진단이 아닙니다.",
+                "단일 축 inverse는 나머지 축을 고정한 경계이며, 조합 탐색은 공유 학습 범위 안의 표본 해입니다. 유일한 진단·전역 최적해가 아닙니다.",
                 "학습 범위 밖의 입력은 외삽 경고가 붙습니다. 최종 sign-off와 실리콘 yield 보장을 대체하지 않습니다.",
                 "read와 write는 서로 다른 온도·배치에서 학습됐습니다. combined 비교는 설계 탐색용 예측입니다.",
             ],
@@ -497,6 +497,160 @@ class DemoEngine:
             "extrapolated_axes": extrapolated,
             "caveat": "이 평면은 선택한 두 축만 움직이고 나머지 7축은 표시된 reference 좌표에 고정한 단면입니다.",
         }
+
+    @staticmethod
+    def _bounded_integer(value: Any, name: str, low: int, high: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, np.integer)) or not low <= value <= high:
+            raise DemoInputError(f"{name} must be an integer between {low} and {high}")
+        return int(value)
+
+    def _joint_inputs(
+        self, supplied: dict[str, Any] | None, axes: list[str], target_vmin: float,
+    ) -> tuple[np.ndarray, dict[str, float], dict[str, tuple[float, float]], float]:
+        if (not isinstance(axes, list) or not 2 <= len(axes) <= len(DEVICE_COLS)
+                or any(not isinstance(axis, str) or axis not in AXIS_BY_KEY for axis in axes)
+                or len(set(axes)) != len(axes)):
+            raise DemoInputError("choose 2 to 9 distinct valid process axes")
+        if supplied is not None and not isinstance(supplied, dict):
+            raise DemoInputError("coordinates must be an object")
+        try:
+            target = float(target_vmin)
+        except (TypeError, ValueError) as exc:
+            raise DemoInputError("target Vmin must be a finite voltage") from exc
+        low = max(float(model.vops[0]) for model in self._modes.values())
+        high = min(float(model.vops[-1]) for model in self._modes.values())
+        if not math.isfinite(target) or not low <= target <= high:
+            raise DemoInputError(f"target Vmin must be within both voltage grids [{low:.3f}, {high:.3f}] V")
+        # Merge once only: both models receive this exact full coordinate vector.
+        point, coordinates, _ = self._coerce_coordinates("read", supplied)
+        bounds = {
+            axis: (max(model.bounds[axis][0] for model in self._modes.values()),
+                   min(model.bounds[axis][1] for model in self._modes.values()))
+            for axis in axes
+        }
+        if any(not math.isfinite(lo) or not math.isfinite(hi) or lo >= hi for lo, hi in bounds.values()):
+            raise DemoInputError("selected axes must have nonempty shared training intervals")
+        return point, coordinates, bounds, target
+
+    def _joint_predictions(self, rows: np.ndarray, target: float) -> dict[str, Any]:
+        modes: dict[str, Any] = {}
+        for name, model in self._modes.items():
+            values: list[float | None] = []
+            statuses: list[str] = []
+            monotone: list[bool] = []
+            finite: list[bool] = []
+            feasible: list[bool] = []
+            unknown: list[bool] = []
+            # Limit ExactGP query memory independently of the total sample budget.
+            for start in range(0, len(rows), 128):
+                mu, sigma, z, _, batch_status, batch_values, supply = self._predict_rows(name, rows[start:start + 128])
+                valid = (np.all(np.isfinite(mu), axis=1) & np.all(np.isfinite(sigma), axis=1)
+                         & np.all(sigma > 0, axis=1) & np.all(np.isfinite(z), axis=1))
+                for i, (status, value) in enumerate(zip(batch_status, batch_values)):
+                    shown = _to_json_number(value) if status == "in_range" else None
+                    usable = bool(valid[i] and supply[i] and
+                                  (status == "below_grid" or (status == "in_range" and shown is not None)))
+                    values.append(shown)
+                    statuses.append(status)
+                    monotone.append(bool(supply[i]))
+                    finite.append(bool(valid[i]))
+                    feasible.append(usable and (status == "below_grid" or (shown is not None and shown <= target)))
+                    unknown.append(not usable)
+            extrapolated = [axis for i, axis in enumerate(DEVICE_COLS)
+                            if np.any((rows[:, i] < model.bounds[axis][0]) | (rows[:, i] > model.bounds[axis][1]))]
+            modes[name] = {"vmin_values_V": values, "vmin_statuses": statuses,
+                           "supply_monotone": monotone, "finite": finite,
+                           "feasible": feasible, "unknown": unknown,
+                           "extrapolated_axes": extrapolated}
+        return {"modes": modes,
+                "joint_feasible": [a and b for a, b in zip(modes["read"]["feasible"], modes["write"]["feasible"])],
+                "unknown": [a or b for a, b in zip(modes["read"]["unknown"], modes["write"]["unknown"])]}
+
+    def joint_plane(
+        self, supplied: dict[str, Any] | None, x_axis: str = "cn", y_axis: str = "pu",
+        target_vmin: float = 0.625, points: int = 31,
+    ) -> dict[str, Any]:
+        """Compare both models on one shared, bounded, row-major 2-D slice."""
+        points = self._bounded_integer(points, "points", 15, 61)
+        point, coordinates, bounds, target = self._joint_inputs(supplied, [x_axis, y_axis], target_vmin)
+        xs, ys = np.linspace(*bounds[x_axis], points), np.linspace(*bounds[y_axis], points)
+        xx, yy = np.meshgrid(xs, ys)
+        rows = np.repeat(point[None, :], xx.size, axis=0)
+        rows[:, DEVICE_COLS.index(x_axis)] = xx.ravel()
+        rows[:, DEVICE_COLS.index(y_axis)] = yy.ravel()
+        return {"x_axis": x_axis, "y_axis": y_axis, "x_values": xs.tolist(), "y_values": ys.tolist(),
+                "points_per_axis": points, "bounds": bounds, "coordinates_fixed": coordinates,
+                "coordinate_reference": "supplied coordinates merged once with read reference",
+                "target_vmin_V": target, **self._joint_predictions(rows, target)}
+
+    def solve_combination(
+        self, supplied: dict[str, Any] | None, axes: list[str], target_vmin: float,
+        budget: int = 729,
+    ) -> dict[str, Any]:
+        """Sample joint feasibility, not a globally optimal or minimum-cost solve."""
+        budget = self._bounded_integer(budget, "budget", 8, 4096)
+        point, coordinates, bounds, target = self._joint_inputs(supplied, axes, target_vmin)
+        if len(axes) <= 3:
+            levels = int(round(budget ** (1 / len(axes))))
+            while levels ** len(axes) > budget:
+                levels -= 1
+            unit = np.stack(np.meshgrid(*([np.linspace(0, 1, levels)] * len(axes)), indexing="ij"), axis=-1).reshape(-1, len(axes))
+            method = "cartesian"
+        else:
+            # Deterministic stratification in every coordinate, without new dependencies.
+            rng = np.random.default_rng(SEED)
+            unit = np.column_stack([(rng.permutation(budget) + 0.5) / budget for _ in axes])
+            method = "seeded_latin_hypercube"
+        rows = np.repeat(point[None, :], len(unit), axis=0)
+        indices = [DEVICE_COLS.index(axis) for axis in axes]
+        for i, axis in enumerate(axes):
+            lo, hi = bounds[axis]
+            rows[:, DEVICE_COLS.index(axis)] = lo + unit[:, i] * (hi - lo)
+        baseline_in_shared_bounds = all(
+            bounds[axis][0] <= point[index] <= bounds[axis][1]
+            for axis, index in zip(axes, indices)
+        )
+        baseline_included = False
+        if baseline_in_shared_bounds:
+            already_present = np.any(
+                np.all(np.isclose(rows[:, indices], point[indices], rtol=0.0, atol=1e-12), axis=1),
+            )
+            if already_present:
+                baseline_included = True
+            elif len(rows) < budget:
+                rows = np.vstack((rows, point))
+                baseline_included = True
+            else:
+                # Preserve the advertised hard budget while always testing the
+                # user-supplied baseline when it is inside the shared domain.
+                rows[-1] = point
+                baseline_included = True
+        prediction = self._joint_predictions(rows, target)
+        widths = np.asarray([bounds[axis][1] - bounds[axis][0] for axis in axes])
+        distances = np.linalg.norm((rows[:, indices] - point[indices]) / widths, axis=1)
+        feasible_indices = np.flatnonzero(prediction["joint_feasible"])
+        ranked = feasible_indices[np.argsort(distances[feasible_indices], kind="stable")][:12]
+        candidates = []
+        for index in ranked:
+            candidates.append({"coordinates": dict(zip(DEVICE_COLS, rows[index].tolist())),
+                               "normalized_distance": float(distances[index]),
+                               "modes": {name: {"vmin_V": data["vmin_values_V"][index],
+                                                "status": data["vmin_statuses"][index],
+                                                "supply_monotone": data["supply_monotone"][index]}
+                                         for name, data in prediction["modes"].items()}})
+        return {"axes": axes, "target_vmin_V": target, "bounds": bounds,
+                "coordinates_fixed": coordinates, "budget": budget, "method": method,
+                "sampled_count": len(rows), "feasible_count": len(feasible_indices),
+                "unknown_count": sum(prediction["unknown"]), "candidates": candidates,
+                "extrapolated_axes_by_mode": {name: data["extrapolated_axes"] for name, data in prediction["modes"].items()},
+                "provenance": {"seed": SEED if len(axes) > 3 else None,
+                               "coordinate_reference": "supplied coordinates merged once with read reference",
+                               "baseline_in_shared_bounds": baseline_in_shared_bounds,
+                               "baseline_included": baseline_included,
+                               "ranking": "Euclidean distance from input divided by shared axis widths"},
+                "caveats": ["Sampled surrogate feasibility only; no global optimum or process-cost claim.",
+                            "No feasible sample does not prove infeasibility; unsampled narrow regions may exist.",
+                            "Read and write use different temperature/training conditions; this is design exploration."]}
 
     def paper_scenario(self) -> dict[str, Any]:
         """Expose the stored paper scenario without recomputing or re-labelling it."""

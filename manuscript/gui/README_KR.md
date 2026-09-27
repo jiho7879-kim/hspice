@@ -1,14 +1,16 @@
 # SRAM Vmin Inverse Studio — Windows 발표용 로컬 도구
 
 이 폴더는 논문에서 학습한 read/SNMR·write/Vtrip GP surrogate를 사용하여
-**순방향 Vmin 예측, one-axis inverse, `cn × pu` 조건부 단면**을 시연하는
+**순방향 Vmin 예측, one-axis inverse, read/write 공동 `cn × pu` contour,
+2–9축 공동 만족 후보 탐색**을 시연하는
 Windows 발표용 도구입니다.
 
 ## 발표자가 먼저 알아야 할 한 문장
 
-이 도구의 inverse 결과는 **나머지 8개 축을 고정했을 때 선택한 한 축이
-목표 Vmin 경계를 만나는 위치**입니다. 9개 물리 원인을 유일하게 추정하거나
-final sign-off를 수행하는 기능은 아닙니다.
+이 도구의 one-axis inverse 결과는 **나머지 8개 축을 고정했을 때 선택한 한 축이
+목표 Vmin 경계를 만나는 위치**입니다. 다축 화면의 결과는 같은 9D 좌표에서 read와
+write가 모두 target을 만족한 **표본 후보군**입니다. 어느 쪽도 9개 물리 원인을 유일하게
+추정하거나 final sign-off를 수행하는 기능은 아닙니다.
 
 ## 보안·오프라인 동작
 
@@ -44,9 +46,10 @@ SRAM-Vmin-Inverse-Studio/
 1. Wi‑Fi를 꺼도 실행되는지 확인한다. (의도적으로 오프라인 동작)
 2. `Vmin 예측`을 눌러 read/write 카드가 보이는지 확인한다.
 3. read에서 target `0.625 V`, axis `cn`으로 `선택 축 inverse`를 한 번 실행한다.
-4. `2D 단면 계산`을 한 번 눌러 warm-up한다.
-5. 결과의 `censored`, `no root`, `multiple root`, `외삽` 상태는 오류를 숨긴 것이 아니라
-   모델이 보장하지 않는 수치 표시를 피하는 안전 상태임을 확인한다.
+4. `read·write 공동 contour`를 한 번 눌러 두 경계와 초록 공동 통과 영역이 같은 좌표에서 표시되는지 확인한다.
+5. 기본 `cn`, `pu` 선택 상태에서 `다축 공동 만족 후보 찾기`를 눌러 후보표가 나오는지 확인한다.
+6. 결과의 `censored`, `no root`, `multiple root`, `외삽` 상태는 오류를 숨긴 것이 아니라
+모델이 보장하지 않는 수치 표시를 피하는 안전 상태임을 확인한다.
 
 ## Windows에서 standalone 폴더 만들기
 
@@ -103,7 +106,9 @@ dist\SRAM-Vmin-Inverse-Studio\SRAM-Vmin-Inverse-Studio.exe --no-browser
 
 - Vmin prediction: read/write 카드 둘 다 응답
 - inverse: root가 있으면 root+residual, 없으면 `no root` 상태
-- plane: `cn × pu` heatmap와 conditional-slice 설명
+- joint contour: 동일 좌표의 read(파랑)·write(주황) target contour와 공동 통과 node(초록)
+- multi-axis: 2–9축에서 read/write를 함께 만족하는 표본 후보와 표본 수·불확정 수
+- plane: 선택 mode의 `cn × pu` heatmap와 conditional-slice 설명
 - sensitivity/scenario: 논문 저장 결과를 설명용으로 표시
 
 ## 개발 모드 실행
@@ -120,19 +125,41 @@ dist\SRAM-Vmin-Inverse-Studio\SRAM-Vmin-Inverse-Studio.exe --no-browser
 .venv\Scripts\python demo_server.py --source
 ```
 
+## 개발 검증
+
+GUI 폴더의 Python 안전성·공동 query 테스트와 browser-independent contour topology 테스트는 다음처럼 실행한다.
+
+```bat
+python -m unittest tests.test_demo_engine -v
+node tests\test_ui_contours.js
+node --check static\app.js
+```
+
+실제 bundle을 포함한 smoke test는 신뢰한 local bundle이 있을 때만 실행한다.
+
+```bat
+set RUN_SRAM_VMIN_DEMO_INTEGRATION=1
+python -m unittest tests.test_demo_engine -v
+```
+
 ## API/모델 동작 개요
 
 | 화면 기능 | 내부 동작 | 발표 시 정확한 해석 |
 |---|---|---|
 | Vmin 예측 | 9 process 축과 Vop grid에 대해 μ·σ GP를 질의 → `z=μ/σ` → `Vmin` | Gaussian μ/σ 정의의 surrogate point estimate |
 | one-axis inverse | selected axis를 scan하여 bracket/monotonicity를 검사한 뒤 bisection | 다른 8축을 고정한 조건부 경계 |
-| 2D plane | `cn × pu` grid를 계산 | 나머지 7축이 고정된 2D slice |
+| joint 2D contour | 한 full 9D coordinate를 한 번 정하고, `cn × pu`의 **양 model training-box 교집합** grid를 read/write에 함께 질의 | 파랑 read·주황 write target contour와 초록 공동 통과 node. 서로 다른 mode median을 섞지 않은 설계 탐색 slice |
+| multi-axis candidates | 선택한 2–3축은 bounded Cartesian grid, 4–9축은 deterministic space-filling 표본으로 함께 변화; 현재 입력점이 shared domain 안이면 표본에 포함 | `Vmin_read ≤ target` 및 `Vmin_write ≤ target`인 **sampled candidate**. 유일 root·전역 최적·제조 비용 최소가 아님 |
+| single-mode 2D plane | `cn × pu` grid를 계산 | 나머지 7축이 고정된 선택 mode의 2D slice |
 | Sobol | 저장된 논문 분석 결과 표시 | uniform training box에서 `z(0.625 V)`의 total-order ST |
 | scenario | 저장된 0.575 V 후보값 표시 | DTCO candidate; process cost 최소해/실리콘 증명 아님 |
 
 ## 제한사항
 
 - read와 write는 서로 다른 온도·batch에서 학습됐기 때문에 combined 비교는 **설계 탐색용**이다.
+- joint contour와 multi-axis 후보는 same-coordinate surrogate query이며, 두 mode의 공동 실측 검증이나 전 공정창 보장이 아니다.
+- `below_grid`는 target이 각 model의 voltage grid 안에 있을 때만 공동 통과로 셀 수 있으나, 화면에는 계속 정확한 Vmin이 아닌 `< grid lower bound`로 표시한다. `above_grid`, 비유한 값, supply-grid 비단조 표본은 공동 통과로 인증하지 않는다.
+- 다축에서 후보가 없다는 표시는 이번 격자/표본에 없었다는 뜻이며, 연속 공간의 불가능 증명이 아니다.
 - Vmin이 voltage grid 아래/위이면 수치를 꾸며내지 않고 censoring/outside-grid 상태로 표시한다.
 - 입력이 training box 밖이면 외삽 warning을 표시한다.
 - real PDK compact model, Monte-Carlo, silicon correlation을 대체하지 않는다.
