@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Scenario Lab — SRAM Vmin</title>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; margin: 0; display: grid; grid-template-columns: 360px 1fr; height: 100vh; color: #222; }
+  aside { background: #F4F6FB; padding: 16px 18px; overflow-y: auto; border-right: 1px solid #DDE2EE; }
+  main { padding: 18px 24px; overflow-y: auto; }
+  h1 { font-size: 18px; color: #1428A0; margin: 0 0 4px; }
+  h2 { font-size: 14px; margin: 18px 0 6px; color: #1428A0; border-bottom: 1px solid #DDE2EE; padding-bottom: 3px; }
+  label { font-size: 13px; }
+  .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+  input[type=number] { width: 84px; }
+  table.ov input { width: 70px; }
+  table { border-collapse: collapse; font-size: 12px; }
+  td, th { padding: 2px 6px; text-align: left; }
+  .levers label { display: inline-block; width: 48%; }
+  button { background: #1428A0; color: #fff; border: 0; padding: 7px 12px; margin: 4px 4px 0 0; cursor: pointer; border-radius: 3px; }
+  button:disabled { background: #999; }
+  .hint { font-size: 11px; color: #777; }
+  #out img { max-width: 100%; border: 1px solid #E3E3E3; }
+  #out table { font-size: 13px; margin: 10px 0; }
+  #out th { background: #EEF1FB; }
+  .card { border-bottom: 1px solid #E5E5E5; padding: 12px 0 18px; }
+  .err { color: #C0392B; }
+  code { font-size: 11px; color: #555; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Scenario Lab</h1>
+  <div class="hint">목표 Vmin을 낮추려면 어느 knob을 얼마나? · 모든 실행은 exports/에 그림·CSV·조건이 저장된다</div>
+
+  <h2>기준 조건</h2>
+  <div class="row"><label>목표 Vmin (V)</label><input id="target" type="number" step="0.005" value="0.575"></div>
+  <div class="row"><label><input type="checkbox" id="m_read" checked> read @</label><select id="c_read"></select>
+                   <label><input type="checkbox" id="m_write" checked> write @</label><select id="c_write"></select></div>
+  <div class="hint">binding Vmin = 고른 mode Vmin의 최댓값. 논문 시나리오 = read FSG + write SFG.</div>
+  <details><summary style="font-size:13px;margin-top:6px">나머지 축 고정값 바꾸기 (빈칸 = mode 학습 중앙값)</summary>
+    <table class="ov" id="ov"></table>
+    <div class="hint">corner를 고르면 ΔVth,N·ΔVth,P는 corner 값이 우선, 여기 값을 넣으면 그 값으로 덮어쓴다.</div>
+  </details>
+
+  <h2>lever (knob)</h2>
+  <div class="levers" id="levers"></div>
+  <div class="row"><input id="custom" placeholder="예: l_com+m_com" style="width:170px"><button onclick="addLever()">추가</button></div>
+  <div class="hint">'+'로 묶은 축은 같은 비율(또는 같은 Δ)로 함께 움직인다. corner = global Vth corner 폭 축소.</div>
+
+  <h2>실행</h2>
+  <button onclick="go('rank')">① lever 순위</button>
+  <button onclick="go('sweep')">② knob별 Vmin 곡선</button>
+  <label style="font-size:12px"><input type="checkbox" id="permode" checked> read/write 선도</label>
+  <div class="row" style="margin-top:8px">③ 두 knob 나눠 부담: <select id="la"></select> × <select id="lb"></select></div>
+  <div class="row">격자 <input id="n" type="number" value="25" min="9" max="41"><button onclick="go('map')">③ map</button></div>
+  <div class="row" style="margin-top:8px">④ read·write contour: 첫 번째 lever(<b>위 왼쪽 select</b>)를 목표까지 개선 · 값 직접 지정 <input id="s" type="number" step="any" placeholder="자동"></div>
+  <button onclick="go('window')">④ window</button>
+  <div class="hint">rank ≈ 10초, map(25²) ≈ 5초, window ≈ 15초. 한 번에 하나씩 실행된다.</div>
+</aside>
+<main><div id="out"><p class="hint">왼쪽에서 조건을 고르고 실행한다. 결과는 위에 쌓인다.</p></div></main>
+<script>
+let meta;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+function leverBox(spec, label, checked) {
+  const l = document.createElement("label");
+  l.innerHTML = `<input type="checkbox" value="${esc(spec)}" ${checked ? "checked" : ""}> ${esc(label)} <code>${esc(spec)}</code>`;
+  $("levers").appendChild(l);
+  for (const sel of [$("la"), $("lb")]) sel.add(new Option(`${label} (${spec})`, spec));
+}
+function addLever() {
+  const v = $("custom").value.trim();
+  if (v) { leverBox(v, v, true); $("custom").value = ""; }
+}
+
+async function init() {
+  meta = await (await fetch("/api/meta")).json();
+  for (const m of ["read", "write"]) {
+    for (const c of meta.corners) $("c_" + m).add(new Option(c, c));
+    $("c_" + m).value = meta.limiting[m];
+  }
+  $("ov").innerHTML = "<tr><th>축</th><th>값</th><th>중앙값 read / write</th><th>범위</th></tr>" + meta.axes.map((a) =>
+    `<tr><td title="${esc(a.label)}">${esc(a.symbol)}</td><td><input data-ax="${a.key}" type="number" step="any"></td>` +
+    `<td>${a.nominal.read} / ${a.nominal.write}</td><td>${a.box[0]}…${a.box[1]}</td></tr>`).join("");
+  meta.levers.forEach((s, i) => leverBox(s, meta.lever_labels[s], i < 4));
+  $("la").value = "l_com"; $("lb").value = "lpu";
+}
+
+function payload(kind) {
+  const overrides = {};
+  document.querySelectorAll("#ov input").forEach((el) => { if (el.value !== "") overrides[el.dataset.ax] = el.value; });
+  return {
+    target: parseFloat($("target").value),
+    modes: ["read", "write"].filter((m) => $("m_" + m).checked),
+    corners: {read: $("c_read").value, write: $("c_write").value},
+    overrides,
+    levers: [...document.querySelectorAll("#levers input:checked")].map((el) => el.value),
+    per_mode: $("permode").checked,
+    lever_a: $("la").value, lever_b: $("lb").value, n: parseInt($("n").value, 10), s: $("s").value,
+  };
+}
+
+async function go(kind) {
+  const buttons = document.querySelectorAll("button");
+  buttons.forEach((b) => b.disabled = true);
+  const card = document.createElement("div");
+  card.className = "card";
+  card.innerHTML = `<p class="hint">${kind} 계산 중…</p>`;
+  $("out").prepend(card);
+  try {
+    const p = payload(kind);
+    const r = await (await fetch("/api/" + kind, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(p)})).json();
+    if (!r.ok) throw new Error(r.error);
+    const c = r.config;
+    const cond = `목표 ${c.target} V · ${c.modes.map((m) => m + " @ " + c.corners[m]).join(" & ")}` +
+      (Object.keys(c.overrides).length ? " · 고정 " + JSON.stringify(c.overrides) : "");
+    card.innerHTML = `<b>${esc(kind)}</b> <span class="hint">${esc(cond)}</span><br>` +
+      `<table><tr><th>lever</th><th>판정</th><th>필요 변화</th><th>지금 binding Vmin (V)</th></tr>` +
+      r.table.map((t) => `<tr><td>${esc(t.label)}</td><td>${esc(t.status)}</td><td>${esc(t.change)}</td><td>${esc(t.baseline)}</td></tr>`).join("") +
+      `</table><img src="${esc(r.image)}"><br><code>${esc(r.dir)}</code>`;
+  } catch (e) {
+    card.innerHTML = `<p class="err">${esc(kind)} 실패: ${esc(e.message)}</p>`;
+  } finally {
+    buttons.forEach((b) => b.disabled = false);
+  }
+}
+init();
+</script>
+</body>
+</html>

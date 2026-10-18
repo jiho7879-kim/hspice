@@ -57,3 +57,6 @@ node_modules/
 __pycache__/
 *.pyc
 
+
+# talk_7min Scenario Lab test outputs (copy picks into talk_7min/figs/)
+manuscript/talk_7min/lab/exports/

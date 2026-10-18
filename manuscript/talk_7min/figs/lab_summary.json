@@ -1,0 +1,85 @@
+{
+  "target": 0.575,
+  "baseline": {
+    "read": 0.5960825145244598,
+    "write": 0.5933163166046143
+  },
+  "gap_mV": {
+    "read": 21.08251452445986,
+    "write": 18.3163166046143
+  },
+  "levers": {
+    "l_com": {
+      "label": "NMOS local mismatch",
+      "status": "reachable",
+      "change": "−10.9 %"
+    },
+    "lpu": {
+      "label": "PMOS local mismatch",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 −30.0 % → 0.5756 V"
+    },
+    "l_com+lpu": {
+      "label": "NMOS + PMOS local mismatch",
+      "status": "reachable",
+      "change": "−7.8 %"
+    },
+    "cn": {
+      "label": "NMOS Vth",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 +0.2 mV → 0.5954 V"
+    },
+    "pu": {
+      "label": "PMOS Vth",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 −0.9 mV → 0.5942 V"
+    },
+    "sk": {
+      "label": "PG–PD Vth 차이",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 +1.0 mV → 0.5960 V"
+    },
+    "l_sk": {
+      "label": "PG–PD local mismatch 차이",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 −0.070 → 0.5912 V"
+    },
+    "m_com": {
+      "label": "NMOS mobility",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 −0.6 % → 0.5954 V"
+    },
+    "mpu": {
+      "label": "PMOS mobility",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 +2.3 % → 0.5951 V"
+    },
+    "m_sk": {
+      "label": "PG–PD mobility 차이",
+      "status": "unreachable",
+      "change": "학습 범위 안에서 닿지 않음 · 최선 −0.007 → 0.5944 V"
+    }
+  },
+  "target_sweep": [
+    {
+      "target": 0.59,
+      "l_com": "−2.6 %",
+      "l_com+lpu": "−1.7 %"
+    },
+    {
+      "target": 0.575,
+      "l_com": "−10.9 %",
+      "l_com+lpu": "−7.8 %"
+    },
+    {
+      "target": 0.56,
+      "l_com": "−20.0 %",
+      "l_com+lpu": "−13.9 %"
+    },
+    {
+      "target": 0.55,
+      "l_com": "−26.3 %",
+      "l_com+lpu": "−18.0 %"
+    }
+  ]
+}
