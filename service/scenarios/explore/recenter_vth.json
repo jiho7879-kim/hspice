@@ -1,0 +1,10 @@
+{
+  "kind": "recenter",
+  "group": "시나리오",
+  "title": "Vth target 재조정 — σ 개선 없이",
+  "description": "global 분포 중심만 옮겨 4개 corner × read·write의 최악 Vmin을 최소화합니다. 학습 범위 밖으로 나가는 이동은 제외합니다.",
+  "target": 0.575,
+  "checks": "all_corners",
+  "range": 20,
+  "n": 41
+}

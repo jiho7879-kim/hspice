@@ -60,3 +60,6 @@ __pycache__/
 
 # talk_7min Scenario Lab test outputs (copy picks into talk_7min/figs/)
 manuscript/talk_7min/lab/exports/
+
+# SRAM Vmin Studio run outputs (model predictions, figures, CSV) -- regenerate with service/main.py
+service/runs/

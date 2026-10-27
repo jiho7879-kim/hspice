@@ -17,6 +17,10 @@ Fig. 11(`manuscript/code/v_e_scenario_process.py`, lever별 상한을 둔 50 mV 
 | 5 | WAT/ET spec window | "N·P Vth 관리 한계를 각각 몇 mV로 잡으면 Vmin이 보장되나" | 없음 | Fig. 5 pass 영역에 내접하는 최대 직사각형을 구하면 된다. 아직 계산하지 않음 |
 | 6 | 개선 roadmap | "−10…−60 mV 목표마다 필요한 lever 조합" | 없음 | Fig. 11을 target sweep으로 확장한 것. 상한 때문에 도달할 수 없게 되는 지점이 나온다 |
 
+> **정정 (2026-10-28)**: #1의 P(pass)·분포 폭은 gpytorch 기본 CG 경로로 계산한 값이라 σ posterior가 ~34 % 넓었다.
+> exact posterior로는 priority 0.45 · balanced 0.50 · local N 단독 0.20이다. 상세와 95 % 기준 해는
+> `2026-10-28_vmin_service_design.md`. 이 후보들은 `service/`(SRAM Vmin Studio)의 분석으로 구현됐다.
+
 범위 밖: assist(WLUD/NBL)는 manuscript의 9D surrogate에 축이 없어 데이터가 새로 필요하다. EOL·aging guardband는 D-05와 충돌한다.
 
 ## 계산 방법 (재현용 메모)

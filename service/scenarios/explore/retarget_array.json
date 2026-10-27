@@ -1,0 +1,8 @@
+{
+  "kind": "retarget",
+  "group": "시나리오",
+  "title": "제품 retarget — L1(1 Mb)부터 LLC(4 Gb)까지",
+  "description": "같은 cell과 공정으로 array 크기만 바꿀 때 Vmin과 binding mode. 0.575 V를 공정 변경 없이 지키는 최대 array도 찾습니다.",
+  "target": 0.575,
+  "checks": "limiting"
+}

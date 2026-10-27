@@ -1,0 +1,36 @@
+{
+  "kind": "sensitivity",
+  "group": "시나리오",
+  "title": "민감도와 lever 교환비 — binding corner에서",
+  "description": "FSG read·SFG write에서 축별 국소 기울기, Fig. 11 lever 사이의 교환비, 저장된 Sobol S_T.",
+  "checks": "limiting",
+  "levers": [
+    {
+      "id": "local_N",
+      "label": "local N σ",
+      "type": "scale",
+      "axes": [
+        "l_com"
+      ],
+      "max_change": -0.1
+    },
+    {
+      "id": "global_N",
+      "label": "global N",
+      "type": "pull",
+      "axes": [
+        "cn"
+      ],
+      "max_change": -0.2
+    },
+    {
+      "id": "global_P",
+      "label": "global P",
+      "type": "pull",
+      "axes": [
+        "pu"
+      ],
+      "max_change": -0.2
+    }
+  ]
+}

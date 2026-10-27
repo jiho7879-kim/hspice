@@ -1,0 +1,47 @@
+{
+  "kind": "levers",
+  "group": "시나리오",
+  "title": "Robust inverse — 95 % 확신으로 통과하려면",
+  "description": "Fig. 11 lever를 GP posterior의 95 % 분위 기준으로 다시 풉니다. mean 해는 정의상 P(pass) ≈ 0.5입니다.",
+  "target": 0.575,
+  "checks": "limiting",
+  "levers": [
+    {
+      "id": "local_N",
+      "label": "local N σ",
+      "type": "scale",
+      "axes": [
+        "l_com"
+      ],
+      "max_change": -0.1,
+      "weight": 1
+    },
+    {
+      "id": "global_N",
+      "label": "global N",
+      "type": "pull",
+      "axes": [
+        "cn"
+      ],
+      "max_change": -0.2,
+      "weight": 1
+    },
+    {
+      "id": "global_P",
+      "label": "global P",
+      "type": "pull",
+      "axes": [
+        "pu"
+      ],
+      "max_change": -0.2,
+      "weight": 1
+    }
+  ],
+  "strategies": [
+    "priority",
+    "balanced"
+  ],
+  "confidence": 0.95,
+  "draws": 4000,
+  "panels": "baseline, priority, priority@95%, balanced@95%"
+}

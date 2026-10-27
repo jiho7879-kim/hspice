@@ -1,0 +1,46 @@
+{
+  "kind": "levers",
+  "group": "시나리오",
+  "title": "Min-cost — local σ가 비쌀 때",
+  "description": "local N σ 1 %의 비용을 global 1 %의 3배로 두면 최소 비용 조합이 어떻게 바뀌는지 봅니다 (weight = 상한 전체를 쓸 때의 비용).",
+  "target": 0.575,
+  "checks": "limiting",
+  "levers": [
+    {
+      "id": "local_N",
+      "label": "local N σ",
+      "type": "scale",
+      "axes": [
+        "l_com"
+      ],
+      "max_change": -0.1,
+      "weight": 3
+    },
+    {
+      "id": "global_N",
+      "label": "global N",
+      "type": "pull",
+      "axes": [
+        "cn"
+      ],
+      "max_change": -0.2,
+      "weight": 1
+    },
+    {
+      "id": "global_P",
+      "label": "global P",
+      "type": "pull",
+      "axes": [
+        "pu"
+      ],
+      "max_change": -0.2,
+      "weight": 1
+    }
+  ],
+  "strategies": [
+    "priority",
+    "balanced",
+    "min_cost"
+  ],
+  "draws": 2000
+}

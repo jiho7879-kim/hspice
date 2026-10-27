@@ -1,0 +1,22 @@
+{
+  "kind": "recenter",
+  "group": "시나리오",
+  "title": "Vth target 재조정 + local N σ −10 %",
+  "description": "local N σ를 상한(−10 %)까지 쓴 뒤 남은 부족분을 Vth target 이동으로 메울 수 있는지 봅니다.",
+  "target": 0.575,
+  "checks": "all_corners",
+  "range": 20,
+  "n": 41,
+  "levers": [
+    {
+      "id": "local_N",
+      "label": "local N σ",
+      "type": "scale",
+      "axes": [
+        "l_com"
+      ],
+      "max_change": -0.1,
+      "usage": 1.0
+    }
+  ]
+}

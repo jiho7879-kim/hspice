@@ -1,0 +1,92 @@
+{
+  "kind": "levers",
+  "group": "논문 재현",
+  "title": "Fig. 10 — 50 mV 시나리오, lever 하나씩 (§IV-B)",
+  "description": "0.625 → 0.575 V. FSG read와 SFG write를 동시에 통과시키려면 lever 하나만으로 얼마나 움직여야 하나. 배율 하한 0.7(−30 %).",
+  "target": 0.575,
+  "checks": "limiting",
+  "levers": [
+    {
+      "id": "k_sigmaN",
+      "label": "NMOS local-σ",
+      "type": "scale",
+      "axes": [
+        "l_com"
+      ],
+      "max_change": -0.3
+    },
+    {
+      "id": "k_sigmaP",
+      "label": "PMOS local-σ",
+      "type": "scale",
+      "axes": [
+        "lpu"
+      ],
+      "max_change": -0.3
+    },
+    {
+      "id": "corner",
+      "label": "global Vth corner",
+      "type": "pull",
+      "axes": [
+        "cn",
+        "pu"
+      ],
+      "max_change": -1.0
+    },
+    {
+      "id": "k_sigmaNP",
+      "label": "NMOS + PMOS local-σ",
+      "type": "scale",
+      "axes": [
+        "l_com",
+        "lpu"
+      ],
+      "max_change": -0.3
+    }
+  ],
+  "strategies": [
+    "single"
+  ],
+  "draws": 0,
+  "map": false,
+  "plane_n": 81,
+  "panels": "baseline, single:k_sigmaN, single:k_sigmaP, single:k_sigmaNP",
+  "expect": [
+    {
+      "path": "baseline_binding",
+      "value": 0.5960829556,
+      "tol": 0.0002,
+      "ledger": "N035"
+    },
+    {
+      "path": "solutions.single:k_sigmaN.change.k_sigmaN",
+      "value": -0.1089359808,
+      "tol": 0.0005,
+      "ledger": "N036"
+    },
+    {
+      "path": "solutions.single:k_sigmaP.reached",
+      "value": false,
+      "ledger": "N037"
+    },
+    {
+      "path": "solutions.single:k_sigmaP.binding",
+      "value": 0.5755810976,
+      "tol": 0.0002,
+      "ledger": "N037"
+    },
+    {
+      "path": "solutions.single:corner.change.corner",
+      "value": -0.4689314663,
+      "tol": 0.0005,
+      "ledger": "N038"
+    },
+    {
+      "path": "solutions.single:k_sigmaNP.change.k_sigmaNP",
+      "value": -0.0778529277,
+      "tol": 0.0005,
+      "ledger": "N039"
+    }
+  ]
+}

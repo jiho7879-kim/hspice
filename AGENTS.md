@@ -51,6 +51,7 @@ root/
 │   └── raw/                 # Raw HSPICE output metadata
 ├── bin/                     # ngspice executables (Windows)
 ├── pdk/sky130/              # SKY130 PDK-calibrated contour analysis
+├── service/                 # SRAM Vmin Studio — forward/inverse web service on the paper GPs (service/README.md)
 ├── docs/                    # Project documentation
 │   ├── decisions/           # Architecture decision records (CRITICAL — read first)
 │   └── plans/               # Active phase plans

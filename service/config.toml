@@ -1,0 +1,130 @@
+# SRAM Vmin Studio — service configuration (read once at start-up).
+#
+# Everything a scenario can vary lives in its JSON spec (scenarios/*.json).
+# This file holds what does NOT change per scenario: where the models are, the
+# axis catalogue, the PDK corners and the defaults a new spec starts from.
+
+[service]
+host = "127.0.0.1"          # loopback only -- the models are confidential
+port = 8765
+runs_dir = "runs"           # every run: spec.json, result.json, figures, CSV
+scenarios_dir = "scenarios" # presets; the UI saves new ones under scenarios/user/
+
+[model]
+# "auto"   = paper checkpoints + canonical training split when python/data has the
+#            final*.xlsx files, otherwise the trusted bundle below
+# "source" / "bundle" force one of the two
+source = "auto"
+results_dir = "../manuscript/results"
+bundle_dir = "../manuscript/gui/demo_bundle"
+seed = 42                   # grouped hold-out split -- must match v_b_forward.py
+holdout_fraction = 0.15
+
+[model.modes.read]
+label = "read · SNMR"
+metric = "SNMR"
+temperature_C = 125
+loader = "load_final_snmr"
+avg_col = "snmr_avg"
+std_col = "snmr_std"
+checkpoint = "surrogate_vb.pth"
+bundle = "read_inference_bundle.pt"
+reference = "corner.json"         # saved §V-D result -> start-up self-check
+sobol = "sensitivity.json"
+
+[model.modes.write]
+label = "write · BWRM (Vtrip)"
+metric = "Vtrip"
+temperature_C = -40
+loader = "load_final_vtrip"
+avg_col = "vtrip_avg"
+std_col = "vtrip_std"
+checkpoint = "surrogate_vb_write.pth"
+bundle = "write_inference_bundle.pt"
+reference = "corner_write.json"
+sobol = "sensitivity_write.json"
+
+[defaults]
+target = 0.575              # V; V_T0 - 50 mV, the paper scenario
+reference_vmin = 0.625      # V_T0, today's spec (grey dashed line in every window)
+array_mb = 128              # D-01: 128 Mb @ 99 % Poisson -> Z = 6.398
+yield = 0.99
+lobe_rho = -0.371           # D-07: rho_LR for the optional min-of-two lobe correction
+
+# PDK global corners (absolute shifts, mV) -- v_d_corner.py
+[corners.FFG]
+cn = -36.42
+pu = -44.32
+
+[corners.FSG]
+cn = -29.16
+pu = 38.64
+
+[corners.SFG]
+cn = 31.63
+pu = -36.76
+
+[corners.SSG]
+cn = 36.30
+pu = 44.80
+
+# mode-limiting corner found in §V-D
+[limiting]
+read = "FSG"
+write = "SFG"
+
+# Model input axes IN COLUMN ORDER. symbol is matplotlib mathtext (paper D notation).
+# Positive Vth shift = slower device for both NMOS and PMOS.
+[[axes]]
+key = "cn"
+symbol = '\Delta V_{th,N}'
+name = "NMOS Vth shift (PG·PD 공통)"
+unit = "mV"
+
+[[axes]]
+key = "sk"
+symbol = '\Delta V_{th,skew}'
+name = "PG–PD Vth skew"
+unit = "mV"
+
+[[axes]]
+key = "pu"
+symbol = '\Delta V_{th,P}'
+name = "PMOS Vth shift"
+unit = "mV"
+
+[[axes]]
+key = "lpu"
+symbol = 'k_{\sigma P}'
+name = "PMOS local-σ 배율"
+unit = "×"
+
+[[axes]]
+key = "l_com"
+symbol = 'k_{\sigma N}'
+name = "NMOS local-σ 배율"
+unit = "×"
+
+[[axes]]
+key = "l_sk"
+symbol = '\Delta k_{\sigma N}'
+name = "PG–PD local-σ skew"
+unit = "×"
+
+[[axes]]
+key = "mpu"
+symbol = 'k_{\mu P}'
+name = "PMOS mobility 배율"
+unit = "×"
+
+[[axes]]
+key = "m_com"
+symbol = 'k_{\mu N}'
+name = "NMOS mobility 배율"
+unit = "×"
+
+[[axes]]
+key = "m_sk"
+symbol = '\Delta k_{\mu N}'
+name = "PG–PD mobility skew"
+unit = "×"

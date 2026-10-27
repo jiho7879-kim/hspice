@@ -1,0 +1,18 @@
+{
+  "kind": "sweep",
+  "group": "논문 재현",
+  "title": "1축 inverse — kσN 하나로 0.575 V를 맞추는 값",
+  "description": "§V-E의 축별 역해를 kσN 축에 적용. lever 해(N036)와 같은 값이 나와야 합니다.",
+  "axis": "l_com",
+  "n": 61,
+  "target": 0.575,
+  "checks": "limiting",
+  "expect": [
+    {
+      "path": "binding_roots.0",
+      "value": 0.8910640192,
+      "tol": 0.0005,
+      "ledger": "N036"
+    }
+  ]
+}

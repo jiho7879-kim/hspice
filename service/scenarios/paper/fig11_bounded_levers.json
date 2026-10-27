@@ -1,0 +1,85 @@
+{
+  "kind": "levers",
+  "group": "논문 재현",
+  "title": "Fig. 11 — 상한이 있는 lever (local N ≤ 10 %, global N/P ≤ 20 %)",
+  "description": "Sobol 순서(local N → global N → global P)로 쓰는 priority 해와, 모두 같은 비율만 쓰는 balanced 해. GP posterior로 본 P(pass)도 같이 냅니다.",
+  "target": 0.575,
+  "checks": "limiting",
+  "levers": [
+    {
+      "id": "local_N",
+      "label": "local N σ",
+      "type": "scale",
+      "axes": [
+        "l_com"
+      ],
+      "max_change": -0.1,
+      "weight": 1
+    },
+    {
+      "id": "global_N",
+      "label": "global N",
+      "type": "pull",
+      "axes": [
+        "cn"
+      ],
+      "max_change": -0.2,
+      "weight": 1
+    },
+    {
+      "id": "global_P",
+      "label": "global P",
+      "type": "pull",
+      "axes": [
+        "pu"
+      ],
+      "max_change": -0.2,
+      "weight": 1
+    }
+  ],
+  "strategies": [
+    "single",
+    "priority",
+    "balanced"
+  ],
+  "draws": 2000,
+  "plane_n": 81,
+  "panels": "baseline, single:local_N, priority, balanced",
+  "expect": [
+    {
+      "path": "solutions.single:local_N.reached",
+      "value": false,
+      "ledger": "N099"
+    },
+    {
+      "path": "solutions.single:local_N.binding",
+      "value": 0.576493156,
+      "tol": 0.0002,
+      "ledger": "N099"
+    },
+    {
+      "path": "solutions.priority.change.local_N",
+      "value": -0.1,
+      "tol": 1e-06,
+      "ledger": "N100"
+    },
+    {
+      "path": "solutions.priority.change.global_N",
+      "value": -0.0795870429,
+      "tol": 0.0005,
+      "ledger": "N100"
+    },
+    {
+      "path": "solutions.priority.change.global_P",
+      "value": 0.0,
+      "tol": 1e-09,
+      "ledger": "N100"
+    },
+    {
+      "path": "solutions.balanced.usage.local_N",
+      "value": 0.754132464,
+      "tol": 0.0005,
+      "ledger": "N101"
+    }
+  ]
+}

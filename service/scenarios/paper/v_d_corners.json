@@ -1,0 +1,48 @@
+{
+  "kind": "point",
+  "group": "논문 재현",
+  "title": "§V-D 고정 corner — GP 예측 vs HSPICE",
+  "description": "학습에 안 들어간 PDK corner 4종을 read·write 모두 예측하고 저장된 HSPICE 값과 나란히 봅니다.",
+  "checks": "all_corners",
+  "target": 0.625,
+  "expect": [
+    {
+      "path": "checks.FSG·read.vmin",
+      "value": 0.5960829556,
+      "tol": 0.0002,
+      "ledger": "N035",
+      "note": "read 최악 corner"
+    },
+    {
+      "path": "checks.SFG·write.vmin",
+      "value": 0.5933179498,
+      "tol": 0.0002,
+      "ledger": "N035",
+      "note": "write 최악 corner"
+    },
+    {
+      "path": "checks.FFG·read.vmin",
+      "value": 0.4632919729,
+      "tol": 0.0002,
+      "ledger": "§V-D"
+    },
+    {
+      "path": "checks.SSG·read.vmin",
+      "value": 0.4764275789,
+      "tol": 0.0002,
+      "ledger": "§V-D"
+    },
+    {
+      "path": "checks.FFG·write.vmin",
+      "value": 0.482359457,
+      "tol": 0.0002,
+      "ledger": "§V-D"
+    },
+    {
+      "path": "checks.SSG·write.vmin",
+      "value": 0.5324222475,
+      "tol": 0.0002,
+      "ledger": "§V-D"
+    }
+  ]
+}
