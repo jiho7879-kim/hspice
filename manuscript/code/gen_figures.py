@@ -582,4 +582,70 @@ if want(10):
     plt.close(fig)
     print("  wrote figures/fig10_scenario.png|pdf")
 
+# =============================================================================
+# Fig. 11 -- §IV-B variant: bounded levers (local N <= 10 %, global N/P <= 20 %)
+# =============================================================================
+if want(11):
+    print("Fig. 11  bounded-lever scenario")
+    sc = load("scenario_process.json")
+    z = np.load(RESULTS / "scenario_process_contours.npz", allow_pickle=False)
+    CN, PU = np.meshgrid(z["cn"], z["pu"])
+    VT = float(z["v_target"])
+    shifts = sc["corner_shifts"]
+    lever_txt = {"local_N": "loc-N σ", "global_N": "glb-N", "global_P": "glb-P"}
+
+    fig, axes = plt.subplots(2, 2, figsize=(DCOL, 5.7), sharex=True, sharey=True)
+    lv = np.arange(0.40, 0.76, 0.025)
+    cf = None
+    for ax, pan in zip(axes.ravel(), sc["panels"]):
+        key = pan["key"]
+        vr, vw = z[f"{key}_read"], z[f"{key}_write"]
+        vcell = np.maximum(np.nan_to_num(vr, nan=0.85), np.nan_to_num(vw, nan=0.85))
+        cf = ax.contourf(CN, PU, vcell, levels=lv, cmap="RdYlBu_r",
+                         norm=TwoSlopeNorm(vmin=lv[0], vcenter=VT, vmax=lv[-1]),
+                         extend="both")
+        ax.contour(CN, PU, vcell, levels=[V_T0], colors="0.25", linewidths=1.0,
+                   linestyles="dashed")
+        ax.contour(CN, PU, vr, levels=[VT], colors="k", linewidths=1.8)
+        ax.contour(CN, PU, vw, levels=[VT], colors="k", linewidths=1.8,
+                   linestyles="dashdot")
+        # global improvement moves the corner, not the plane: grey hollow star =
+        # PDK corner today, black star = corner after the global pull-in
+        for cname, mode in (("FSG", "read"), ("SFG", "write")):
+            x0, y0 = shifts[cname]
+            x1, y1 = pan["corner_xy"][f"{cname}_{mode}"]
+            ok = float(pan["corner_vmin"][f"{cname}_{mode}"]) <= VT + 1e-4
+            if np.hypot(x1 - x0, y1 - y0) > 0.5:
+                ax.scatter([x0], [y0], s=30, marker="*", facecolor="none",
+                           edgecolor="0.35", lw=0.8, zorder=5)
+                ax.annotate("", (x1, y1), (x0, y0), zorder=5,
+                            arrowprops=dict(arrowstyle="->", color="0.15", lw=0.8))
+            ax.scatter([x1], [y1], s=46, marker="*", zorder=6,
+                       facecolor=("#111111" if ok else "none"),
+                       edgecolor="#111111", lw=1.0)
+            ax.annotate(cname, (x1, y1), textcoords="offset points",
+                        xytext=(5, 3), fontsize=6.4, color="#111111",
+                        fontweight="bold")
+        imp = {k: v for k, v in pan["imp"].items() if v > 0}
+        sub = ("\n" + " · ".join(f"{lever_txt[k]} −{v * 100:.1f}%"
+                                for k, v in imp.items())) if imp else ""
+        ax.set_title(f"{pan['label']}{sub}", fontsize=7.4, linespacing=1.35)
+    for ax in axes[-1, :]:
+        ax.set_xlabel("$\\Delta V_{th,N}$ (mV)")
+    for ax in axes[:, 0]:
+        ax.set_ylabel("$\\Delta V_{th,P}$ (mV)")
+    fig.suptitle(f"process window at the NEW target $V_{{min}} \\leq$ {VT:.3f} V — "
+                 f"blue passes, red fails. Solid black = read limit, "
+                 f"long-dash = write limit, grey dash = today's spec {V_T0} V.\n"
+                 f"Levers: local N σ ≤ 10 %, global N/P corner pull-in ≤ 20 %. "
+                 f"Hollow grey star = PDK corner today, black star = after global pull-in.",
+                 fontsize=7.4, y=1.02)
+    cb = fig.colorbar(cf, ax=axes, pad=0.015, fraction=0.04)
+    cb.set_label("cell $V_{min}=\\max$(read, write)  (V)", fontsize=7)
+    cb.ax.tick_params(labelsize=6.5)
+    for ext in ("png", "pdf"):
+        fig.savefig(FIGURES / f"fig11_scenario_process.{ext}", bbox_inches="tight")
+    plt.close(fig)
+    print("  wrote figures/fig11_scenario_process.png|pdf")
+
 print(f"\nfigures in {FIGURES}")

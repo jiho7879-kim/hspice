@@ -397,6 +397,33 @@ def axes(prs, notes, n=7):
         y += 5 + 4.6 * len(body) + 3
 
 
+def cost_compare(prs, notes, n=12):
+    """기존 crossed DOE와 GP 학습의 deck 수 비교 (deck = 조건 1개 × VDD 1개의 MC run)."""
+    s = frame(prs, n, "Simulation 비용: 기존 DOE와 비교", notes.get(n, ""),
+              foot="deck = 조건 1개 × VDD 1개의 Monte Carlo run · 조건당 Monte Carlo 횟수는 같다고 가정")
+    cols = (("기존: 9D crossed DOE", 3.8, False,
+             [("2D contour", "CCD 15점 × 지표 2 × VDD 5", "150"),
+              ("나머지 7개 knob", "3-level grid 3⁷", "× 2,187")], "328,050"),
+            ("제안: GP 학습", 53, True,
+             [("SNMR · BWRM", "조건 2,000 × 지표 2", "4,000"),
+              ("VDD", "5개", "× 5")], "20,000"))
+    for title, x, hi, rows, total in cols:
+        label(s, x, 16, 43.2, title, color=ACC if hi else INK, size=17)
+        hline(s, x, 21.5, 43.2, color=INK, pt=1)
+        for i, (lab, body, val) in enumerate(rows):
+            y = 23 + i * 10
+            text(s, x, y, 14, 9, lab, size=14, color=MUTE, bold=True, anchor="m")
+            text(s, x + 14, y, 21, 9, body, size=15, color=INK, anchor="m")
+            text(s, x + 35, y, 8.2, 9, val, size=18, color=INK, align="r", anchor="m")
+            hline(s, x, y + 9.5, 43.2, color="E6E6E6", pt=0.75)
+        text(s, x, 46, 15, 12, "총 deck", size=15, color=INK, bold=True, anchor="m")
+        text(s, x + 15, 46, 28.2, 12, total, size=34, color=ACC if hi else INK, bold=True,
+             align="r", anchor="m")
+    vline(s, 50, 16, 44, color="D9D9D9", pt=0.75)
+    kpi(s, 30, 63, 40, "1/16", "", "deck 수 (20,000 ÷ 328,050)", ACC, size=36)
+    message(s, 80, "9개 knob 전체를 보는 데 필요한 simulation이 1/16로 줄어든다")
+
+
 def build(notes) -> Presentation:
     prs = Presentation()
     prs.slide_width, prs.slide_height = d.W, d.H
@@ -411,6 +438,17 @@ def build(notes) -> Presentation:
 
 
 if __name__ == "__main__":
+    if "--draft-cost" in sys.argv:       # 비용 비교 장표 1장만 따로 만든다 (본 deck에는 아직 넣지 않음)
+        prs = Presentation()
+        prs.slide_width, prs.slide_height = d.W, d.H
+        cost_compare(prs, {})
+        for shp in prs.slides[0].shapes:
+            if shp.has_text_frame and shp.text_frame.text == "SRAM Vmin surrogate":
+                shp.text_frame.paragraphs[0].runs[0].text = BRAND
+        out = HERE / "draft_cost.pptx"
+        prs.save(out)
+        print("saved", out)
+        raise SystemExit
     if "--draft-axes" in sys.argv:       # 입력 축 장표 초안 1장만 따로 만든다 (본 deck에는 아직 넣지 않음)
         prs = Presentation()
         prs.slide_width, prs.slide_height = d.W, d.H

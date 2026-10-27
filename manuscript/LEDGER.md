@@ -353,6 +353,35 @@ z가 큰 영역이기 때문이며, Vmin 판정에는 영향이 없다(둘 다 0
 
 ---
 
+## §V-E.3 역방향 시나리오 — 상한이 있는 공정 레버 (2026-10-27)
+
+`code/v_e_scenario_process.py` → `results/scenario_process.json` · `scenario_process_contours.npz`.
+목표 0.575 V(= V_T0 − 50 mV), 구속 조건은 §V-E.2와 같다(FSG 읽기 ∧ SFG 쓰기).
+레버 상한: local N σ(k_σN) **−10 %**, global N·P 코너 당김 각 **−20 %**.
+우선순위 = §VII S_T 순(local N) → global N → global P. 목표 해석은 `DECISIONS.md` D-17.
+
+| ID | 항목 | 값 | 상태 |
+|---|---|---|---|
+| N097 | 출발점 | N035와 동일 (읽기 0.5961 · 쓰기 0.5933 V) | ✅ |
+| N098 | 기울기 @출발점 (mV per 1 %) | local N **2.36** · global N 0.46 · global P 0.54 | ✅ |
+| N099 | 1단계 local N −10 %(상한) | **0.5765 V — 도달 불가**(1.5 mV 부족, 쓰기가 구속) | ✅ |
+| N100 | 우선순위 해 | local N −10 % + global N **−8.0 %** (global P 불필요) → 0.5750 V | ✅ |
+| N101 | 균형 해 (모든 레버를 상한의 같은 비율 t) | **t = 0.754** → local N −7.5 % · global N/P 각 −15.1 % | ✅ |
+| N102 | local N −10 % 고정 시 2단계 대안 | global P 단독 −8.3 % · N −3.2 % + P −5 % · N 단독 −8.0 % — 사실상 등가, N이 근소하게 효율적 | ✅ (검산 스크립트, 결과 파일 없음) |
+
+> **local N 하나로는 1.5 mV 모자란다.** N036의 −10.9 %가 상한 10 %를 살짝 넘기 때문이다.
+> 남은 1.5 mV는 global N 8 %로 채워진다 — 상한 20 %의 40 %만 쓴다.
+>
+> **global N이 P보다 "가파르다"는 것은 mV 기준에서만 맞다.** % 기준 기울기는 P가 약간
+> 크다(0.54 vs 0.46) — FSG의 P 오프셋(27.6 mV)이 N(16.2 mV)보다 커서 같은 %가 더 많은 mV를
+> 당긴다. Vth 1 mV당으로 환산하면 N 2.8 · P 2.0 mV/mV로 N이 가파르다. 1단계 뒤 구속 모드가
+> 쓰기(SFG, N 오프셋 44.6 mV)로 넘어가므로 2단계에서는 global N이 효율적이다.
+>
+> **한계**: v_e_scenario.py와 같다(나머지 7축 nominal 고정, 코너 당김은 분포 축소의 비례 근사,
+> 경계 오차 3.98/5.65 mV). 1.5 mV 부족 판정은 예측 오차보다 작다.
+
+---
+
 ## §V-F lobe 상관
 
 `code/v_f_lobe.py` → `results/lobe.json`. 초안 `draft/v_f.md`. 팹 반출 요약표
@@ -707,6 +736,7 @@ S_T = Jansen 1999[8], Saltelli 행 500회 재표집으로 95 % 부트스트랩 �
 | F008 | Fig. 8 Sobol S_T (z·σ) + ARD relevance | `sensitivity[_write].json` | ✅ |
 | F009 | Fig. 9 skew 허용폭 지도 (Z_t / Z_eff) | `sensitivity.json` | ✅ |
 | F010 | Fig. 10 50 mV 시나리오 — 레버별 통과 창 | `scenario.json` · `scenario_contours.npz` | ✅ |
+| F011 | Fig. 11 상한 레버 시나리오 — 출발점 / local N 상한 / 우선순위 해 / 균형 해 | `scenario_process.json` · `scenario_process_contours.npz` | ✅ |
 
 > 폰트: 본문 serif에 mathtext도 serif(`dejavuserif`)로 맞춘다 — 기본값은 수식만 sans라
 > 페이지 안에서 `V_min`이 두 서체로 나온다.
