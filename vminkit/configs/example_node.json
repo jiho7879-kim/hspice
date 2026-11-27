@@ -53,12 +53,74 @@
     },
     "_ranges": "cn/pu/sk 는 mV, loc/mom 은 배율, l_sk/m_sk 는 PG-PD 배율 차이의 절반"
   },
+  "deck_template": {
+    "_comment": "사내 include.param.tpl + snmr/bwrm template 방식. 덱 = include(채움) + mode template(채움). #이름# 을 아래 값으로 바꾼다. VTMSKEW_/VTSLSKEW_/MOMSKEW_{PU,PG,PD} 와 VDDA(=Vop)는 덱마다 코드가 채우므로 적지 않는다. \"=VOP\" 는 그 덱의 Vop. \"TODO\" 가 남아 있으면 실행이 멈춘다.",
+    "include": "/path/to/include.param.tpl",
+    "values": {
+      "ARE_YOU_MONTE": 1,
+      "MONTE_EVENT": 5000,
+      "SPICE_LIB": "TODO",
+      "CORNER": "TODO",
+      "GLOBAL": "TODO",
+      "LOCAL_RDF": "TODO",
+      "LOCAL_GEO": "TODO",
+      "SPICE_MODEL_PU1": "TODO",
+      "SPICE_MODEL_PU2": "TODO",
+      "SPICE_MODEL_PG1": "TODO",
+      "SPICE_MODEL_PG2": "TODO",
+      "SPICE_MODEL_PD1": "TODO",
+      "SPICE_MODEL_PD2": "TODO",
+      "PU_W": "TODO",
+      "PU_L": "TODO",
+      "PG_W": "TODO",
+      "PG_L": "TODO",
+      "PD_W": "TODO",
+      "PD_L": "TODO",
+      "SZOFFSET_PUW": 0,
+      "SZOFFSET_PUL": 0,
+      "SZOFFSET_PGW": 0,
+      "SZOFFSET_PGL": 0,
+      "SZOFFSET_PDW": 0,
+      "SZOFFSET_PDL": 0,
+      "TONSKEW": 0,
+      "TOPSKEW": 0,
+      "NFIN_PU": "TODO",
+      "NFIN_PG": "TODO",
+      "NFIN_PD": "TODO",
+      "PGR_NFIN": "TODO",
+      "PDR_NFIN": "TODO",
+      "OFFSET_TEMP": 0,
+      "OFFSET_VDDA": 0,
+      "OFFSET_VTMSKEW_PU": 0,
+      "OFFSET_VTMSKEW_PG": 0,
+      "OFFSET_VTMSKEW_PD": 0,
+      "OFFSET_VTSLSKEW_PU": 0,
+      "OFFSET_VTSLSKEW_PG": 0,
+      "OFFSET_VTSLSKEW_PD": 0,
+      "VTSGSKEW_PU": 1,
+      "VTSGSKEW_PG": 1,
+      "VTSGSKEW_PD": 1,
+      "OFFSET_VTSGSKEW_PU": 0,
+      "OFFSET_VTSGSKEW_PG": 0,
+      "OFFSET_VTSGSKEW_PD": 0,
+      "OFFSET_MOMSKEW_PU": 0,
+      "OFFSET_MOMSKEW_PG": 0,
+      "OFFSET_MOMSKEW_PD": 0,
+      "VSSA": 0,
+      "VWL": "=VOP",
+      "VBL": "=VOP",
+      "VPW": 0
+    }
+  },
   "modes": {
     "read": {
       "metric": "SNMR",
       "temperature_C": 125,
-      "template_dir": "/path/to/read_templates",
-      "template_glob": "*{prefix}-{start}_{vop}V*.in",
+      "template": "/path/to/snmr.tpl",
+      "values": {
+        "TEMP": 125
+      },
+      "deck_name": "{metric}_{prefix}-{no}_{vop}V.in",
       "deck_out_dir": "/path/to/read_sim_dir",
       "sim_dirs": [
         "/path/to/read_sim_dir"
@@ -70,13 +132,16 @@
       },
       "value_unit": "V",
       "snm_floor_mV": 0.0,
-      "_template": "00_gen_decks: template_dir 의 Vop별 template(예: ...-TT-1_0.4V-125C.in)으로 deck_out_dir 에 덱 생성. 01_extract: 시뮬레이션이 끝난 sim_dirs 에서 덱+.mt0 를 읽음 (보통 deck_out_dir 와 같은 폴더)."
+      "_paths": "template: 이 mode 의 template 파일. deck_out_dir: 00_gen_decks 가 덱을 쓰는 폴더. sim_dirs: 시뮬레이션이 끝난 뒤 01_extract 가 덱+.mt0 를 읽는 폴더 (보통 같은 폴더)."
     },
     "write": {
       "metric": "Vtrip",
       "temperature_C": -40,
-      "template_dir": "/path/to/write_templates",
-      "template_glob": "*{prefix}-{start}_{vop}V*.in",
+      "template": "/path/to/bwrm.tpl",
+      "values": {
+        "TEMP": -40
+      },
+      "deck_name": "{metric}_{prefix}-{no}_{vop}V.in",
       "deck_out_dir": "/path/to/write_sim_dir",
       "sim_dirs": [
         "/path/to/write_sim_dir"

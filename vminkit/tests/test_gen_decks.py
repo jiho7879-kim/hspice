@@ -67,6 +67,7 @@ def test_roundtrip():
         cfg = json.load(open(ROOT / "configs" / "example_node.json", encoding="utf-8"))
         cfg["work_dir"] = str(tmp / "work")
         cfg["modes"] = {"read": cfg["modes"]["read"]}
+        cfg["modes"]["read"].pop("template")  # 옛 방식(.param 치환) 시험
         cfg["modes"]["read"].update(template_dir=str(tdir), deck_out_dir=str(sim),
                                     sim_dirs=[str(sim)])
         cfg["modes"]["read"]["result"]["measure"] = "snmr"
@@ -104,7 +105,91 @@ def test_roundtrip():
             assert "--force" in str(e)
 
 
+# 사내 include.param.tpl / snmr template 과 같은 자리표시자 이름을 쓰는 최소 예시
+INCLUDE = """* include
+.temp '(#TEMP#) + (#OFFSET_TEMP#)'
+.param VOP='(#VDDA#) + (#OFFSET_VDDA#)'
+.param VOPP=VOP
+""" + "".join(
+    f".param {s}_L='(#{s}_L#)*1n + (#SZOFFSET_{s}L#*1n)'\n.param NFIN_{s}='#NFIN_{s}#'\n"
+    for s in ("PU", "PG", "PD")) + "".join(
+    f".param {fam}_{dev}{i}='(#{fam}_{dev}#) + (#OFFSET_{fam}_{dev}#)'\n"
+    for fam in ("VTMSKEW", "VTSLSKEW", "VTSGSKEW", "MOMSKEW")
+    for dev in ("PU", "PG", "PD") for i in (1, 2)) + \
+    ".param VDDA='(#VDDA#) + (#OFFSET_VDDA#)'\n.param VSSA='(#VSSA#)'\n" \
+    ".param VWL='(#VWL#) + (#OFFSET_VDDA#)'\n.param VBL='(#VBL#) + (#OFFSET_VDDA#)'\n"
+SNMR = """.param are_you_monte=#ARE_YOU_MONTE#
+.lib "/#SPICE_LIB#" #CORNER#
+xmpu out in vdda nwell #SPICE_MODEL_PU1# nfin=NFIN_PU L='PU_L'
+.dc vu '-VOP' VOP 0.01 sweep monte=#MONTE_EVENT#
+.measure dc snmr_diagonal param="1"
+.end
+"""
+
+
+def test_placeholder():
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        (tmp / "include.param.tpl").write_text(INCLUDE)
+        (tmp / "snmr.tpl").write_text(SNMR)
+        sim = tmp / "sim"
+        cfg = json.load(open(ROOT / "configs" / "example_node.json", encoding="utf-8"))
+        cfg["work_dir"] = str(tmp / "work")
+        cfg["deck_template"]["include"] = str(tmp / "include.param.tpl")
+        vals = cfg["deck_template"]["values"]
+        for k, v in list(vals.items()):
+            if v == "TODO":
+                vals[k] = "lib.l" if k == "SPICE_LIB" else ("tt" if k == "CORNER" else 1)
+        cfg["modes"] = {"read": cfg["modes"]["read"]}
+        cfg["modes"]["read"].update(template=str(tmp / "snmr.tpl"), deck_out_dir=str(sim),
+                                    sim_dirs=[str(sim)])
+        cp = tmp / "node.json"
+        cp.write_text(json.dumps(cfg))
+
+        gen.main(["--config", str(cp), "--preview"])
+        gen.main(["--config", str(cp), "--limit", "3"])
+        decks = sorted(sim.glob("*.in"))
+        assert len(decks) == 15, len(decks)
+        txt = (sim / "SNMR_TT-2_0.6V.in").read_text()
+        assert "#" not in txt.replace("* include", ""), "자리표시자가 남음"
+        assert ".param VOP='(0.6) + (0)'" in txt and ".param VWL='(0.6) + (0)'" in txt
+        assert ".temp '(125) + (0)'" in txt
+        cond = pd.read_csv(sim / "conditions_read.csv")
+
+        for d in decks:
+            body = "\n".join(f"{i + 1} {0.1 + 0.001 * i:.6e} 125 1" for i in range(50))
+            d.with_suffix(".mt0").write_text("$DATA1\n.TITLE 'x'\nindex snmr_diagonal temper alter#\n"
+                                             + body + "\n")
+        extract.main(["--config", str(cp)])
+        ds = pd.read_csv(tmp / "work" / "01_extract" / "dataset_read.csv")
+        m = ds.merge(cond, left_on="deck", right_on=cond["deck_file"].str[:-3], suffixes=("", "_gen"))
+        assert len(m) == 15
+        for c in ["cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk", "vop"]:
+            assert np.allclose(m[c], m[c + "_gen"], atol=1e-6), c
+        assert (ds["temp"] == 125).all()
+        print("  include + snmr template → 덱 15개 → 01_extract: 9D·Vop·온도 일치")
+
+        # 값이 빠지거나 '#' 짝이 안 맞으면 멈춰야 한다
+        cfg["deck_template"]["values"]["NFIN_PU"] = "TODO"
+        cp.write_text(json.dumps(cfg))
+        try:
+            gen.main(["--config", str(cp), "--preview"])
+            raise AssertionError("TODO 값을 통과시킴")
+        except SystemExit as e:
+            assert "NFIN_PU" in str(e)
+        cfg["deck_template"]["values"]["NFIN_PU"] = 2
+        (tmp / "include.param.tpl").write_text(INCLUDE.replace("(#OFFSET_TEMP#)", "(#OFFSET_TEMP)"))
+        cp.write_text(json.dumps(cfg))
+        try:
+            gen.main(["--config", str(cp), "--preview"])
+            raise AssertionError("'#' 오타를 통과시킴")
+        except (SystemExit, RuntimeError) as e:
+            assert "OFFSET_TEMP" in str(e), e
+        print("  TODO 값, '#' 짝 오타 모두 멈춤")
+
+
 if __name__ == "__main__":
     test_paper_equivalence()
     test_roundtrip()
+    test_placeholder()
     print("OK test_gen_decks")

@@ -31,8 +31,17 @@ python vminkit/00_gen_decks.py --config vminkit/configs/my_node.json --limit 3  
 python vminkit/00_gen_decks.py --config vminkit/configs/my_node.json             # 전체
 ```
 
-- `template_dir` 에 Vop별 template 덱(예: `02-sp-bc-snmr-TT-1_0.4V-125C.in`)을 둔다.
-  `template_glob` 에 `{vop}` 이 없으면 template 하나에서 `.param VOP` 값도 바꾼다.
+- 덱 하나 = `include.param.tpl`(채움) + mode template(`snmr.tpl` / `bwrm.tpl`, 채움).
+  template 파일은 툴에 넣지 않고, 설정에 경로만 적는다 (`deck_template.include`, `modes.<mode>.template`).
+- template 의 `#이름#` 을 바꾼다. 값의 출처:
+  - `deck_template.values`: 노드 공통 고정값 (라이브러리, 코너, 모델명, 사이즈, NFIN, OFFSET_*, MC 횟수 ...)
+  - `modes.<mode>.values`: mode 별 값 (`TEMP` 등)
+  - 덱마다 코드가 채움: `VTMSKEW_/VTSLSKEW_/MOMSKEW_{PU,PG,PD}`(조건), `VDDA`(= Vop)
+  - 값을 `"=VOP"` 로 적으면 그 덱의 Vop 가 들어간다 (예: `VWL`, `VBL`).
+- 멈추는 경우: template 에 있는데 값이 없는 이름, 아직 `"TODO"` 인 값, 채운 뒤에도 남은 `#이름`
+  (`#OFFSET_TEMP)` 처럼 `#` 짝이 안 맞는 오타 포함).
+- 덱 이름은 `deck_name` (기본 `{metric}_{prefix}-{no}_{vop}V.in`, 예: `SNMR_TT-17_0.6V.in`).
+- (예전 방식) `template` 대신 `template_dir` 을 주면 Vop별 template 의 `.param X = '(A) + B'` 에서 A 를 바꾼다.
 - 조건은 논문과 같은 방식이다: 9D, 2000 조건, numpy PCG64, (cn, pu) 사분면 가중
   (read 는 FSG, write 는 SFG 쪽을 촘촘히), read seed 2027 / write seed 2028.
   기본값으로 돌리면 논문 조건과 숫자 하나까지 같다. 범위·개수·Vop 는 설정의 `doe` 에서 바꾼다.

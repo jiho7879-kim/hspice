@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core.axes import AXES  # noqa: E402
 from core.config import ConfigError, load_config  # noqa: E402
 from core.doe import deck_params, generate_conditions, iter_decks, replace_params  # noqa: E402
+from core import template as tpl_mod  # noqa: E402
 
 STEP_DIR = "00_gen_decks"
 VOP_PATTERN = r"(\.param\s+VOP\s*=\s*'\s*\(\s*)[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?(\s*\))"
@@ -99,6 +100,8 @@ def render(text: str, rec: Dict[str, Any], vth_unit: str, src: str, per_vop: boo
 def gen_mode(cfg: Dict[str, Any], name: str, limit: Optional[int], preview: bool,
              force: bool) -> None:
     m = cfg["modes"][name]
+    if m.get("template"):
+        return gen_mode_placeholder(cfg, name, limit, preview, force)
     doe = cfg["doe"]
     vth_unit = cfg["deck"]["vth_unit"]
     per_vop = "{vop}" in m["template_glob"]
@@ -152,6 +155,100 @@ def gen_mode(cfg: Dict[str, Any], name: str, limit: Optional[int], preview: bool
     write_report(cfg, name, out_dir, n_written, tmpl, limit)
 
 
+def _placeholder_setup(cfg: Dict[str, Any], name: str):
+    """include + mode template 읽기, 값 합치기, 빠진 이름 검사."""
+    m = cfg["modes"][name]
+    dt = cfg.get("deck_template") or {}
+    inc_path = dt.get("include")
+    texts = []
+    for label, p in (("deck_template.include", inc_path), (f"modes.{name}.template", m["template"])):
+        if not p:
+            raise SystemExit(f"설정에 {label} 경로가 없습니다")
+        if not Path(p).is_file():
+            raise SystemExit(f"{label} 파일이 없습니다: {p}")
+        texts.append(_read(Path(p)))
+    inc, tpl = texts
+    values: Dict[str, Any] = {k: v for k, v in (dt.get("values") or {}).items() if not k.startswith("_")}
+    values.update({k: v for k, v in (m.get("values") or {}).items() if not k.startswith("_")})
+    bad = tpl_mod.conflicting(values)
+    if bad:
+        raise SystemExit(f"[{name}] {bad} 는 덱마다 코드가 채우는 값이라 설정에서 빼야 합니다")
+    probe = dict(values)
+    probe.update({k: 0 for k in tpl_mod.AUTO_KEYS})
+    missing, unused = tpl_mod.split_keys(inc, tpl, probe)
+    if missing:
+        raise SystemExit(f"[{name}] template 에 있는데 설정에 값이 없는 자리표시자: {', '.join(missing)}\n"
+                         f"  → deck_template.values 또는 modes.{name}.values 에 추가하세요")
+    if unused:
+        print(f"  [참고] 설정에는 있지만 template 에 없는 값: {', '.join(unused)}")
+    todo = [k for k in tpl_mod.todo_keys(values) if k not in unused]
+    if todo:
+        raise SystemExit(f"[{name}] 설정에 아직 \"TODO\" 인 값: {', '.join(todo)}")
+    return inc, tpl, values, Path(inc_path), Path(m["template"])
+
+
+def _placeholder_deck(inc: str, tpl: str, values: Dict[str, Any], rec: Dict[str, Any],
+                      vth_unit: str, src: str) -> str:
+    v = dict(values)
+    v.update(tpl_mod.auto_values(deck_params(rec, vth_unit), rec["vop"]))
+    sep = "" if inc.endswith("\n") else "\n"
+    return tpl_mod.fill(inc + sep + tpl, v, rec["vop"], src)
+
+
+def _placeholder_name(m: Dict[str, Any], rec: Dict[str, Any], doe: Dict[str, Any]) -> str:
+    pat = m.get("deck_name") or "{metric}_{prefix}-{no}_{vop}V.in"
+    return pat.format(metric=m["metric"], prefix=doe["deck_prefix"], no=rec["deck_no"],
+                      vop=f"{rec['vop']:g}", mode=m.get("_name", ""))
+
+
+def gen_mode_placeholder(cfg: Dict[str, Any], name: str, limit: Optional[int], preview: bool,
+                         force: bool) -> None:
+    m = cfg["modes"][name]
+    doe = cfg["doe"]
+    vth_unit = cfg["deck"]["vth_unit"]
+    print(f"[{name}] n_cond={doe['n_cond']} seed={doe['seeds'][name]} method={doe['method']} "
+          f"Vop={doe['vops']}")
+    inc, tpl, values, inc_path, tpl_path = _placeholder_setup(cfg, name)
+    print(f"  include : {inc_path}\n  template: {tpl_path}")
+
+    if preview:
+        rec = next(iter_decks(doe, name))
+        text = _placeholder_deck(inc, tpl, values, rec, vth_unit, tpl_path.name)
+        print(f"\n--- preview: {_placeholder_name(m, rec, doe)} ---")
+        print("  조건: " + ", ".join(f"{c}={rec[c]}" for c in AXES) + f", vop={rec['vop']}")
+        src_lines = (inc + "\n" + tpl).splitlines()
+        for b, a in zip(src_lines, text.splitlines()):
+            if b != a:
+                print(f"  {a.strip()}")
+        return
+
+    out_dir = Path(m["deck_out_dir"] or Path(cfg["work_dir"]) / STEP_DIR / name)
+    map_path = out_dir / f"conditions_{name}.csv"
+    if map_path.exists() and not force:
+        raise SystemExit(f"{map_path} 가 이미 있습니다. 덮어쓰려면 --force")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    t0 = time.time()
+    n_written = 0
+    names = set()
+    with open(map_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["deck_file", "deck_no", "vop"] + AXES)
+        for rec in iter_decks(doe, name):
+            if limit is not None and rec["deck_no"] >= doe["start"] + limit:
+                continue
+            fn = _placeholder_name(m, rec, doe)
+            if fn in names:
+                raise RuntimeError(f"덱 이름이 겹칩니다: {fn} (deck_name 에 {{no}} 와 {{vop}} 를 넣으세요)")
+            names.add(fn)
+            (out_dir / fn).write_text(
+                _placeholder_deck(inc, tpl, values, rec, vth_unit, tpl_path.name), encoding="utf-8")
+            w.writerow([fn, rec["deck_no"], rec["vop"]] + [rec[c] for c in AXES])
+            n_written += 1
+    print(f"[{name}] 덱 {n_written}개 → {out_dir.resolve()} ({time.time() - t0:.0f}s)")
+    write_report(cfg, name, out_dir, n_written, {"include": inc_path, "template": tpl_path}, limit)
+
+
 def write_report(cfg, name, out_dir: Path, n_written: int, tmpl, limit) -> None:
     doe = cfg["doe"]
     cond = generate_conditions(doe, name)
@@ -170,7 +267,7 @@ def write_report(cfg, name, out_dir: Path, n_written: int, tmpl, limit) -> None:
         "",
         "## template",
         "",
-    ] + [f"- {v:g} V: `{p}`" for v, p in tmpl.items()] + [
+    ] + [f"- {k if isinstance(k, str) else f'{k:g} V'}: `{p}`" for k, p in tmpl.items()] + [
         "",
         "## 생성된 조건 범위",
         "",
