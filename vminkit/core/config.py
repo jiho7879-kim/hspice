@@ -40,9 +40,12 @@ def load_config(path: str | Path) -> Dict[str, Any]:
     for name, m in modes.items():
         where = f"modes.{name}"
         _require(m, "metric", where)
-        dirs = _require(m, "sim_dirs", where)
+        dirs = m.setdefault("sim_dirs", [])
         if isinstance(dirs, str):
             m["sim_dirs"] = [dirs]
+        m.setdefault("template_dir", None)
+        m.setdefault("template_glob", "*{prefix}-{start}_{vop}V*.in")
+        m.setdefault("deck_out_dir", None)
         res = _require(m, "result", where)
         rtype = _require(res, "type", where + ".result")
         if rtype not in RESULT_TYPES:
@@ -60,6 +63,12 @@ def load_config(path: str | Path) -> Dict[str, Any]:
             raise ConfigError(f"{where}.value_unit 은 'V' 또는 'mV' 여야 합니다")
         m.setdefault("temperature_C", None)
         m.setdefault("snm_floor_mV", None)
+
+    from .doe import merge_doe
+    cfg["doe"] = merge_doe(cfg.get("doe"))
+    for name in modes:
+        if name not in cfg["doe"]["seeds"]:
+            raise ConfigError(f"doe.seeds 에 mode '{name}' 의 seed 가 없습니다")
 
     cfg["_path"] = str(path.resolve())
     cfg["z_target"] = z_target(cfg["yield_target"])

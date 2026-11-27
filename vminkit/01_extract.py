@@ -52,6 +52,8 @@ def extract_mode(cfg: Dict[str, Any], name: str, out_dir: Path,
     vscale = 1000.0 if m["value_unit"] == "V" else 1.0
     floor = None if m.get("snm_floor_mV") is None else float(m["snm_floor_mV"]) / vscale
 
+    if not m["sim_dirs"]:
+        raise SystemExit(f"[{name}] 설정에 sim_dirs 가 비어 있습니다 (시뮬레이션 결과 폴더)")
     jobs = []
     for d in m["sim_dirs"]:
         sdir = Path(d)

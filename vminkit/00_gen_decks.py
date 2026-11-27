@@ -1,0 +1,222 @@
+"""0단계: template 덱 → 시뮬레이션용 .in 덱 (Vop 당 2000개, 논문 방식).
+
+    python vminkit/00_gen_decks.py --config vminkit/configs/my_node.json --preview
+    python vminkit/00_gen_decks.py --config ... --limit 3        # 스모크: Vop당 3개만
+    python vminkit/00_gen_decks.py --config ...                  # 전체 생성
+    python vminkit/00_gen_decks.py --config ... --mode read --force
+
+설정의 modes 마다
+  template_dir   : template 덱이 있는 폴더
+  template_glob  : template 파일 이름 패턴. {prefix} {start} {vop} 가 채워진다.
+                   기본 "*{prefix}-{start}_{vop}V*.in"  (예: 02-sp-bc-snmr-TT-1_0.4V-125C.in)
+                   - {vop} 가 있으면 Vop 마다 template 하나 (논문 방식)
+                   - {vop} 가 없으면 template 하나에서 .param VOP 값도 바꾼다
+  deck_out_dir   : 덱을 쓸 폴더 (기본 work_dir/00_gen_decks/<mode>)
+
+조건은 doe 설정(기본값 = 논문: stage D 9D, 2000 조건, PCG64, read seed 2027 / write
+seed 2028, 사분면 가중)으로 만든다. 덱 이름은 template 이름의 "TT-1" 을 "TT-<번호>" 로
+바꾼 것이고, 번호는 Vop 마다 1 부터 다시 시작한다.
+
+출력:
+  deck_out_dir/*.in              시뮬레이션에 넣을 덱
+  deck_out_dir/conditions_<mode>.csv   덱 파일 ↔ 조건(9D, Vop) 표
+  work_dir/00_gen_decks/gen_<mode>.md  사용한 설정과 범위 요약
+
+시뮬레이션이 끝나면 결과(.mt0)가 있는 폴더를 설정의 sim_dirs 에 적고 01_extract.py 를 실행한다.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import re
+import sys
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from core.axes import AXES  # noqa: E402
+from core.config import ConfigError, load_config  # noqa: E402
+from core.doe import deck_params, generate_conditions, iter_decks, replace_params  # noqa: E402
+
+STEP_DIR = "00_gen_decks"
+VOP_PATTERN = r"(\.param\s+VOP\s*=\s*'\s*\(\s*)[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?(\s*\))"
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return path.read_text(encoding="latin-1")
+
+
+def find_templates(m: Dict[str, Any], doe: Dict[str, Any], name: str) -> Dict[float, Path]:
+    if not m.get("template_dir"):
+        raise SystemExit(f"[{name}] 설정에 template_dir 이 없습니다")
+    tdir = Path(m["template_dir"])
+    if not tdir.is_dir():
+        raise SystemExit(f"[{name}] template_dir 가 없습니다: {tdir}")
+    glob = m["template_glob"]
+    out: Dict[float, Path] = {}
+    per_vop = "{vop}" in glob
+    for v in (doe["vops"] if per_vop else [None]):
+        pat = glob.format(prefix=doe["deck_prefix"], start=doe["start"],
+                          vop="" if v is None else f"{v:g}")
+        hits = sorted(tdir.glob(pat))
+        if len(hits) != 1:
+            raise SystemExit(f"[{name}] template 패턴 '{pat}' 이 {len(hits)}개 매치됨 "
+                             f"(정확히 1개 필요). 폴더: {tdir.resolve()}")
+        if v is None:
+            return {float(x): hits[0] for x in doe["vops"]}
+        out[float(v)] = hits[0]
+    return out
+
+
+def deck_name(template: Path, rec: Dict[str, Any], doe: Dict[str, Any], per_vop: bool) -> str:
+    pat = rf"{re.escape(doe['deck_prefix'])}-\d+"
+    if re.search(pat, template.name):
+        name = re.sub(pat, rec["deck_id"], template.name, count=1)
+        if not per_vop:  # template 하나면 Vop 를 이름에 붙여 구분
+            name = name[: len(name) - len(template.suffix)] + f"_{rec['vop']:g}V{template.suffix}"
+        return name
+    return f"{template.stem}_{rec['deck_id']}_{rec['vop']:g}V{template.suffix}"
+
+
+def render(text: str, rec: Dict[str, Any], vth_unit: str, src: str, per_vop: bool) -> str:
+    text = replace_params(text, deck_params(rec, vth_unit), src)
+    if not per_vop:
+        text, n = re.subn(VOP_PATTERN, lambda mm: mm.group(1) + f"{rec['vop']:.6f}" + mm.group(2),
+                          text, flags=re.IGNORECASE | re.MULTILINE)
+        if n != 1:
+            raise RuntimeError(f"[{src}] .param VOP 가 {n}번 매치됨 (기대 1번)")
+    return text
+
+
+def gen_mode(cfg: Dict[str, Any], name: str, limit: Optional[int], preview: bool,
+             force: bool) -> None:
+    m = cfg["modes"][name]
+    doe = cfg["doe"]
+    vth_unit = cfg["deck"]["vth_unit"]
+    per_vop = "{vop}" in m["template_glob"]
+    tmpl = find_templates(m, doe, name)
+    texts = {v: _read(p) for v, p in tmpl.items()}
+    print(f"[{name}] n_cond={doe['n_cond']} seed={doe['seeds'][name]} method={doe['method']} "
+          f"Vop={doe['vops']}")
+    for v, p in tmpl.items():
+        print(f"  template {v:g} V: {p.name}")
+
+    if preview:
+        rec = next(iter_decks(doe, name))
+        src = tmpl[rec["vop"]]
+        before = texts[rec["vop"]]
+        after = render(before, rec, vth_unit, src.name, per_vop)
+        print(f"\n--- preview: {src.name} -> {deck_name(src, rec, doe, per_vop)} ---")
+        print("  조건: " + ", ".join(f"{c}={rec[c]}" for c in AXES))
+        n = 0
+        for b, a in zip(before.splitlines(), after.splitlines()):
+            if b != a:
+                print(f"  BEFORE | {b.strip()}\n  AFTER  | {a.strip()}")
+                n += 1
+        print(f"  바뀐 줄 {n}개 (기대 {18 + (0 if per_vop else 1)}개)")
+        return
+
+    out_dir = Path(m["deck_out_dir"] or Path(cfg["work_dir"]) / STEP_DIR / name)
+    map_path = out_dir / f"conditions_{name}.csv"
+    if map_path.exists() and not force:
+        raise SystemExit(f"{map_path} 가 이미 있습니다. 덮어쓰려면 --force")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    t0 = time.time()
+    n_written = 0
+    names = set()
+    with open(map_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["deck_file", "deck_no", "vop"] + AXES)
+        for rec in iter_decks(doe, name):
+            if limit is not None and rec["deck_no"] >= doe["start"] + limit:
+                continue
+            src = tmpl[rec["vop"]]
+            fn = deck_name(src, rec, doe, per_vop)
+            if fn in names:
+                raise RuntimeError(f"덱 이름이 겹칩니다: {fn} (template 이름을 확인하세요)")
+            names.add(fn)
+            (out_dir / fn).write_text(render(texts[rec["vop"]], rec, vth_unit, src.name, per_vop),
+                                      encoding="utf-8")
+            w.writerow([fn, rec["deck_no"], rec["vop"]] + [rec[c] for c in AXES])
+            n_written += 1
+    print(f"[{name}] 덱 {n_written}개 → {out_dir.resolve()} ({time.time() - t0:.0f}s)")
+    write_report(cfg, name, out_dir, n_written, tmpl, limit)
+
+
+def write_report(cfg, name, out_dir: Path, n_written: int, tmpl, limit) -> None:
+    doe = cfg["doe"]
+    cond = generate_conditions(doe, name)
+    rep_dir = Path(cfg["work_dir"]) / STEP_DIR
+    rep_dir.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"# 00_gen_decks · {cfg['node']} · {name}",
+        "",
+        f"- 설정: `{cfg['_path']}`",
+        f"- 생성: {time.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- 덱 {n_written}개 → `{out_dir.resolve()}`"
+        + (f" (스모크: Vop당 {limit}개)" if limit is not None else ""),
+        f"- 조건 {doe['n_cond']}개 x Vop {len(doe['vops'])}개, method {doe['method']}, "
+        f"seed {doe['seeds'][name]}",
+        f"- 조건 지문(checksum): {float(cond.sum()):.6f}  (같은 설정이면 항상 같은 값)",
+        "",
+        "## template",
+        "",
+    ] + [f"- {v:g} V: `{p}`" for v, p in tmpl.items()] + [
+        "",
+        "## 생성된 조건 범위",
+        "",
+        "| 축 | 최소 | 최대 | 평균 |",
+        "| --- | --- | --- | --- |",
+    ] + [f"| {c} | {cond[:, j].min():g} | {cond[:, j].max():g} | {cond[:, j].mean():.3f} |"
+         for j, c in enumerate(AXES)]
+    qw = doe["quadrant_weights"].get(name)
+    if qw:
+        cn, pu = cond[:, 0], cond[:, 2]
+        lines += ["", "## (cn, pu) 사분면 비율", "", "| 사분면 | 설정 | 실제 |", "| --- | --- | --- |"]
+        for key, val in qw.items():
+            a, b = (s.strip() for s in key.split(","))
+            mc = (cn >= 0) if a == "+" else (cn <= 0)
+            mp = (pu >= 0) if b == "+" else (pu <= 0)
+            lines.append(f"| cn{a} pu{b} | {val:.2f} | {np.mean(mc & mp):.2f} |")
+    lines += ["", "## doe 설정 전체", "", "```json", json.dumps(doe, indent=2, ensure_ascii=False),
+              "```", "", "## 다음 단계", "",
+              "덱을 PrimeSim 으로 돌린 뒤, 결과(.mt0)가 있는 폴더를 설정의 "
+              f"`modes.{name}.sim_dirs` 에 적고 `01_extract.py` 를 실행한다."]
+    (rep_dir / f"gen_{name}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"[{name}] 요약 → {rep_dir / f'gen_{name}.md'}")
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    ap = argparse.ArgumentParser(description="0단계: template → 시뮬레이션 덱")
+    ap.add_argument("--config", required=True)
+    ap.add_argument("--mode", default="all", help="read / write / all")
+    ap.add_argument("--preview", action="store_true",
+                    help="첫 덱의 바뀌는 .param 줄만 보여주고 파일은 안 씀")
+    ap.add_argument("--limit", type=int, default=None, help="Vop당 앞 N개만 (스모크)")
+    ap.add_argument("--force", action="store_true", help="기존 결과 덮어쓰기")
+    a = ap.parse_args(argv)
+    try:
+        cfg = load_config(a.config)
+    except ConfigError as e:
+        raise SystemExit(f"설정 오류: {e}")
+    names = list(cfg["modes"]) if a.mode == "all" else [a.mode]
+    for n in names:
+        if n not in cfg["modes"]:
+            raise SystemExit(f"설정에 mode '{n}' 이 없습니다 ({list(cfg['modes'])})")
+    for n in names:
+        gen_mode(cfg, n, a.limit, a.preview, a.force)
+    if not a.preview:
+        print("\n완료. 덱으로 시뮬레이션을 돌린 뒤 01_extract.py 를 실행하세요.")
+
+
+if __name__ == "__main__":
+    main()

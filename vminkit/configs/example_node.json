@@ -1,37 +1,86 @@
 {
   "_comment": "노드 하나 = 설정 파일 하나. 논문(manuscript/code/v_b_forward.py) 구조가 기본값이다. 경로와 범위만 노드에 맞게 바꾸면 된다.",
-
   "node": "example_finfet",
   "work_dir": "work/example_finfet",
-
   "yield_target": {
     "array_mb": 128,
     "yield": 0.99
   },
-
   "deck": {
     "pattern": "*.in",
     "vth_unit": "V",
     "_vth_unit": "덱의 VTMSKEW 단위. 'V'면 mV로 바꿔서 저장한다 (논문 덱은 V)."
   },
-
+  "doe": {
+    "_comment": "비워두면 논문 값(2000 조건, Vop 0.4~0.8, PCG64, read seed 2027 / write seed 2028, 아래 범위). 노드에 맞게 바꿀 것만 적는다.",
+    "n_cond": 2000,
+    "vops": [
+      0.4,
+      0.5,
+      0.6,
+      0.7,
+      0.8
+    ],
+    "ranges": {
+      "cn": [
+        -60,
+        60
+      ],
+      "pu": [
+        -60,
+        60
+      ],
+      "sk": [
+        -20,
+        20
+      ],
+      "loc": [
+        0.7,
+        1.3
+      ],
+      "mom": [
+        0.7,
+        1.3
+      ],
+      "l_sk": [
+        -0.075,
+        0.075
+      ],
+      "m_sk": [
+        -0.075,
+        0.075
+      ]
+    },
+    "_ranges": "cn/pu/sk 는 mV, loc/mom 은 배율, l_sk/m_sk 는 PG-PD 배율 차이의 절반"
+  },
   "modes": {
     "read": {
       "metric": "SNMR",
       "temperature_C": 125,
-      "sim_dirs": ["/path/to/read_sim_dir"],
+      "template_dir": "/path/to/read_templates",
+      "template_glob": "*{prefix}-{start}_{vop}V*.in",
+      "deck_out_dir": "/path/to/read_sim_dir",
+      "sim_dirs": [
+        "/path/to/read_sim_dir"
+      ],
       "result": {
         "type": "single",
         "pattern": "{stem}.mt0",
         "measure": null
       },
       "value_unit": "V",
-      "snm_floor_mV": 0.0
+      "snm_floor_mV": 0.0,
+      "_template": "00_gen_decks: template_dir 의 Vop별 template(예: ...-TT-1_0.4V-125C.in)으로 deck_out_dir 에 덱 생성. 01_extract: 시뮬레이션이 끝난 sim_dirs 에서 덱+.mt0 를 읽음 (보통 deck_out_dir 와 같은 폴더)."
     },
     "write": {
       "metric": "Vtrip",
       "temperature_C": -40,
-      "sim_dirs": ["/path/to/write_sim_dir"],
+      "template_dir": "/path/to/write_templates",
+      "template_glob": "*{prefix}-{start}_{vop}V*.in",
+      "deck_out_dir": "/path/to/write_sim_dir",
+      "sim_dirs": [
+        "/path/to/write_sim_dir"
+      ],
       "result": {
         "type": "min_left_right",
         "left_pattern": "{stem}*a0*.mt0",
