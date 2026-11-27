@@ -43,6 +43,7 @@ python vminkit/00_gen_decks.py --config vminkit/configs/my_node.json            
   (`#OFFSET_TEMP)` 처럼 `#` 짝이 안 맞는 오타 포함).
 - 10번째 축 `wl_ratio`: 조건마다 `doe.wl_ratio.range`(기본 0.8~1.0) 안에서 뽑고, 덱의 `VWL = Vop x wl_ratio`
   로 넣는다 (read·write 둘 다). 9D 와 다른 난수열이라 9D 조건은 논문과 그대로다. `range` 를 `null` 로 두면 1.0.
+  `one_fraction`(기본 0.2) 만큼의 조건은 정확히 1.0 으로 고정해서 assist 없는 기준 데이터를 반드시 포함한다.
 - 덱 이름은 `deck_name` (기본 `{metric}_{prefix}-{no}_{vop}V.in`, 예: `SNMR_TT-17_0.6V.in`).
 - (예전 방식) `template` 대신 `template_dir` 을 주면 Vop별 template 의 `.param X = '(A) + B'` 에서 A 를 바꾼다.
 - 조건은 논문과 같은 방식이다: 9D, 2000 조건, numpy PCG64, (cn, pu) 사분면 가중

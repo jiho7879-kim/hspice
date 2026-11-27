@@ -57,9 +57,10 @@
         0.8,
         1.0
       ],
-      "decimals": 3
+      "decimals": 3,
+      "one_fraction": 0.2
     },
-    "_wl_ratio": "10번째 축: VWL/VDDA 비율 (read/write assist). 조건마다 range 안에서 뽑고 덱의 VWL = Vop x 비율. null 이면 1.0 (VWL = Vop)."
+    "_wl_ratio": "10번째 축: VWL/VDDA 비율 (read/write assist). 조건마다 range 안에서 뽑고 덱의 VWL = Vop x 비율. null 이면 1.0 (VWL = Vop). one_fraction: 조건 중 이 비율만큼은 정확히 1.0 (assist 없는 기준). 0.2 = 2000개 중 400개."
   },
   "deck_template": {
     "_comment": "사내 include.param.tpl + snmr/bwrm template 방식. 덱 = include(채움) + mode template(채움). #이름# 을 아래 값으로 바꾼다. VTMSKEW_/VTSLSKEW_/MOMSKEW_{PU,PG,PD} 와 VDDA(=Vop), VWL(=Vop x wl_ratio)는 덱마다 코드가 채우므로 적지 않는다. \"=VOP\" 는 그 덱의 Vop. \"TODO\" 가 남아 있으면 실행이 멈춘다.",

@@ -39,7 +39,8 @@ DEFAULT_DOE: Dict[str, Any] = {
     },
     # 10번째 축 (논문에는 없음). 9D 와 다른 난수열(seed + 200)이라 9D 조건은 논문과 그대로.
     # range 를 null 로 두면 모든 덱이 1.0 (VWL = Vop, 논문과 같은 덱).
-    "wl_ratio": {"range": [0.8, 1.0], "decimals": 3},
+    # one_fraction: 조건의 이 비율만큼은 정확히 1.0 (assist 없는 기준 데이터를 반드시 포함)
+    "wl_ratio": {"range": [0.8, 1.0], "decimals": 3, "one_fraction": 0.2},
 }
 WL_SEED_OFFSET = 200
 
@@ -136,8 +137,17 @@ def generate_wl_ratio(doe: Dict[str, Any], mode: str) -> np.ndarray:
     if not rng_:
         return np.ones(n)
     lo, hi = float(rng_[0]), float(rng_[1])
-    u = _unit(n, 1, int(doe["seeds"][mode]) + WL_SEED_OFFSET, doe["method"])[:, 0]
-    return np.round(lo + (hi - lo) * u, int(w.get("decimals", 3)))
+    seed = int(doe["seeds"][mode]) + WL_SEED_OFFSET
+    u = _unit(n, 1, seed, doe["method"])[:, 0]
+    out = np.round(lo + (hi - lo) * u, int(w.get("decimals", 3)))
+    frac = float(w.get("one_fraction") or 0.0)
+    if not 0.0 <= frac <= 1.0:
+        raise ValueError(f"wl_ratio.one_fraction 은 0~1 이어야 합니다: {frac}")
+    k = int(round(n * frac))
+    if k:
+        idx = np.random.default_rng(seed + 1).choice(n, size=k, replace=False)
+        out[idx] = 1.0
+    return out
 
 
 def iter_decks(doe: Dict[str, Any], mode: str) -> Iterator[Dict[str, Any]]:

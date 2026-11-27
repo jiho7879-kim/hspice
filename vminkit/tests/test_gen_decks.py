@@ -31,7 +31,7 @@ def load(name, path):
 
 gen = load("gen_decks", ROOT / "00_gen_decks.py")
 extract = load("extract", ROOT / "01_extract.py")
-from core.doe import DEFAULT_DOE, generate_conditions  # noqa: E402
+from core.doe import DEFAULT_DOE, generate_conditions, generate_wl_ratio  # noqa: E402
 
 TEMPLATE = """* 6T SRAM {metric} MC  TT-1  {vop}V
 .temp '({temp}) +(0)'
@@ -54,6 +54,18 @@ def test_paper_equivalence():
         mine = generate_conditions(DEFAULT_DOE, mode)
         assert np.array_equal(ref, mine), f"{mode}: 논문 조건과 다름"
         print(f"  {mode}: 논문 조건과 2000 x 9 모두 일치 (checksum {mine.sum():.6f})")
+
+
+def test_wl_one():
+    w = generate_wl_ratio(DEFAULT_DOE, "read")
+    n1 = int((w == 1.0).sum())
+    assert 400 <= n1 <= 415, n1  # 400개 고정 + 연속값이 반올림으로 1.000 이 되는 경우
+    assert w.min() >= 0.8 and w.max() <= 1.0
+    import copy
+    d = copy.deepcopy(DEFAULT_DOE); d["wl_ratio"]["one_fraction"] = 0
+    assert (generate_wl_ratio(d, "read") == 1.0).sum() <= 15
+    assert np.array_equal(generate_conditions(d, "read"), generate_conditions(DEFAULT_DOE, "read"))
+    print(f"  wl_ratio: 2000개 중 {n1}개가 정확히 1.0, 9D 는 영향 없음")
 
 
 def test_roundtrip():
@@ -198,6 +210,7 @@ def test_placeholder():
 
 if __name__ == "__main__":
     test_paper_equivalence()
+    test_wl_one()
     test_roundtrip()
     test_placeholder()
     print("OK test_gen_decks")
