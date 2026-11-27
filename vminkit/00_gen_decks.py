@@ -39,9 +39,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core.axes import AXES  # noqa: E402
+from core.axes import AXES, MODEL_AXES, WL_AXIS  # noqa: E402
 from core.config import ConfigError, load_config  # noqa: E402
-from core.doe import deck_params, generate_conditions, iter_decks, replace_params  # noqa: E402
+from core.doe import (deck_params, generate_conditions, generate_wl_ratio, iter_decks,  # noqa: E402
+                      replace_params, set_vwl)
 from core import template as tpl_mod  # noqa: E402
 
 STEP_DIR = "00_gen_decks"
@@ -89,6 +90,7 @@ def deck_name(template: Path, rec: Dict[str, Any], doe: Dict[str, Any], per_vop:
 
 def render(text: str, rec: Dict[str, Any], vth_unit: str, src: str, per_vop: bool) -> str:
     text = replace_params(text, deck_params(rec, vth_unit), src)
+    text = set_vwl(text, rec["VWL"], src)
     if not per_vop:
         text, n = re.subn(VOP_PATTERN, lambda mm: mm.group(1) + f"{rec['vop']:.6f}" + mm.group(2),
                           text, flags=re.IGNORECASE | re.MULTILINE)
@@ -118,13 +120,13 @@ def gen_mode(cfg: Dict[str, Any], name: str, limit: Optional[int], preview: bool
         before = texts[rec["vop"]]
         after = render(before, rec, vth_unit, src.name, per_vop)
         print(f"\n--- preview: {src.name} -> {deck_name(src, rec, doe, per_vop)} ---")
-        print("  조건: " + ", ".join(f"{c}={rec[c]}" for c in AXES))
+        print("  조건: " + ", ".join(f"{c}={rec[c]}" for c in MODEL_AXES))
         n = 0
         for b, a in zip(before.splitlines(), after.splitlines()):
             if b != a:
                 print(f"  BEFORE | {b.strip()}\n  AFTER  | {a.strip()}")
                 n += 1
-        print(f"  바뀐 줄 {n}개 (기대 {18 + (0 if per_vop else 1)}개)")
+        print(f"  바뀐 줄 {n}개 (기대 {19 + (0 if per_vop else 1)}개, VWL 포함)")
         return
 
     out_dir = Path(m["deck_out_dir"] or Path(cfg["work_dir"]) / STEP_DIR / name)
@@ -138,7 +140,7 @@ def gen_mode(cfg: Dict[str, Any], name: str, limit: Optional[int], preview: bool
     names = set()
     with open(map_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["deck_file", "deck_no", "vop"] + AXES)
+        w.writerow(["deck_file", "deck_no", "vop"] + MODEL_AXES + ["VWL"])
         for rec in iter_decks(doe, name):
             if limit is not None and rec["deck_no"] >= doe["start"] + limit:
                 continue
@@ -149,7 +151,7 @@ def gen_mode(cfg: Dict[str, Any], name: str, limit: Optional[int], preview: bool
             names.add(fn)
             (out_dir / fn).write_text(render(texts[rec["vop"]], rec, vth_unit, src.name, per_vop),
                                       encoding="utf-8")
-            w.writerow([fn, rec["deck_no"], rec["vop"]] + [rec[c] for c in AXES])
+            w.writerow([fn, rec["deck_no"], rec["vop"]] + [rec[c] for c in MODEL_AXES] + [rec["VWL"]])
             n_written += 1
     print(f"[{name}] 덱 {n_written}개 → {out_dir.resolve()} ({time.time() - t0:.0f}s)")
     write_report(cfg, name, out_dir, n_written, tmpl, limit)
@@ -190,7 +192,7 @@ def _placeholder_setup(cfg: Dict[str, Any], name: str):
 def _placeholder_deck(inc: str, tpl: str, values: Dict[str, Any], rec: Dict[str, Any],
                       vth_unit: str, src: str) -> str:
     v = dict(values)
-    v.update(tpl_mod.auto_values(deck_params(rec, vth_unit), rec["vop"]))
+    v.update(tpl_mod.auto_values(deck_params(rec, vth_unit), rec["vop"], rec["VWL"]))
     sep = "" if inc.endswith("\n") else "\n"
     return tpl_mod.fill(inc + sep + tpl, v, rec["vop"], src)
 
@@ -215,7 +217,7 @@ def gen_mode_placeholder(cfg: Dict[str, Any], name: str, limit: Optional[int], p
         rec = next(iter_decks(doe, name))
         text = _placeholder_deck(inc, tpl, values, rec, vth_unit, tpl_path.name)
         print(f"\n--- preview: {_placeholder_name(m, rec, doe)} ---")
-        print("  조건: " + ", ".join(f"{c}={rec[c]}" for c in AXES) + f", vop={rec['vop']}")
+        print("  조건: " + ", ".join(f"{c}={rec[c]}" for c in MODEL_AXES) + f", vop={rec['vop']}")
         src_lines = (inc + "\n" + tpl).splitlines()
         for b, a in zip(src_lines, text.splitlines()):
             if b != a:
@@ -233,7 +235,7 @@ def gen_mode_placeholder(cfg: Dict[str, Any], name: str, limit: Optional[int], p
     names = set()
     with open(map_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["deck_file", "deck_no", "vop"] + AXES)
+        w.writerow(["deck_file", "deck_no", "vop"] + MODEL_AXES + ["VWL"])
         for rec in iter_decks(doe, name):
             if limit is not None and rec["deck_no"] >= doe["start"] + limit:
                 continue
@@ -243,7 +245,7 @@ def gen_mode_placeholder(cfg: Dict[str, Any], name: str, limit: Optional[int], p
             names.add(fn)
             (out_dir / fn).write_text(
                 _placeholder_deck(inc, tpl, values, rec, vth_unit, tpl_path.name), encoding="utf-8")
-            w.writerow([fn, rec["deck_no"], rec["vop"]] + [rec[c] for c in AXES])
+            w.writerow([fn, rec["deck_no"], rec["vop"]] + [rec[c] for c in MODEL_AXES] + [rec["VWL"]])
             n_written += 1
     print(f"[{name}] 덱 {n_written}개 → {out_dir.resolve()} ({time.time() - t0:.0f}s)")
     write_report(cfg, name, out_dir, n_written, {"include": inc_path, "template": tpl_path}, limit)
@@ -251,7 +253,7 @@ def gen_mode_placeholder(cfg: Dict[str, Any], name: str, limit: Optional[int], p
 
 def write_report(cfg, name, out_dir: Path, n_written: int, tmpl, limit) -> None:
     doe = cfg["doe"]
-    cond = generate_conditions(doe, name)
+    cond = np.column_stack([generate_conditions(doe, name), generate_wl_ratio(doe, name)])
     rep_dir = Path(cfg["work_dir"]) / STEP_DIR
     rep_dir.mkdir(parents=True, exist_ok=True)
     lines = [
@@ -263,7 +265,8 @@ def write_report(cfg, name, out_dir: Path, n_written: int, tmpl, limit) -> None:
         + (f" (스모크: Vop당 {limit}개)" if limit is not None else ""),
         f"- 조건 {doe['n_cond']}개 x Vop {len(doe['vops'])}개, method {doe['method']}, "
         f"seed {doe['seeds'][name]}",
-        f"- 조건 지문(checksum): {float(cond.sum()):.6f}  (같은 설정이면 항상 같은 값)",
+        f"- 조건 지문(checksum, 9D): {float(cond[:, :9].sum()):.6f}  (같은 설정이면 항상 같은 값)",
+        f"- wl_ratio (VWL/VDDA): {doe.get('wl_ratio')}",
         "",
         "## template",
         "",
@@ -274,7 +277,7 @@ def write_report(cfg, name, out_dir: Path, n_written: int, tmpl, limit) -> None:
         "| 축 | 최소 | 최대 | 평균 |",
         "| --- | --- | --- | --- |",
     ] + [f"| {c} | {cond[:, j].min():g} | {cond[:, j].max():g} | {cond[:, j].mean():.3f} |"
-         for j, c in enumerate(AXES)]
+         for j, c in enumerate(MODEL_AXES)]
     qw = doe["quadrant_weights"].get(name)
     if qw:
         cn, pu = cond[:, 0], cond[:, 2]

@@ -4,8 +4,9 @@
 값의 출처 (뒤에 오는 것이 앞의 것을 덮는다):
   1. deck_template.values            노드 공통 고정값 (라이브러리, 코너, MC 횟수, 사이즈, OFFSET_* ...)
   2. modes.<mode>.values             mode 별 고정값 (TEMP 등)
-  3. 덱마다 자동으로 채우는 값        VTMSKEW_/VTSLSKEW_/MOMSKEW_{PU,PG,PD}, VDDA(=Vop)
-값을 문자열 "=VOP" 로 적으면 그 덱의 Vop 가 들어간다 (예: VWL, VBL 을 Vop 에 맞출 때).
+  3. 덱마다 자동으로 채우는 값        VTMSKEW_/VTSLSKEW_/MOMSKEW_{PU,PG,PD}, VDDA(=Vop),
+                                     VWL(= Vop x wl_ratio, 10번째 축)
+값을 문자열 "=VOP" 로 적으면 그 덱의 Vop 가 들어간다 (예: VBL 을 Vop 에 맞출 때).
 
 채운 뒤 '#이름' 이 하나라도 남으면 (값이 없거나 '#' 짝이 안 맞는 오타) 멈추고 목록을 보여준다.
 """
@@ -19,7 +20,7 @@ LEFTOVER = re.compile(r"#[A-Za-z_][A-Za-z0-9_]*#?")
 
 # 덱마다 코드가 채우는 이름 (설정에 적으면 무시하지 않고 오류로 알린다)
 AUTO_KEYS = tuple(f"{fam}_{dev}" for fam in ("VTMSKEW", "VTSLSKEW", "MOMSKEW")
-                  for dev in ("PU", "PG", "PD")) + ("VDDA",)
+                  for dev in ("PU", "PG", "PD")) + ("VDDA", "VWL")
 
 
 def tokens(text: str) -> Set[str]:
@@ -74,10 +75,11 @@ def split_keys(include: str, mode_tpl: str, values: Dict[str, Any]) -> Tuple[Lis
     return sorted(need - have), sorted(have - need)
 
 
-def auto_values(params: Dict[str, str], vop: float) -> Dict[str, Any]:
-    """core.doe.deck_params 결과(문자열) + Vop → 자동 채움 값."""
+def auto_values(params: Dict[str, str], vop: float, vwl: float) -> Dict[str, Any]:
+    """core.doe.deck_params 결과(문자열) + Vop + VWL → 자동 채움 값."""
     out: Dict[str, Any] = dict(params)
     out["VDDA"] = f"{vop:g}"
+    out["VWL"] = f"{vwl:.6g}"
     return out
 
 

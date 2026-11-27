@@ -32,7 +32,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from core.axes import AXES  # noqa: E402
+from core.axes import MODEL_AXES as AXES  # noqa: E402  (9D + wl_ratio)
 from core.config import ConfigError, load_config  # noqa: E402
 from core.worker import process_deck  # noqa: E402
 
@@ -224,6 +224,8 @@ def write_report(df, iss, name: str, m: Dict[str, Any], cfg: Dict[str, Any], pat
         f" (설정 {m.get('temperature_C')} °C)",
         f"- MC 표본 수: 중앙값 {good['n_mc'].median():.0f}, 최소 {good['n_mc'].min():.0f}"
         if len(good) else "- MC 표본 수: -",
+        f"- wl_ratio (VWL/VOP): {good['wl_ratio'].min():.3f} ~ {good['wl_ratio'].max():.3f}"
+        if len(good) else "- wl_ratio: -",
         f"- 목표 z (참고): {cfg['z_target']:.4f}",
         "",
         "## Vop별 요약 (mV)",

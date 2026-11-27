@@ -36,6 +36,7 @@ from core.doe import DEFAULT_DOE, generate_conditions  # noqa: E402
 TEMPLATE = """* 6T SRAM {metric} MC  TT-1  {vop}V
 .temp '({temp}) +(0)'
 .param VOP='({vop}) +(0)'
+.param VWL='({vop}) +(0)'
 """ + "".join(
     f".param {fam}_{dev}{i} = ' ({dflt}) + (0)'\n"
     for fam, dflt in (("VTMSKEW", 0), ("VTSGSKEW", 1), ("VTSLSKEW", 1), ("MOMSKEW", 1))
@@ -92,7 +93,7 @@ def test_roundtrip():
         ds = pd.read_csv(tmp / "work" / "01_extract" / "dataset_read.csv")
         m = ds.merge(cond, left_on="deck", right_on=cond["deck_file"].str[:-3], suffixes=("", "_gen"))
         assert len(m) == 20, len(m)
-        for c in ["cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk", "vop"]:
+        for c in ["cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk", "wl_ratio", "vop"]:
             assert np.allclose(m[c], m[c + "_gen"], atol=1e-6), c
         assert ds["cond_id"].nunique() == 4
         print("  template → 덱 20개 → 가짜 결과 → 01_extract: 9D·Vop 모두 조건표와 일치")
@@ -152,7 +153,13 @@ def test_placeholder():
         assert len(decks) == 15, len(decks)
         txt = (sim / "SNMR_TT-2_0.6V.in").read_text()
         assert "#" not in txt.replace("* include", ""), "자리표시자가 남음"
-        assert ".param VOP='(0.6) + (0)'" in txt and ".param VWL='(0.6) + (0)'" in txt
+        cond = pd.read_csv(sim / "conditions_read.csv")
+        r = cond[cond["deck_file"] == "SNMR_TT-2_0.6V.in"].iloc[0]
+        assert ".param VOP='(0.6) + (0)'" in txt
+        assert f".param VWL='({0.6 * r['wl_ratio']:.6g}) + (0)'" in txt, (r["wl_ratio"], txt[-400:])
+        assert 0.8 <= cond["wl_ratio"].min() and cond["wl_ratio"].max() <= 1.0
+        # 같은 조건은 모든 Vop 에서 같은 비율
+        assert (cond.groupby("deck_no")["wl_ratio"].nunique() == 1).all()
         assert ".temp '(125) + (0)'" in txt
         cond = pd.read_csv(sim / "conditions_read.csv")
 
@@ -164,9 +171,10 @@ def test_placeholder():
         ds = pd.read_csv(tmp / "work" / "01_extract" / "dataset_read.csv")
         m = ds.merge(cond, left_on="deck", right_on=cond["deck_file"].str[:-3], suffixes=("", "_gen"))
         assert len(m) == 15
-        for c in ["cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk", "vop"]:
+        for c in ["cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk", "wl_ratio", "vop"]:
             assert np.allclose(m[c], m[c + "_gen"], atol=1e-6), c
         assert (ds["temp"] == 125).all()
+        assert ds["cond_id"].nunique() == 3
         print("  include + snmr template → 덱 15개 → 01_extract: 9D·Vop·온도 일치")
 
         # 값이 빠지거나 '#' 짝이 안 맞으면 멈춰야 한다

@@ -51,10 +51,18 @@
         0.075
       ]
     },
-    "_ranges": "cn/pu/sk 는 mV, loc/mom 은 배율, l_sk/m_sk 는 PG-PD 배율 차이의 절반"
+    "_ranges": "cn/pu/sk 는 mV, loc/mom 은 배율, l_sk/m_sk 는 PG-PD 배율 차이의 절반",
+    "wl_ratio": {
+      "range": [
+        0.8,
+        1.0
+      ],
+      "decimals": 3
+    },
+    "_wl_ratio": "10번째 축: VWL/VDDA 비율 (read/write assist). 조건마다 range 안에서 뽑고 덱의 VWL = Vop x 비율. null 이면 1.0 (VWL = Vop)."
   },
   "deck_template": {
-    "_comment": "사내 include.param.tpl + snmr/bwrm template 방식. 덱 = include(채움) + mode template(채움). #이름# 을 아래 값으로 바꾼다. VTMSKEW_/VTSLSKEW_/MOMSKEW_{PU,PG,PD} 와 VDDA(=Vop)는 덱마다 코드가 채우므로 적지 않는다. \"=VOP\" 는 그 덱의 Vop. \"TODO\" 가 남아 있으면 실행이 멈춘다.",
+    "_comment": "사내 include.param.tpl + snmr/bwrm template 방식. 덱 = include(채움) + mode template(채움). #이름# 을 아래 값으로 바꾼다. VTMSKEW_/VTSLSKEW_/MOMSKEW_{PU,PG,PD} 와 VDDA(=Vop), VWL(=Vop x wl_ratio)는 덱마다 코드가 채우므로 적지 않는다. \"=VOP\" 는 그 덱의 Vop. \"TODO\" 가 남아 있으면 실행이 멈춘다.",
     "include": "/path/to/include.param.tpl",
     "values": {
       "ARE_YOU_MONTE": 1,
@@ -107,7 +115,6 @@
       "OFFSET_MOMSKEW_PG": 0,
       "OFFSET_MOMSKEW_PD": 0,
       "VSSA": 0,
-      "VWL": "=VOP",
       "VBL": "=VOP",
       "VPW": 0
     }

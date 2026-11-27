@@ -17,7 +17,7 @@ from typing import Any, Dict, Iterator, List, Tuple
 
 import numpy as np
 
-from .axes import AXES
+from .axes import AXES, MODEL_AXES, WL_AXIS
 
 # 논문 값. 사분면 key 는 "cn부호,pu부호" (+ = 느린 쪽).
 DEFAULT_DOE: Dict[str, Any] = {
@@ -37,7 +37,11 @@ DEFAULT_DOE: Dict[str, Any] = {
         "read":  {"-,+": 0.45, "-,-": 0.20, "+,+": 0.15, "+,-": 0.20},
         "write": {"-,+": 0.10, "-,-": 0.15, "+,+": 0.30, "+,-": 0.45},
     },
+    # 10번째 축 (논문에는 없음). 9D 와 다른 난수열(seed + 200)이라 9D 조건은 논문과 그대로.
+    # range 를 null 로 두면 모든 덱이 1.0 (VWL = Vop, 논문과 같은 덱).
+    "wl_ratio": {"range": [0.8, 1.0], "decimals": 3},
 }
+WL_SEED_OFFSET = 200
 
 INT_AXES = ("cn", "sk", "pu")
 
@@ -124,9 +128,22 @@ def generate_conditions(doe: Dict[str, Any], mode: str) -> np.ndarray:
     return np.column_stack([cn, sk, pu, lpu, l_com, l_sk, mpu, m_com, m_sk]).astype(float)
 
 
+def generate_wl_ratio(doe: Dict[str, Any], mode: str) -> np.ndarray:
+    """조건마다 VWL/VDDA 비율. 같은 조건이면 모든 Vop 에서 같은 비율."""
+    n = int(doe["n_cond"])
+    w = doe.get("wl_ratio") or {}
+    rng_ = w.get("range")
+    if not rng_:
+        return np.ones(n)
+    lo, hi = float(rng_[0]), float(rng_[1])
+    u = _unit(n, 1, int(doe["seeds"][mode]) + WL_SEED_OFFSET, doe["method"])[:, 0]
+    return np.round(lo + (hi - lo) * u, int(w.get("decimals", 3)))
+
+
 def iter_decks(doe: Dict[str, Any], mode: str) -> Iterator[Dict[str, Any]]:
     """(Vop, 조건) 마다 한 레코드. 바깥 루프 Vop, 번호는 Vop 마다 start 부터 다시."""
     cond = generate_conditions(doe, mode)
+    wl = generate_wl_ratio(doe, mode)
     for v in doe["vops"]:
         for i in range(len(cond)):
             no = int(doe["start"]) + i
@@ -134,6 +151,8 @@ def iter_decks(doe: Dict[str, Any], mode: str) -> Iterator[Dict[str, Any]]:
                                    "vop": float(v)}
             for j, c in enumerate(AXES):
                 rec[c] = int(cond[i, j]) if c in INT_AXES else round(float(cond[i, j]), 2) + 0.0
+            rec[WL_AXIS] = float(wl[i]) + 0.0
+            rec["VWL"] = round(float(v) * rec[WL_AXIS], 6)
             yield rec
 
 
@@ -159,6 +178,18 @@ def deck_params(rec: Dict[str, Any], vth_unit: str = "V") -> Dict[str, str]:
     scale = 1e-3 if vth_unit == "V" else 1.0
     return {k: f"{v * scale:.6f}" if k.startswith("VTMSKEW") else f"{v:.6f}"
             for k, v in vals.items()}
+
+
+VWL_PATTERN = r"(\.param\s+VWL\s*=\s*'\s*\(\s*)[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?(\s*\))"
+
+
+def set_vwl(text: str, vwl: float, src_name: str) -> str:
+    """예전 방식 template: .param VWL='( A ) + B' 의 A 를 Vop x wl_ratio 로."""
+    text, n = re.subn(VWL_PATTERN, lambda m: m.group(1) + f"{vwl:.6f}" + m.group(2),
+                      text, flags=re.IGNORECASE | re.MULTILINE)
+    if n != 1:
+        raise RuntimeError(f"[{src_name}] .param VWL='( A ) + B' 가 {n}번 매치됨 (기대 1번)")
+    return text
 
 
 def replace_params(text: str, values: Dict[str, str], src_name: str,

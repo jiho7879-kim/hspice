@@ -1,6 +1,7 @@
 # vminkit — 범용 SRAM Vmin 예측 툴
 
-논문에서 검증한 구조(9D 입력 + Vop, exact GP + physics layer)를 노드에 상관없이 쓰도록 만든 툴이다.
+논문에서 검증한 구조(9D 입력 + Vop, exact GP + physics layer)에 assist 평가용 10번째 축
+`wl_ratio`(VWL / VDDA)를 더한 것을 노드에 상관없이 쓰도록 만든 툴이다.
 설치 없이 `.py` 를 직접 실행한다. Python 3.8 기준.
 
 단계는 자동으로 이어지지 않는다. 각 스크립트가 `work_dir/<단계>/` 에 결과와 리포트를 남기고 멈추면,
@@ -40,6 +41,8 @@ python vminkit/00_gen_decks.py --config vminkit/configs/my_node.json            
   - 값을 `"=VOP"` 로 적으면 그 덱의 Vop 가 들어간다 (예: `VWL`, `VBL`).
 - 멈추는 경우: template 에 있는데 값이 없는 이름, 아직 `"TODO"` 인 값, 채운 뒤에도 남은 `#이름`
   (`#OFFSET_TEMP)` 처럼 `#` 짝이 안 맞는 오타 포함).
+- 10번째 축 `wl_ratio`: 조건마다 `doe.wl_ratio.range`(기본 0.8~1.0) 안에서 뽑고, 덱의 `VWL = Vop x wl_ratio`
+  로 넣는다 (read·write 둘 다). 9D 와 다른 난수열이라 9D 조건은 논문과 그대로다. `range` 를 `null` 로 두면 1.0.
 - 덱 이름은 `deck_name` (기본 `{metric}_{prefix}-{no}_{vop}V.in`, 예: `SNMR_TT-17_0.6V.in`).
 - (예전 방식) `template` 대신 `template_dir` 을 주면 Vop별 template 의 `.param X = '(A) + B'` 에서 A 를 바꾼다.
 - 조건은 논문과 같은 방식이다: 9D, 2000 조건, numpy PCG64, (cn, pu) 사분면 가중
@@ -61,7 +64,8 @@ python vminkit/01_extract.py --config vminkit/configs/my_node.json --workers 8
 ```
 
 - 덱(`*.in`)의 `.param` 에서 VTMSKEW / VTSLSKEW / MOMSKEW (PG·PD·PU), VOP, `.temp` 를 읽어
-  논문 9D 축(cn, sk, pu, lpu, l_com, l_sk, mpu, m_com, m_sk)으로 바꾼다.
+  논문 9D 축(cn, sk, pu, lpu, l_com, l_sk, mpu, m_com, m_sk)으로 바꾸고, `VWL / VOP` 를 10번째 축
+  `wl_ratio` 로 저장한다 (덱에 VWL 이 없으면 1.0).
 - read: `{stem}.mt0` 의 MC 표본에서 mu / sigma / median / n.
 - write: `{stem}*a0*.mt0` 의 `bwrm_1`(left) 과 `{stem}*a1*.mt0` 의 `bwrm_2`(right) 를 MC index 로 맞춰
   min 을 먼저 취한 뒤 통계를 낸다.

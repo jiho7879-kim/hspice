@@ -290,6 +290,8 @@ def parse_in_deck(path: str | Path) -> dict:
     # VOP / temperature
     if "VOP" in params:
         row["VOP"] = _paren_sum(params["VOP"])
+    if "VWL" in params:  # vminkit: wl_ratio = VWL / VOP
+        row["VWL"] = _paren_sum(params["VWL"])
     tmatch = re.search(r"^\s*\.temp\s+(.+)$", text, flags=re.MULTILINE | re.IGNORECASE)
     if tmatch:
         row["temp"] = _paren_sum(tmatch.group(1).strip().strip("'\""))

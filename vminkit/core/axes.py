@@ -10,6 +10,9 @@ from __future__ import annotations
 from typing import Dict, List, Tuple
 
 AXES: List[str] = ["cn", "sk", "pu", "lpu", "l_com", "l_sk", "mpu", "m_com", "m_sk"]
+# 10번째 축: read/write assist 평가용 VWL / VDDA(=VOP) 비율. 덱의 VWL = Vop x wl_ratio.
+WL_AXIS = "wl_ratio"
+MODEL_AXES: List[str] = AXES + [WL_AXIS]
 
 # (deck family, 값이 없을 때 기본값)
 _FAMILIES = {
@@ -40,9 +43,18 @@ def deck_to_axes(row: Dict[str, object], vth_unit: str = "V") -> Tuple[Dict[str,
         if str(k).endswith("_mismatch"):
             warns.append(f"{k}: 인스턴스 1/2 값이 다름 (1번 값을 사용)")
 
+    vop = row.get("VOP")
+    if "VWL" in row and vop:
+        wl = float(row["VWL"]) / float(vop)  # type: ignore[arg-type]
+    else:
+        wl = 1.0
+        warns.append("VWL 또는 VOP 없음 → wl_ratio = 1")
+
     out = {
         "cn": (vpg + vpd) / 2, "sk": (vpg - vpd) / 2, "pu": vpu,
         "lpu": lpu, "l_com": (lpg + lpd) / 2, "l_sk": (lpg - lpd) / 2,
         "mpu": mpu, "m_com": (mpg + mpd) / 2, "m_sk": (mpg - mpd) / 2,
     }
-    return {k: round(v, _ROUND) + 0.0 for k, v in out.items()}, warns
+    res = {k: round(v, _ROUND) + 0.0 for k, v in out.items()}
+    res[WL_AXIS] = round(wl, 4) + 0.0
+    return res, warns
