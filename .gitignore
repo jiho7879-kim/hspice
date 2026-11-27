@@ -63,3 +63,7 @@ manuscript/talk_7min/lab/exports/
 
 # SRAM Vmin Studio run outputs (model predictions, figures, CSV) -- regenerate with service/main.py
 service/runs/
+
+# vminkit: 단계별 작업 결과 (데이터셋, 모델, 리포트) -- 사내 데이터라 커밋하지 않음
+work/
+!vminkit/requirements-py38.txt

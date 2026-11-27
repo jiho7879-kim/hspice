@@ -1,0 +1,46 @@
+{
+  "_comment": "노드 하나 = 설정 파일 하나. 논문(manuscript/code/v_b_forward.py) 구조가 기본값이다. 경로와 범위만 노드에 맞게 바꾸면 된다.",
+
+  "node": "example_finfet",
+  "work_dir": "work/example_finfet",
+
+  "yield_target": {
+    "array_mb": 128,
+    "yield": 0.99
+  },
+
+  "deck": {
+    "pattern": "*.in",
+    "vth_unit": "V",
+    "_vth_unit": "덱의 VTMSKEW 단위. 'V'면 mV로 바꿔서 저장한다 (논문 덱은 V)."
+  },
+
+  "modes": {
+    "read": {
+      "metric": "SNMR",
+      "temperature_C": 125,
+      "sim_dirs": ["/path/to/read_sim_dir"],
+      "result": {
+        "type": "single",
+        "pattern": "{stem}.mt0",
+        "measure": null
+      },
+      "value_unit": "V",
+      "snm_floor_mV": 0.0
+    },
+    "write": {
+      "metric": "Vtrip",
+      "temperature_C": -40,
+      "sim_dirs": ["/path/to/write_sim_dir"],
+      "result": {
+        "type": "min_left_right",
+        "left_pattern": "{stem}*a0*.mt0",
+        "right_pattern": "{stem}*a1*.mt0",
+        "left_measure": "bwrm_1",
+        "right_measure": "bwrm_2"
+      },
+      "value_unit": "V",
+      "snm_floor_mV": null
+    }
+  }
+}
