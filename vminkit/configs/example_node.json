@@ -82,11 +82,10 @@
         "/path/to/write_sim_dir"
       ],
       "result": {
-        "type": "min_left_right",
-        "left_pattern": "{stem}*a0*.mt0",
-        "right_pattern": "{stem}*a1*.mt0",
-        "left_measure": "bwrm_1",
-        "right_measure": "bwrm_2"
+        "type": "single",
+        "pattern": "{stem}.mt0",
+        "measure": "bwrm_min",
+        "_other": "a0/a1 두 파일로 나뉜 경우: {\"type\": \"min_left_right\", \"left_pattern\": \"{stem}*a0*.mt0\", \"right_pattern\": \"{stem}*a1*.mt0\", \"left_measure\": \"bwrm_1\", \"right_measure\": \"bwrm_2\"}"
       },
       "value_unit": "V",
       "snm_floor_mV": null

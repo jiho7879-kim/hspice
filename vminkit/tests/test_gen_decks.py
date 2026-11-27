@@ -69,6 +69,7 @@ def test_roundtrip():
         cfg["modes"] = {"read": cfg["modes"]["read"]}
         cfg["modes"]["read"].update(template_dir=str(tdir), deck_out_dir=str(sim),
                                     sim_dirs=[str(sim)])
+        cfg["modes"]["read"]["result"]["measure"] = "snmr"
         cp = tmp / "node.json"
         cp.write_text(json.dumps(cfg))
 

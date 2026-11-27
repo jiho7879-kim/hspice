@@ -109,6 +109,11 @@ def main():
         cfg["work_dir"] = str(tmp / "work")
         cfg["modes"]["read"]["sim_dirs"] = [str(tmp / "read")]
         cfg["modes"]["write"]["sim_dirs"] = [str(tmp / "write")]
+        cfg["modes"]["read"]["result"]["measure"] = "snmr"
+        # a0/a1 로 나뉜 옛 방식도 계속 시험
+        cfg["modes"]["write"]["result"] = {
+            "type": "min_left_right", "left_pattern": "{stem}*a0*.mt0",
+            "right_pattern": "{stem}*a1*.mt0", "left_measure": "bwrm_1", "right_measure": "bwrm_2"}
         cp = tmp / "node.json"
         cp.write_text(json.dumps(cfg))
 
